@@ -40,7 +40,7 @@ namespace LAMMPS_NS {
 
 	private:
 		// Input variables for constant values
-    int igroupH, groupHbit;
+    		int igroupH, groupHbit;
     
 
 
