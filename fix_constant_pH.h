@@ -41,6 +41,9 @@ namespace LAMMPS_NS {
 	private:
 		// Input variables for constant values
     		int igroupH, groupHbit;
+		double pK, pH, T;
+		double a, b, s, m, w, r;
+		double m_lambda;
     
 
 
