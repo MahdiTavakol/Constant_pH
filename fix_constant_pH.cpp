@@ -20,11 +20,13 @@
 #include "force.h"
 #include "group.h"
 #include "memory.h"
+#include "math_const.h"
 
 #include <cstring>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
+using namespace MathConst;
 
 /* ---------------------------------------------------------------------- */
 
@@ -39,37 +41,59 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   while (iarg < narg) {
     
   }
+
+
+   groupHbit = group->bitmask[igroupH];
+}
+
+/* ---------------------------------------------------------------------- */
+
+FixConstantPH::~FixConstantPH()
+{
+   
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::post_force(int vflag)
+{
+   if (update->ntimestep % nevery) return;
+
+   calculate_df();
+   calculate_dU();
+   integrate_lambda();
+   set_force();
 }
 
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::init()
 {
-  
+   // set the initial lambda and v_lambda values
 }
 
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::integrate_lambda()
 {
-   double f_lambda = -(HB-HA + df_lambda*R*T*ln(10)*(pK-pH) + dU);
+   double f_lambda = -(HB-HA + df*R*T*ln(10)*(pK-pH) + dU);
    double a_lambda = f_lambda / m_lambda;
    double t_lambda = nevery*update->dt;
-   double H_lambda = (1-lambda)*HA + lambda*HB + f_lambda*R*T*ln(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda**2);
+   double H_lambda = (1-lambda)*HA + lambda*HB + f*R*T*ln(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda**2);
    lambda = (1.0/2.0)*(a_lambda)*(t_lambda)**2 + v_lambda*t_lambda + lambda;
    v_lambda = a_lambda * t_lambda + v_lambda;
 }
 /* ---------------------------------------------------------------------- */
 
-void FixConstantPH::calculate_df(const double lambda)
+void FixConstantPH::calculate_df()
 {
-   f_lambda = 1.0/(1+exp(-50*(x-0.5));
-   df_lambda = 50*exp(-50*(x-0.5))/(f_lambda*f_lambda);
+   f = 1.0/(1+exp(-50*(lambda-0.5));
+   df = 50*exp(-50*(lambda-0.5))/(f**2);
 }
 
 /* ----------------------------------------------------------------------- */
 
-void FixConstantPH::calculate_dU(const double lambda)
+void FixConstantPH::calculate_dU()
 {
    double U1, U2, U3, U4, U5;
    double dU1, dU2, dU3, dU4, dU5;
@@ -81,9 +105,28 @@ void FixConstantPH::calculate_dU(const double lambda)
    dU1 = -((lambda-1-b)/(2*a*a))*U1;
    dU2 = -((lambda+b)/(2*a*a))*U2;
    dU3 = -((lambda-0.5)/(s*s))*U3;
-   dU4 = -0.5*w*r*2*exp(-r*r*(lambda+0.5)*(lambda+0.5))/sqrt(pi);
-   dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(pi);
+   dU4 = -0.5*w*r*2*exp(-r*r*(lambda+0.5)*(lambda+0.5))/sqrt(MY_PI);
+   dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(MY_PI);
 
     U =  U1 +  U2 +  U3 +  U4 +  U5;
    dU = dU1 + dU2 + dU3 + dU4 + dU5;
+}
+
+/* ----------------------------------------------------------------------- */
+
+void FixConstantPH::set_force()
+{
+   double **f = atom->f;
+   int *mask = atom->mask;
+   int nlocal = atom->nlocal;
+   
+   for (int i = 0; i < nlocal; i++)
+   {
+      if (mask[i] & groupHbit)
+      {
+         f[i][0] *= lambda;
+         f[i][1] *= lambda;
+         f[i][2] *= lambda;
+      }
+   }
 }
