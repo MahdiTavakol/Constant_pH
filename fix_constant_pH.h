@@ -27,8 +27,8 @@ namespace LAMMPS_NS {
 
 	class FixConstantPH: public Fix {
 	public:
-		FixMetaAR(class LAMMPS*, int, char**);
-		~FixMetaAR() override;
+		FixConstantPH(class LAMMPS*, int, char**);
+		~FixConstantPH() override;
 		int setmask() override;
 		void init() override;
 		void setup(int) override;
