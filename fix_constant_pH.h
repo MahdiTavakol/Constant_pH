@@ -23,6 +23,7 @@ FixStyle(constant_pH,FixConstantPH);
 
 #include "fix.h"
 
+
 namespace LAMMPS_NS {
 
 	class FixConstantPH: public Fix {
@@ -40,20 +41,15 @@ namespace LAMMPS_NS {
 
 	private:
 		// Input variables for constant values
-    		int igroupH, groupHbit;
+		int igroupH, igroupW;
+		int groupHbit, groupWbit;
 		double pK, pH, T;
-		double a, b, s, m, w, r;
+		double a, b, s, m, w, r, d;
 		double m_lambda;
-    
-
-
-
-
-
-
 	};
 
 }    // namespace LAMMPS_NS
+
 
 #endif
 #endif
