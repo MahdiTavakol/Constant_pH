@@ -46,6 +46,16 @@ namespace LAMMPS_NS {
 		double pK, pH, T;
 		double a, b, s, m, w, r, d;
 		double m_lambda;
+		double HA, HB;
+		int nmax;
+                double *H_atom;
+
+		void integrate_lambda();
+		void compute_Hs();
+		void calculate_df();
+		void calculate_dU();
+		void set_force();
+		void modify_water();
 	};
 
 }    // namespace LAMMPS_NS
