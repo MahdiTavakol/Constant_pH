@@ -67,6 +67,7 @@ FixConstantPH::~FixConstantPH()
 void FixConstantPH::post_force(int vflag)
 {
    if (update->ntimestep % nevery == 0) {
+      compute_Hs();
       calculate_df();
       calculate_dU();
       integrate_lambda();
@@ -82,17 +83,25 @@ void FixConstantPH::post_force(int vflag)
 void FixConstantPH::init()
 {
    // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
-	w = 200.0;
-	s = 0.3;
-	h = 4.0;
-	k = 2.533;
-	a = 0.034041;
-	b = 0.005238;
-	r = 16.458;
-	m = 0.1507;
-	d = 2.0;
-	// m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
-	m_lambda = 20;
+    w = 200.0;
+    s = 0.3;
+    h = 4.0;
+    k = 2.533;
+    a = 0.034041;
+    b = 0.005238;
+    r = 16.458;
+    m = 0.1507;
+    d = 2.0;
+    // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
+    m_lambda = 20;
+
+    // It might needs to be in the setup. I am not sure
+    nmax = 1;
+    if (atom->nmax > nmax) {
+	memory->destroy(H_atom);
+    	nmax = atom->nmax;
+    	memory->create(H_atom, nmax, "constant_pH:H_atom");
+    }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -152,4 +161,113 @@ void FixConstantPH::set_force()
          f[i][2] *= lambda;
       }
    }
+}
+
+/* --------------------------------------------------------------------------
+     taken from src/compute_pe_atom.cpp
+   -------------------------------------------------------------------------- */
+
+void FixConstantPH::compute_Hs()
+{
+  int i;
+
+  invoked_peratom = update->ntimestep;
+  if (update->eflag_atom != invoked_peratom)
+    error->all(FLERR, "Per-atom energy was not tallied on needed timestep");
+
+  // grow local energy array if necessary
+  // needs to be atom->nmax in length
+
+  if (atom->nmax > nmax) {
+    memory->destroy(H_atom);
+    nmax = atom->nmax;
+    memory->create(H_atom, nmax, "constant_pH:H_atom");
+  }
+
+  // npair includes ghosts if either newton flag is set
+  //   b/c some bonds/dihedrals call pair::ev_tally with pairwise info
+  // nbond includes ghosts if newton_bond is set
+  // ntotal includes ghosts if either newton flag is set
+  // KSpace includes ghosts if tip4pflag is set
+
+  int nlocal = atom->nlocal;
+  int npair = nlocal;
+  int nbond = nlocal;
+  int ntotal = nlocal;
+  int nkspace = nlocal;
+  if (force->newton) npair += atom->nghost;
+  if (force->newton_bond) nbond += atom->nghost;
+  if (force->newton) ntotal += atom->nghost;
+  if (force->kspace && force->kspace->tip4pflag) nkspace += atom->nghost;
+
+  // clear local energy array
+
+  for (i = 0; i < ntotal; i++) H_atom[i] = 0.0;
+
+  // add in per-atom contributions from each force
+
+  if (pairflag && force->pair && force->pair->compute_flag) {
+    double *eatom = force->pair->eatom;
+    for (i = 0; i < npair; i++) H_atom[i] += eatom[i];
+  }
+
+  if (bondflag && force->bond) {
+    double *eatom = force->bond->eatom;
+    for (i = 0; i < nbond; i++) H_atom[i] += eatom[i];
+  }
+
+  if (angleflag && force->angle) {
+    double *eatom = force->angle->eatom;
+    for (i = 0; i < nbond; i++) H_atom[i] += eatom[i];
+  }
+
+  if (dihedralflag && force->dihedral) {
+    double *eatom = force->dihedral->eatom;
+    for (i = 0; i < nbond; i++) H_atom[i] += eatom[i];
+  }
+
+  if (improperflag && force->improper) {
+    double *eatom = force->improper->eatom;
+    for (i = 0; i < nbond; i++) H_atom[i] += eatom[i];
+  }
+
+  if (kspaceflag && force->kspace && force->kspace->compute_flag) {
+    double *eatom = force->kspace->eatom;
+    for (i = 0; i < nkspace; i++) H_atom[i] += eatom[i];
+  }
+
+  // add in per-atom contributions from relevant fixes
+  // always only for owned atoms, not ghost
+
+  if (fixflag && modify->n_energy_atom) modify->energy_atom(nlocal, H_atom);
+
+  // communicate ghost energy between neighbor procs
+
+  if (force->newton || (force->kspace && force->kspace->tip4pflag)) comm->reverse_comm(this);
+
+  // calculate HA and HB
+
+  int *mask = atom->mask;
+
+  double HA_local = 0.0;
+  double HB_local = 0.0;
+  double * Hs_local = new double[2];
+  double * Hs_all = new double[2];
+
+  for (i = 0; i < nlocal; i++) {
+    HA_local += H_atom[i];
+    if (!(mask[i] & groupHbit)) HB_local += H_atom[i];
+  }
+  // You need to consider the water molecule here 
+
+
+  Hs[0] = HA_local;
+  Hs[1] = HB_local;
+  // The final magic!
+  MPI_Allreduce(&Hs_local, &Hs_all, 2 , MPI_DOUBLE, MPI_SUM, world);
+
+  HA = Hs_all[0];
+  HB = Hs_all[1];
+  delete [] Hs_local;
+  delete [] Hs_all;
 }
