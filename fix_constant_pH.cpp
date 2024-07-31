@@ -271,3 +271,41 @@ void FixConstantPH::compute_Hs()
   delete [] Hs_local;
   delete [] Hs_all;
 }
+
+/* May be I need to set the size of the reverse communication through 
+   variable comm_reverse inherited from the Fix class. I have no idea
+   how does this communication occur                                  */
+/* ---------------------------------------------------------------------- */
+
+int FixConstantPH::pack_reverse_comm(int n, int first, double *buf)
+{
+  int i, m, last;
+
+  m = 0;
+  last = first + n;
+  for (i = first; i < last; i++) buf[m++] = H_atom[i];
+  return m;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::unpack_reverse_comm(int n, int *list, double *buf)
+{
+  int i, j, m;
+
+  m = 0;
+  for (i = 0; i < n; i++) {
+    j = list[i];
+    H_atom[j] += buf[m++];
+  }
+}
+
+/* ----------------------------------------------------------------------
+   memory usage of local atom-based array
+------------------------------------------------------------------------- */
+
+double ComputePEAtom::memory_usage()
+{
+  double bytes = (double) nmax * sizeof(double);
+  return bytes;
+}
