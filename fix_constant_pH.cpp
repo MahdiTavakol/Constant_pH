@@ -33,17 +33,26 @@ using namespace MathConst;
 FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   Fix(lmp, narg, arg)
 {
-  if (narg < ??) utils::mising_cmd_args(FLERR,"fix constant pH", error);
+  if (narg < 9) utils::mising_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
   if (nevery < 0) error->all(FLERR,"Ilegal fix constant pH every value {}", nevery);
-
-  int iarg = 4;
+  igroupH = group->find(arg[4]);
+  if (igroupH == -1) error->all(FLERR,"Cannot find the hydrogens group for fix constant_pH);
+  groupHbit = group->bitmask(igroupH);
+  igroupW = group->find(arg[5]);
+  if (igroupW == -1) error->all(FLERR,"Cannot find the water group for fix constant_pH");
+  if (group->count(igroupW) != 3) 
+     error->all(FLERR, "Number of atoms in the water molecule for the fix constant_pH is {} instead of three",group->count(igroupW));
+  groupWbit = group->bitmask(igroupW);
+  pK = utils::numeric(FLERR, arg[6], false, lmp);
+  pH = utils::numeric(FLERR, arg[7], false, lmp);
+  T = utils::numeric(FLERR, arg[8], false, lmp);
+   
+  int iarg = 9;
   while (iarg < narg) {
-    
+    // for now, no other keywords
   }
 
-
-   groupHbit = group->bitmask[igroupH];
 }
 
 /* ---------------------------------------------------------------------- */
@@ -57,19 +66,33 @@ FixConstantPH::~FixConstantPH()
 
 void FixConstantPH::post_force(int vflag)
 {
-   if (update->ntimestep % nevery) return;
-
-   calculate_df();
-   calculate_dU();
-   integrate_lambda();
-   set_force();
+   if (update->ntimestep % nevery == 0) {
+      calculate_df();
+      calculate_dU();
+      integrate_lambda();
+   }
+   /* The force on hydrogens must be updated at every step otherwise at 
+      steps at this fix is not active the pH would be very low and there
+      will be a jump in pH in nevery steps                               */
+   set_force(); 
 }
 
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::init()
 {
-   // set the initial lambda and v_lambda values
+   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
+	w = 200.0;
+	s = 0.3;
+	h = 4.0;
+	k = 2.533;
+	a = 0.034041;
+	b = 0.005238;
+	r = 16.458;
+	m = 0.1507;
+	d = 2.0;
+	// m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
+	m_lambda = 20;
 }
 
 /* ---------------------------------------------------------------------- */
