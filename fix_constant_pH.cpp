@@ -16,6 +16,7 @@
 
 #include "atom.h"
 #include "atom_masks.h"
+#include "pair.h"
 #include "error.h"
 #include "force.h"
 #include "group.h"
@@ -153,6 +154,29 @@ void FixConstantPH::set_force()
    int nlocal = atom->nlocal;
 
 
+   Pair * pair = nullptr;
+  
+   if (lmp->suffix_enable)
+       pair = force->pair_match(std::string(ad->pstyle)+"/"+lmp->suffix,1);
+   if (pair == nullptr)
+       pair = force->pair_match(pstyle,1); // I need to define the pstyle variable
+   void *ptr1 = pair->extract(pparam1,pdim1);
+   if (ptr1 == nullptr)
+       error->all(FLERR,"Fix adapt/fep pair style param not supported");
+   if (pdim != 2)
+        error->all(FLERR,"Pair style parameter {} is not compatible with fix constant_pH", pparam1);
+   
+   if (pdim == 2) epsilons = (double **) ptr;
+
+   for (int i = 0; i <= ??; i++)
+        for (int j = i; j <= ??; j++)
+            epsilons_org[i][j] = epsilons[i][j];
+
+
+   
+   
+
+
    /* This is not going to work! Even though the force on the hydrogen atoms
       are scaled by lambda, the atoms interacting with them still feel the 
       whole hydrogen atom. A minimally invasive approach is that before LAMMPS
@@ -168,6 +192,16 @@ void FixConstantPH::set_force()
          f[i][2] *= lambda;
       }
    }
+}
+
+/* --------------------------------------------------------------------------
+   -------------------------------------------------------------------------- */
+
+void FixConstantPH::modify_params()
+{
+    for (int i = 0; i < ??; i++)
+	for (int j = i; j < ??; j++)
+	    epsilons[i][j] *= lambda;
 }
 
 /* --------------------------------------------------------------------------
