@@ -49,6 +49,12 @@ namespace LAMMPS_NS {
 		double HA, HB;
 		int nmax;
                 double *H_atom;
+		char* pparam1; // It should be epsilon or something like that.
+                char* pparam2;
+                int pdim1;
+                int pdim2;
+                double** epsilons;
+                double** epsilons_org;
 
 		void integrate_lambda();
 		void compute_Hs();
