@@ -151,7 +151,14 @@ void FixConstantPH::set_force()
    double **f = atom->f;
    int *mask = atom->mask;
    int nlocal = atom->nlocal;
-   
+
+
+   /* This is not going to work! Even though the force on the hydrogen atoms
+      are scaled by lambda, the atoms interacting with them still feel the 
+      whole hydrogen atom. A minimally invasive approach is that before LAMMPS
+      calculates the forces, the forcefield parameters are changed. However,
+      in this approach only a limited number of forcefields are supported.
+      */
    for (int i = 0; i < nlocal; i++)
    {
       if (mask[i] & groupHbit)
