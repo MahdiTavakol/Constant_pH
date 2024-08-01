@@ -76,7 +76,7 @@ void FixConstantPH::post_force(int vflag)
    /* The force on hydrogens must be updated at every step otherwise at 
       steps at this fix is not active the pH would be very low and there
       will be a jump in pH in nevery steps                               */
-   set_force(); 
+   set_force(); // I am not sure with change_parameter it should be here or not!!!!
 }
 
 /* ---------------------------------------------------------------------- */
@@ -147,13 +147,13 @@ void FixConstantPH::calculate_dU()
 
 /* ----------------------------------------------------------------------- */
 
-void FixConstantPH::set_force()
+void FixConstantPH::compute_Hs()
 {
    double **f = atom->f;
    int *mask = atom->mask;
    int nlocal = atom->nlocal;
 
-
+  // This part should be in the init function 
    Pair * pair = nullptr;
   
    if (lmp->suffix_enable)
@@ -172,26 +172,67 @@ void FixConstantPH::set_force()
         for (int j = i; j <= ??; j++)
             epsilons_org[i][j] = epsilons[i][j];
 
-
-   
-   
+  // This part should be in the init function 
 
 
-   /* This is not going to work! Even though the force on the hydrogen atoms
-      are scaled by lambda, the atoms interacting with them still feel the 
-      whole hydrogen atom. A minimally invasive approach is that before LAMMPS
-      calculates the forces, the forcefield parameters are changed. However,
-      in this approach only a limited number of forcefields are supported.
-      */
-   for (int i = 0; i < nlocal; i++)
-   {
-      if (mask[i] & groupHbit)
-      {
-         f[i][0] *= lambda;
-         f[i][1] *= lambda;
-         f[i][2] *= lambda;
-      }
-   }
+
+
+
+  eflag = 1;
+  vflag = 0;
+
+  invoked_vector = update->ntimestep;
+
+  if (atom->nmax > nmax) {    // reallocate working arrays if necessary
+     ???? 
+    ?????
+  }
+
+  backup_qfev();      // backup charge, force, energy, virial array values
+
+  change_parameters(0.0); //should define a change_parameters(const int);
+
+  timer->stamp();
+  if (force->pair && force->pair->compute_flag) {
+    force->pair->compute(eflag, vflag);
+    timer->stamp(Timer::PAIR);
+  }
+  if (chgflag && force->kspace && force->kspace->compute_flag) {
+    force->kspace->compute(eflag, vflag);
+    timer->stamp(Timer::KSPACE);
+  }
+
+  // accumulate force/energy/virial from /gpu pair styles
+  if (fixgpu) fixgpu->post_force(vflag);
+
+  HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0
+
+  change_parameters(1.0); //should define a change_parameters(const double);
+
+  timer->stamp();
+  if (force->pair && force->pair->compute_flag) {
+    force->pair->compute(eflag, vflag);
+    timer->stamp(Timer::PAIR);
+  }
+  if (chgflag && force->kspace && force->kspace->compute_flag) {
+    force->kspace->compute(eflag, vflag);
+    timer->stamp(Timer::KSPACE);
+  }
+
+  // accumulate force/energy/virial from /gpu pair styles
+  // this is required as to empty the answer queue,
+  // otherwise the force compute on the GPU in the next step would be incorrect
+  if (fixgpu) fixgpu->post_force(vflag);
+
+  HB = compute_epair();
+
+  restore_qfev();      // restore charge, force, energy, virial array values
+  restore_params();    // restore pair parameters
+
+  change_parameters(lambda); //should define a change_parameters(const double);
+
+
+
 }
 
 /* --------------------------------------------------------------------------
@@ -204,145 +245,9 @@ void FixConstantPH::modify_params()
 	    epsilons[i][j] *= lambda;
 }
 
-/* --------------------------------------------------------------------------
-     taken from src/compute_pe_atom.cpp
-   -------------------------------------------------------------------------- */
-
-void FixConstantPH::compute_Hs()
-{
-  int i;
-
-  invoked_peratom = update->ntimestep;
-  if (update->eflag_atom != invoked_peratom)
-    error->all(FLERR, "Per-atom energy was not tallied on needed timestep");
-
-  // grow local energy array if necessary
-  // needs to be atom->nmax in length
-
-  if (atom->nmax > nmax) {
-    memory->destroy(H_atom);
-    nmax = atom->nmax;
-    memory->create(H_atom, nmax, "constant_pH:H_atom");
-  }
-
-  // npair includes ghosts if either newton flag is set
-  //   b/c some bonds/dihedrals call pair::ev_tally with pairwise info
-  // nbond includes ghosts if newton_bond is set
-  // ntotal includes ghosts if either newton flag is set
-  // KSpace includes ghosts if tip4pflag is set
-
-  int nlocal = atom->nlocal;
-  int npair = nlocal;
-  int nbond = nlocal;
-  int ntotal = nlocal;
-  int nkspace = nlocal;
-  if (force->newton) npair += atom->nghost;
-  if (force->newton_bond) nbond += atom->nghost;
-  if (force->newton) ntotal += atom->nghost;
-  if (force->kspace && force->kspace->tip4pflag) nkspace += atom->nghost;
-
-  // clear local energy array
-
-  for (i = 0; i < ntotal; i++) H_atom[i] = 0.0;
-
-  // add in per-atom contributions from each force
-
-  if (pairflag && force->pair && force->pair->compute_flag) {
-    double *eatom = force->pair->eatom;
-    for (i = 0; i < npair; i++) H_atom[i] += eatom[i];
-  }
-
-  if (bondflag && force->bond) {
-    double *eatom = force->bond->eatom;
-    for (i = 0; i < nbond; i++) H_atom[i] += eatom[i];
-  }
-
-  if (angleflag && force->angle) {
-    double *eatom = force->angle->eatom;
-    for (i = 0; i < nbond; i++) H_atom[i] += eatom[i];
-  }
-
-  if (dihedralflag && force->dihedral) {
-    double *eatom = force->dihedral->eatom;
-    for (i = 0; i < nbond; i++) H_atom[i] += eatom[i];
-  }
-
-  if (improperflag && force->improper) {
-    double *eatom = force->improper->eatom;
-    for (i = 0; i < nbond; i++) H_atom[i] += eatom[i];
-  }
-
-  if (kspaceflag && force->kspace && force->kspace->compute_flag) {
-    double *eatom = force->kspace->eatom;
-    for (i = 0; i < nkspace; i++) H_atom[i] += eatom[i];
-  }
-
-  // add in per-atom contributions from relevant fixes
-  // always only for owned atoms, not ghost
-
-  if (fixflag && modify->n_energy_atom) modify->energy_atom(nlocal, H_atom);
-
-  // communicate ghost energy between neighbor procs
-
-  if (force->newton || (force->kspace && force->kspace->tip4pflag)) comm->reverse_comm(this);
-
-  // calculate HA and HB
-
-  int *mask = atom->mask;
-
-  double HA_local = 0.0;
-  double HB_local = 0.0;
-  double * Hs_local = new double[2];
-  double * Hs_all = new double[2];
-
-  for (i = 0; i < nlocal; i++) {
-    HA_local += H_atom[i];
-    if (!(mask[i] & groupHbit)) HB_local += H_atom[i];
-  }
-  // You need to consider the water molecule here 
-
-
-  Hs[0] = HA_local;
-  Hs[1] = HB_local;
-  // The final magic!
-  MPI_Allreduce(&Hs_local, &Hs_all, 2 , MPI_DOUBLE, MPI_SUM, world);
-
-  HA = Hs_all[0];
-  HB = Hs_all[1];
-  delete [] Hs_local;
-  delete [] Hs_all;
-}
-
-/* May be I need to set the size of the reverse communication through 
-   variable comm_reverse inherited from the Fix class. I have no idea
-   how does this communication occur                                  */
-/* ---------------------------------------------------------------------- */
-
-int FixConstantPH::pack_reverse_comm(int n, int first, double *buf)
-{
-  int i, m, last;
-
-  m = 0;
-  last = first + n;
-  for (i = first; i < last; i++) buf[m++] = H_atom[i];
-  return m;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::unpack_reverse_comm(int n, int *list, double *buf)
-{
-  int i, j, m;
-
-  m = 0;
-  for (i = 0; i < n; i++) {
-    j = list[i];
-    H_atom[j] += buf[m++];
-  }
-}
 
 /* ----------------------------------------------------------------------
-   memory usage of local atom-based array
+   memory usage of local atom-based array --> Needs to be updated at the end
 ------------------------------------------------------------------------- */
 
 double ComputePEAtom::memory_usage()
