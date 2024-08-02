@@ -52,7 +52,7 @@ namespace LAMMPS_NS {
 		Pair * pair1;
 
 		// _init is the initial value of hydrogen atoms properties which is multiplied by lambda at each step
-                double *q_init;
+                double q_init; // ask the user to enter that as an input
 		double **epsilon_init;
 
                 // _org is for value of parameters before the update_lmp() with modified parameters act on them
