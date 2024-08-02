@@ -154,13 +154,13 @@ void FixConstantPH::compute_Hs()
    int nlocal = atom->nlocal;
 
   // This part should be in the init function 
-   Pair * pair = nullptr;
+   Pair * pair1 = nullptr;
   
    if (lmp->suffix_enable)
-       pair = force->pair_match(std::string(ad->pstyle)+"/"+lmp->suffix,1);
-   if (pair == nullptr)
-       pair = force->pair_match(pstyle,1); // I need to define the pstyle variable
-   void *ptr1 = pair->extract(pparam1,pdim1);
+       pair1 = force->pair_match(std::string(ad->pstyle)+"/"+lmp->suffix,1);
+   if (pair1 == nullptr)
+       pair1 = force->pair_match(pstyle,1); // I need to define the pstyle variable
+   void *ptr1 = pair1->extract(pparam1,pdim1);
    if (ptr1 == nullptr)
        error->all(FLERR,"Fix adapt/fep pair style param not supported");
    if (pdim != 2)
