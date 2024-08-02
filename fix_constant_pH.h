@@ -51,6 +51,16 @@ namespace LAMMPS_NS {
                 double *H_atom;
 		Pair * pair1;
 
+
+  		double *q_orig;
+ 		double **f_orig;
+  		double eng_vdwl_orig, eng_coul_orig;
+  		double pvirial_orig[6];
+  		double *peatom_orig, **pvatom_orig;
+ 		double energy_orig;
+ 		double kvirial_orig[6];
+		double *keatom_orig, **kvatom_orig;
+
 		void integrate_lambda();
 		void compute_Hs();
 		void calculate_df();
