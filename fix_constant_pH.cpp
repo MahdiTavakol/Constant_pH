@@ -96,6 +96,25 @@ void FixConstantPH::init()
     // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
     m_lambda = 20;
 
+
+    pair1 = nullptr;
+  
+    if (lmp->suffix_enable)
+        pair1 = force->pair_match(std::string(ad->pstyle)+"/"+lmp->suffix,1);
+    if (pair1 == nullptr)
+        pair1 = force->pair_match(pstyle,1); // I need to define the pstyle variable
+    void *ptr1 = pair1->extract(pparam1,pdim1);
+    if (ptr1 == nullptr)
+        error->all(FLERR,"Fix adapt/fep pair style param not supported");
+    if (pdim != 2)
+         error->all(FLERR,"Pair style parameter {} is not compatible with fix constant_pH", pparam1);
+   
+    if (pdim == 2) epsilons = (double **) ptr;
+
+    for (int i = 0; i <= ??; i++)
+         for (int j = i; j <= ??; j++)
+             epsilons_org[i][j] = epsilons[i][j];
+	
     // It might needs to be in the setup. I am not sure
     nmax = 1;
     if (atom->nmax > nmax) {
@@ -153,54 +172,28 @@ void FixConstantPH::compute_Hs()
    int *mask = atom->mask;
    int nlocal = atom->nlocal;
 
-  // This part should be in the init function 
-   Pair * pair1 = nullptr;
-  
-   if (lmp->suffix_enable)
-       pair1 = force->pair_match(std::string(ad->pstyle)+"/"+lmp->suffix,1);
-   if (pair1 == nullptr)
-       pair1 = force->pair_match(pstyle,1); // I need to define the pstyle variable
-   void *ptr1 = pair1->extract(pparam1,pdim1);
-   if (ptr1 == nullptr)
-       error->all(FLERR,"Fix adapt/fep pair style param not supported");
-   if (pdim != 2)
-        error->all(FLERR,"Pair style parameter {} is not compatible with fix constant_pH", pparam1);
-   
-   if (pdim == 2) epsilons = (double **) ptr;
+   eflag = 1;
+   vflag = 0;
 
-   for (int i = 0; i <= ??; i++)
-        for (int j = i; j <= ??; j++)
-            epsilons_org[i][j] = epsilons[i][j];
+   invoked_vector = update->ntimestep;
 
-  // This part should be in the init function 
+   if (atom->nmax > nmax) {    // reallocate working arrays if necessary
+      ???? 
+     ?????
+   }
 
+   backup_qfev();      // backup charge, force, energy, virial array values
+   modify_params(0.0); //should define a change_parameters(const int);
 
-
-
-
-  eflag = 1;
-  vflag = 0;
-
-  invoked_vector = update->ntimestep;
-
-  if (atom->nmax > nmax) {    // reallocate working arrays if necessary
-     ???? 
-    ?????
-  }
-
-  backup_qfev();      // backup charge, force, energy, virial array values
-
-  change_parameters(0.0); //should define a change_parameters(const int);
-
-  timer->stamp();
-  if (force->pair && force->pair->compute_flag) {
-    force->pair->compute(eflag, vflag);
-    timer->stamp(Timer::PAIR);
-  }
-  if (chgflag && force->kspace && force->kspace->compute_flag) {
-    force->kspace->compute(eflag, vflag);
-    timer->stamp(Timer::KSPACE);
-  }
+   timer->stamp();
+   if (force->pair && force->pair->compute_flag) {
+     force->pair->compute(eflag, vflag);
+     timer->stamp(Timer::PAIR);
+   }
+   if (chgflag && force->kspace && force->kspace->compute_flag) {
+     force->kspace->compute(eflag, vflag);
+     timer->stamp(Timer::KSPACE);
+   }
 
   // accumulate force/energy/virial from /gpu pair styles
   if (fixgpu) fixgpu->post_force(vflag);
@@ -235,14 +228,94 @@ void FixConstantPH::compute_Hs()
 
 }
 
+/* ----------------------------------------------------------------------
+   backup and restore arrays with charge, force, energy, virial
+   taken from src/FEP/compute_fep.cpp
+------------------------------------------------------------------------- */
+
+void ComputeFEP::backup_qfev()
+{
+  int i;
+
+  int nall = atom->nlocal + atom->nghost;
+  int natom = atom->nlocal;
+  if (force->newton || force->kspace->tip4pflag) natom += atom->nghost;
+
+  double **f = atom->f;
+  for (i = 0; i < natom; i++) {
+    f_orig[i][0] = f[i][0];
+    f_orig[i][1] = f[i][1];
+    f_orig[i][2] = f[i][2];
+  }
+
+  eng_vdwl_orig = force->pair->eng_vdwl;
+  eng_coul_orig = force->pair->eng_coul;
+
+  pvirial_orig[0] = force->pair->virial[0];
+  pvirial_orig[1] = force->pair->virial[1];
+  pvirial_orig[2] = force->pair->virial[2];
+  pvirial_orig[3] = force->pair->virial[3];
+  pvirial_orig[4] = force->pair->virial[4];
+  pvirial_orig[5] = force->pair->virial[5];
+
+  if (update->eflag_atom) {
+    double *peatom = force->pair->eatom;
+    for (i = 0; i < natom; i++) peatom_orig[i] = peatom[i];
+  }
+  if (update->vflag_atom) {
+    double **pvatom = force->pair->vatom;
+    for (i = 0; i < natom; i++) {
+      pvatom_orig[i][0] = pvatom[i][0];
+      pvatom_orig[i][1] = pvatom[i][1];
+      pvatom_orig[i][2] = pvatom[i][2];
+      pvatom_orig[i][3] = pvatom[i][3];
+      pvatom_orig[i][4] = pvatom[i][4];
+      pvatom_orig[i][5] = pvatom[i][5];
+    }
+  }
+
+
+  double *q = atom->q;
+  for (i = 0; i < nall; i++) q_orig[i] = q[i];
+
+  if (force->kspace) {
+     energy_orig = force->kspace->energy;
+     kvirial_orig[0] = force->kspace->virial[0];
+     kvirial_orig[1] = force->kspace->virial[1];
+     kvirial_orig[2] = force->kspace->virial[2];
+     kvirial_orig[3] = force->kspace->virial[3];
+     kvirial_orig[4] = force->kspace->virial[4];
+     kvirial_orig[5] = force->kspace->virial[5];
+
+     if (update->eflag_atom) {
+        double *keatom = force->kspace->eatom;
+        for (i = 0; i < natom; i++) keatom_orig[i] = keatom[i];
+     }
+     if (update->vflag_atom) {
+        double **kvatom = force->kspace->vatom;
+        for (i = 0; i < natom; i++) {
+          kvatom_orig[i][0] = kvatom[i][0];
+          kvatom_orig[i][1] = kvatom[i][1];
+          kvatom_orig[i][2] = kvatom[i][2];
+          kvatom_orig[i][3] = kvatom[i][3];
+          kvatom_orig[i][4] = kvatom[i][4];
+          kvatom_orig[i][5] = kvatom[i][5];
+        }
+     }
+  }
+}
+
 /* --------------------------------------------------------------------------
    -------------------------------------------------------------------------- */
 
-void FixConstantPH::modify_params()
+void FixConstantPH::modify_params(const double& scale)
 {
     for (int i = 0; i < ??; i++)
 	for (int j = i; j < ??; j++)
-	    epsilons[i][j] *= lambda;
+	    epsilons_org[i][j] *= scale;
+
+    // I need to add bond, angle, dihedral, improper and charge parameters
+	
 }
 
 
