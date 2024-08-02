@@ -11,6 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
+/* ---v0.00.2----- */
 
 #include "fix.h"
 
@@ -21,6 +22,7 @@
 #include "force.h"
 #include "group.h"
 #include "memory.h"
+#include "timer.h"
 #include "math_const.h"
 
 #include <cstring>
@@ -100,28 +102,29 @@ void FixConstantPH::init()
     pair1 = nullptr;
   
     if (lmp->suffix_enable)
-        pair1 = force->pair_match(std::string(ad->pstyle)+"/"+lmp->suffix,1);
+        pair1 = force->pair_match(std::string(pstyle)+"/"+lmp->suffix,1);
     if (pair1 == nullptr)
         pair1 = force->pair_match(pstyle,1); // I need to define the pstyle variable
     void *ptr1 = pair1->extract(pparam1,pdim1);
     if (ptr1 == nullptr)
-        error->all(FLERR,"Fix adapt/fep pair style param not supported");
+        error->all(FLERR,"Fix constant_pH pair style param not supported");
     if (pdim != 2)
          error->all(FLERR,"Pair style parameter {} is not compatible with fix constant_pH", pparam1);
    
-    if (pdim == 2) epsilons = (double **) ptr;
+    if (pdim == 2) double ** epsilon = (double **) ptr;
 
-    for (int i = 0; i <= ??; i++)
-         for (int j = i; j <= ??; j++)
-             epsilons_org[i][j] = epsilons[i][j];
-	
-    // It might needs to be in the setup. I am not sure
-    nmax = 1;
-    if (atom->nmax > nmax) {
-	memory->destroy(H_atom);
-    	nmax = atom->nmax;
-    	memory->create(H_atom, nmax, "constant_pH:H_atom");
-    }
+    int ntypes = atom->ntypes;
+    memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init);
+
+    // I am not sure about the limits of these two loops, please double check them
+    for (int i = 0; i <= ntypes+1; i++)
+         for (int j = i; j <= ntypes+1; j++)
+             epsilon_init[i][j] = epsilon[i][j];
+
+    for (int i = 0; i < nlocal; i++)
+         if (mask[i] & groupHbit)
+	     q[i] = q_init * 1.0;
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -172,60 +175,61 @@ void FixConstantPH::compute_Hs()
    int *mask = atom->mask;
    int nlocal = atom->nlocal;
 
-   eflag = 1;
-   vflag = 0;
-
    invoked_vector = update->ntimestep;
 
    if (atom->nmax > nmax) {    // reallocate working arrays if necessary
-      ???? 
-     ?????
+      deallocate_storage();
+      allocate_storage();
    }
 
    backup_qfev();      // backup charge, force, energy, virial array values
    modify_params(0.0); //should define a change_parameters(const int);
+   update_lmp(); // update the lammps force and virial values
+   HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0
+   restore_qfev();      // restore charge, force, energy, virial array values
+   restore_params();    // restore pair parameters and charge values
+   modify_params(1.0); //should define a change_parameters(const double);
+   update_lmp();
+   HB = compute_epair();
+   restore_qfev();      // restore charge, force, energy, virial array values
+   restore_params();    // restore pair parameters and charge values
+   modify_params(lambda); //should define a change_parameters(const double);
+   update_lmp();	
+}
 
-   timer->stamp();
-   if (force->pair && force->pair->compute_flag) {
-     force->pair->compute(eflag, vflag);
-     timer->stamp(Timer::PAIR);
-   }
-   if (chgflag && force->kspace && force->kspace->compute_flag) {
-     force->kspace->compute(eflag, vflag);
-     timer->stamp(Timer::KSPACE);
-   }
+/* ----------------------------------------------------------------------
+   manage storage for charge, force, energy, virial arrays
+   taken from src/FEP/compute_fep.cpp
+------------------------------------------------------------------------- */
 
-  // accumulate force/energy/virial from /gpu pair styles
-  if (fixgpu) fixgpu->post_force(vflag);
-
-  HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0
-
-  change_parameters(1.0); //should define a change_parameters(const double);
-
-  timer->stamp();
-  if (force->pair && force->pair->compute_flag) {
-    force->pair->compute(eflag, vflag);
-    timer->stamp(Timer::PAIR);
+void FixConstantPH::allocate_storage()
+{
+  nmax = atom->nmax;
+  memory->create(f_orig, nmax, 3, "fep:f_orig");
+  memory->create(peatom_orig, nmax, "fep:peatom_orig");
+  memory->create(pvatom_orig, nmax, 6, "fep:pvatom_orig");
+  memory->create(q_orig, nmax, "fep:q_orig");
+  if (force->kspace) {
+     memory->create(keatom_orig, nmax, "fep:keatom_orig");
+     memory->create(kvatom_orig, nmax, 6, "fep:kvatom_orig");
   }
-  if (chgflag && force->kspace && force->kspace->compute_flag) {
-    force->kspace->compute(eflag, vflag);
-    timer->stamp(Timer::KSPACE);
-  }
+}
 
-  // accumulate force/energy/virial from /gpu pair styles
-  // this is required as to empty the answer queue,
-  // otherwise the force compute on the GPU in the next step would be incorrect
-  if (fixgpu) fixgpu->post_force(vflag);
+/* ---------------------------------------------------------------------- */
 
-  HB = compute_epair();
+void FixConstantPH::deallocate_storage()
+{
+  memory->destroy(f_orig);
+  memory->destroy(peatom_orig);
+  memory->destroy(pvatom_orig);
+  memory->destroy(q_orig);
+  memory->destroy(keatom_orig);
+  memory->destroy(kvatom_orig);
 
-  restore_qfev();      // restore charge, force, energy, virial array values
-  restore_params();    // restore pair parameters
-
-  change_parameters(lambda); //should define a change_parameters(const double);
-
-
-
+  f_orig = nullptr;
+  q_orig = nullptr;
+  peatom_orig = keatom_orig = nullptr;
+  pvatom_orig = kvatom_orig = nullptr;
 }
 
 /* ----------------------------------------------------------------------
@@ -310,18 +314,48 @@ void ComputeFEP::backup_qfev()
 
 void FixConstantPH::modify_params(const double& scale)
 {
-    for (int i = 0; i < ??; i++)
-	for (int j = i; j < ??; j++)
-	    epsilons_org[i][j] *= scale;
+    int nlocal = atom->nlocal;
+    int * mask = atom->mask;
+    int ntypes = atom->ntypes;
 
+    // not sure about the range of these two loops
+    for (int i = 0; i < ntypes + 1; i++)
+	for (int j = i; j < ntypes + 1; j++)
+	    epsilon[i][j] = epsilon_init[i][j] * scale;
+
+    for (int i = 0; i < nlocal; i++)
+        if (mask[i] & groupHbit)
+	    q[i] = q_init * scale;
+	    
     // I need to add bond, angle, dihedral, improper and charge parameters
 	
+}
+
+/* ----------------------------------------------------------------------
+   modify force and kspace in lammps according
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::update_lmp() {
+   eflag = 1;
+   vflag = 0;
+   timer->stamp();
+   if (force->pair && force->pair->compute_flag) {
+     force->pair->compute(eflag, vflag);
+     timer->stamp(Timer::PAIR);
+   }
+   if (force->kspace && force->kspace->compute_flag) {
+     force->kspace->compute(eflag, vflag);
+     timer->stamp(Timer::KSPACE);
+   }
+
+   // accumulate force/energy/virial from /gpu pair styles
+   if (fixgpu) fixgpu->post_force(vflag);
 }
 
 
 /* ----------------------------------------------------------------------
    memory usage of local atom-based array --> Needs to be updated at the end
-------------------------------------------------------------------------- */
+   ---------------------------------------------------------------------- */
 
 double ComputePEAtom::memory_usage()
 {
