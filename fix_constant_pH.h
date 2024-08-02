@@ -49,6 +49,7 @@ namespace LAMMPS_NS {
 		double HA, HB;
 		int nmax;
                 double *H_atom;
+		Pair * pair1;
 
 		void integrate_lambda();
 		void compute_Hs();
