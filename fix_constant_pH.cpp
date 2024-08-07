@@ -43,9 +43,12 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   if (igroupH == -1) error->all(FLERR,"Cannot find the hydrogens group for fix constant_pH);
   groupHbit = group->bitmask(igroupH);
   igroupW = group->find(arg[5]);
-  if (igroupW == -1) error->all(FLERR,"Cannot find the water group for fix constant_pH");
-  if (group->count(igroupW) != 3) 
-     error->all(FLERR, "Number of atoms in the water molecule for the fix constant_pH is {} instead of three",group->count(igroupW));
+  if (igroupW == -1) error->all(FLERR,"Cannot find the hydronium ions hydrogen groups for fix constant_pH");
+  // For hydronium the initial charges are qO=-0.834, qH1=0.611, qH2=0.612, qH3=0.611 (based on TIP3P water model)
+  // if m is the number of igroupW atoms, m-1 atoms in the igroupW should be given a charge of lambda/3.0 
+  // and then the last atom must be given the charge of m*lambda/3 - (m-1)*lambda/3. This is done to count for rounding errors
+  if (group->count(igroupW) != 3 * group->count(igroupH)) 
+     error->all(FLERR, "Number of hydronium hydrogen atoms must be three times the number of protonable hydrogens");
   groupWbit = group->bitmask(igroupW);
   pK = utils::numeric(FLERR, arg[6], false, lmp);
   pH = utils::numeric(FLERR, arg[7], false, lmp);
@@ -62,7 +65,8 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
 
 FixConstantPH::~FixConstantPH()
 {
-   
+   memory->destroy(epsilon_init);
+   delete [] q_init;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -121,9 +125,11 @@ void FixConstantPH::init()
          for (int j = i; j <= ntypes+1; j++)
              epsilon_init[i][j] = epsilon[i][j];
 
+    int nmax = atom->nmax;
+    q_init = new double[nmax];
     for (int i = 0; i < nlocal; i++)
          if (mask[i] & groupHbit)
-	     q[i] = q_init * 1.0;
+	     q_init[i] = q[i];
 
 }
 
@@ -205,13 +211,12 @@ void FixConstantPH::compute_Hs()
 void FixConstantPH::allocate_storage()
 {
   nmax = atom->nmax;
-  memory->create(f_orig, nmax, 3, "fep:f_orig");
-  memory->create(peatom_orig, nmax, "fep:peatom_orig");
-  memory->create(pvatom_orig, nmax, 6, "fep:pvatom_orig");
-  memory->create(q_orig, nmax, "fep:q_orig");
+  memory->create(f_orig, nmax, 3, "constant_pH:f_orig");
+  memory->create(peatom_orig, nmax, "constant_pH:peatom_orig");
+  memory->create(pvatom_orig, nmax, 6, "constant_pH:pvatom_orig");
   if (force->kspace) {
-     memory->create(keatom_orig, nmax, "fep:keatom_orig");
-     memory->create(kvatom_orig, nmax, 6, "fep:kvatom_orig");
+     memory->create(keatom_orig, nmax, "constant_pH:keatom_orig");
+     memory->create(kvatom_orig, nmax, 6, "constant_pH:kvatom_orig");
   }
 }
 
@@ -222,12 +227,10 @@ void FixConstantPH::deallocate_storage()
   memory->destroy(f_orig);
   memory->destroy(peatom_orig);
   memory->destroy(pvatom_orig);
-  memory->destroy(q_orig);
   memory->destroy(keatom_orig);
   memory->destroy(kvatom_orig);
 
   f_orig = nullptr;
-  q_orig = nullptr;
   peatom_orig = keatom_orig = nullptr;
   pvatom_orig = kvatom_orig = nullptr;
 }
@@ -280,7 +283,6 @@ void ComputeFEP::backup_qfev()
 
 
   double *q = atom->q;
-  for (i = 0; i < nall; i++) q_orig[i] = q[i];
 
   if (force->kspace) {
      energy_orig = force->kspace->energy;
@@ -325,7 +327,7 @@ void FixConstantPH::modify_params(const double& scale)
 
     for (int i = 0; i < nlocal; i++)
         if (mask[i] & groupHbit)
-	    q[i] = q_init * scale;
+	    q[i] = q_init[i] * scale;
 	    
     // I need to add bond, angle, dihedral, improper and charge parameters
 	
