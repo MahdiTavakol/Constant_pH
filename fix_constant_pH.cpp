@@ -128,9 +128,7 @@ void FixConstantPH::init()
     int nmax = atom->nmax;
     q_init = new double[nmax];
     for (int i = 0; i < nlocal; i++)
-         if (mask[i] & groupHbit)
-	     q_init[i] = q[i];
-
+	q_init[i] = q[i];
 }
 
 /* ---------------------------------------------------------------------- */
@@ -281,9 +279,6 @@ void ComputeFEP::backup_qfev()
     }
   }
 
-
-  double *q = atom->q;
-
   if (force->kspace) {
      energy_orig = force->kspace->energy;
      kvirial_orig[0] = force->kspace->virial[0];
@@ -325,9 +320,15 @@ void FixConstantPH::modify_params(const double& scale)
 	for (int j = i; j < ntypes + 1; j++)
 	    epsilon[i][j] = epsilon_init[i][j] * scale;
 
+    int numWH = group->count(igroupW);
     for (int i = 0; i < nlocal; i++)
+    {
         if (mask[i] & groupHbit)
 	    q[i] = q_init[i] * scale;
+	if (mask[i] & groupWbit)
+	    q[i] = q_init[i] * (1-scale) * (float) numWH /3.0;	
+     }
+	    
 	    
     // I need to add bond, angle, dihedral, improper and charge parameters
 	
