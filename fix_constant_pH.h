@@ -53,7 +53,10 @@ namespace LAMMPS_NS {
 		int pdim1;
 
 		// Lambda dynamics
-		double lambda, v_lambda;
+		double lambda, v_lambda;	
+
+		// Protonation and hydronium group num atoms
+		int num_Hs, num_HWs;
 
 		// The smoothing function 
 		double f, df;
