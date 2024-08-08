@@ -93,7 +93,7 @@ namespace LAMMPS_NS {
 	void modify_params();
 	void modify_water();
 	void update_lmp();
-	};
+    };
 
 }    // namespace LAMMPS_NS
 
