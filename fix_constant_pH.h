@@ -43,17 +43,30 @@ namespace LAMMPS_NS {
 		// Input variables for constant values
 		int igroupH, igroupW;
 		int groupHbit, groupWbit;
+		int typeH;
 		double pK, pH, T;
-                bool GFF_flag;
-		double a, b, s, m, w, r, d;
+
+		double a, b, s, m, w, r, d, k, h;
 		double m_lambda;
 		double HA, HB;
-		int nmax;
-                double *H_atom;
 		Pair * pair1;
+		int pdim1;
+
+		// Lambda dynamics
+		double lambda, v_lambda;
+
+		// The smoothing function 
+		double f, df;
+
+		// Parameters for the forcefield modifiction term
+                bool GFF_flag;
+		FILE *fp;
+		double **GFF;
+		int GFF_size;
+		double GFF_lambda;
 
 		// _init is the initial value of hydrogen atoms properties which is multiplied by lambda at each step
-                double q_init; // ask the user to enter that as an input
+                double *q_init; // ask the user to enter that as an input
 		double **epsilon_init;
 
                 // _org is for value of parameters before the update_lmp() with modified parameters act on them
@@ -67,10 +80,13 @@ namespace LAMMPS_NS {
 		double *keatom_orig, **kvatom_orig;
 
 		void integrate_lambda();
+                template<int stage>
 		void compute_Hs();
+		void init_GFF();
+		void calculate_GFF();
 		void calculate_df();
 		void calculate_dU();
-		void set_force();
+		void integrate_lambda();
 		void modify_water();
 	};
 
