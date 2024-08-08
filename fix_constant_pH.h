@@ -87,7 +87,12 @@ namespace LAMMPS_NS {
 		void calculate_df();
 		void calculate_dU();
 		void integrate_lambda();
+		void allocate_storage();
+		void deallocate_storage();
+		void backup_qfev();
+		void modify_params();
 		void modify_water();
+		void update_lmp();
 	};
 
 }    // namespace LAMMPS_NS
