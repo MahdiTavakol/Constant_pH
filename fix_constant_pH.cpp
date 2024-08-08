@@ -238,13 +238,14 @@ void FixConstantPH::compute_Hs()
 
 void FixConstantPH::allocate_storage()
 {
-  int nmax = atom->nmax;
-  memory->create(f_orig, nmax, 3, "constant_pH:f_orig");
-  memory->create(peatom_orig, nmax, "constant_pH:peatom_orig");
-  memory->create(pvatom_orig, nmax, 6, "constant_pH:pvatom_orig");
+  int nlocal = atom->nlocal; // nlocal is fine since before the next atom exchange between MPI ranks these variables will be destroyed.
+  memory->create(f_orig, nlocal, 3, "constant_pH:f_orig");
+  memory->create(q_orig, nlocal, "constant_pH:q_orig");
+  memory->create(peatom_orig, nlocal, "constant_pH:peatom_orig");
+  memory->create(pvatom_orig, nlocal, 6, "constant_pH:pvatom_orig");
   if (force->kspace) {
-     memory->create(keatom_orig, nmax, "constant_pH:keatom_orig");
-     memory->create(kvatom_orig, nmax, 6, "constant_pH:kvatom_orig");
+     memory->create(keatom_orig, nlocal, "constant_pH:keatom_orig");
+     memory->create(kvatom_orig, nlocal, 6, "constant_pH:kvatom_orig");
   }
 }
 
@@ -252,6 +253,7 @@ void FixConstantPH::allocate_storage()
 
 void FixConstantPH::deallocate_storage()
 {
+  memory->destroy(q_orig);
   memory->destroy(f_orig);
   memory->destroy(peatom_orig);
   memory->destroy(pvatom_orig);
@@ -282,6 +284,10 @@ void ComputeFEP::backup_qfev()
     f_orig[i][1] = f[i][1];
     f_orig[i][2] = f[i][2];
   }
+
+  double *q = atom->q;
+  for (int i = 0; i < natom; i++)
+     q_orig[i] = q[i];
 
   eng_vdwl_orig = force->pair->eng_vdwl;
   eng_coul_orig = force->pair->eng_coul;
@@ -451,22 +457,20 @@ void FixConstantPH::calculate_GFF()
 
 double FixConstantPH::memory_usage()
 {
-
-		double *peatom_orig, **pvatom_orig;
- 		double energy_orig;
- 		double kvirial_orig[6];
-		double *keatom_orig, **kvatom_orig;
-
-	
   int nmax = atom->nmax;
   int nlocal = atom->nlocal;
   int ntypes = atom->ntypes;
   double pair_bytes = sizeof(Pair);
   double GFF_bytes = 2.0 * GFF_size * sizeof(double);
-  double epsilon_init = (double) (ntypes + 1) * (double) (ntypes + 1) * sizeof(double);
-  double q_orig_bytes = (double) nmax * sizeof(double);
-  double f_orig_bytes = (double) nmax * 3.0 * sizeof(double);
-  double 
-  double bytes = (double) nmax * sizeof(double);
+  double epsilon_init_bytes = (double) (ntypes + 1) * (double) (ntypes + 1) * sizeof(double);
+  double q_orig_bytes = (double) nlocal * sizeof(double);
+  double f_orig_bytes = (double) nlocal * 3.0 * sizeof(double);
+  double peatom_orig_bytes = (double) nlocal * sizeof(double);
+  double pvatom_orig_bytes = (double) nlocal * 6.0 * sizeof(double);
+  double keatom_orig_bytes = (double) nlocal * sizeof(double);
+  double kvatom_orig_bytes = (double) nlocal * 6.0 * sizeof(double);
+  double bytes = pair_bytes + GFF_bytes + epsilon_init_bytes + \
+	         q_orig_bytes + f_orig_bytes + peatom_orig_bytes + \
+                 pvatom_orig_bytes + keatom_orig_bytes + kvatom_orig_bytes;
   return bytes;
 }
