@@ -43,14 +43,15 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH); 
   typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
   if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
-  // For hydronium the initial charges are qO=-0.834, qH1=0.611, qH2=0.612, qH3=0.611 (based on TIP3P water model)
-  // if m is the number of igroupW atoms, m-1 atoms in the igroupW should be given a charge of lambda/3.0 
-  // and then the last atom must be given the charge of m*lambda/3 - (m-1)*lambda/3. This is done to count for rounding errors
+  // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
 
 	
   pK = utils::numeric(FLERR, arg[6], false, lmp);
   pH = utils::numeric(FLERR, arg[7], false, lmp);
   T = utils::numeric(FLERR, arg[8], false, lmp);
+
+  qHs = 0.0;
+  qHWs = 0.612
 
   GFF_flag = false;
   int iarg = 9;
@@ -373,7 +374,7 @@ void FixConstantPH::modify_params(const double& scale)
     for (int i = 0; i < nlocal; i++)
     {
         if (type[i] == typeH)
-	    q[i] = scale;
+	    q[i] = qH + scale;
 	if (mask[i] & groupWbit)
 	    q[i] = qHW + (-scale) * (double) numHs/ (double) numHWs;	
      }
