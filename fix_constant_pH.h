@@ -44,6 +44,7 @@ namespace LAMMPS_NS {
 		int igroupH, igroupW;
 		int groupHbit, groupWbit;
 		double pK, pH, T;
+                bool GFF_flag;
 		double a, b, s, m, w, r, d;
 		double m_lambda;
 		double HA, HB;
