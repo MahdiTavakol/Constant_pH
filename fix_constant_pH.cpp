@@ -236,15 +236,15 @@ void FixConstantPH::compute_Hs()
    if (stage == 0)
    {
       allocate_storage();
-      backup_qfev();      // backup charge, force, energy, virial array values
+      backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
       modify_params(0.0); //should define a change_parameters(const int);
       update_lmp(); // update the lammps force and virial values
       HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0
-      restore_qfev();      // restore charge, force, energy, virial array values
+      backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
       modify_params(1.0); //should define a change_parameters(const double);
       update_lmp();
       HB = compute_epair();
-      restore_qfev();      // restore charge, force, energy, virial array values
+      backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
       deallocate_storage();
    }
    if (stage == 1)
@@ -289,10 +289,80 @@ void FixConstantPH::deallocate_storage()
 }
 
 /* ----------------------------------------------------------------------
+   Forward-reverse copy function to be used in backup_restore_qfev()
+   ---------------------------------------------------------------------- */
+
+template <typename type, int direction>
+void FixConstantPH::forward_reverse_copy(type &a,type &b)
+{
+   if (direction == 1) a = b;
+   if (direction == -1) b = a;
+}
+/* ----------------------------------------------------------------------
    backup and restore arrays with charge, force, energy, virial
    taken from src/FEP/compute_fep.cpp
+   backup ==> direction == 1
+   restore ==> direction == -1
 ------------------------------------------------------------------------- */
 
+template <int direction>
+void FixConstantPH::backup_restore_qfev()
+{
+  int i;
+
+  int nall = atom->nlocal + atom->nghost;
+  int natom = atom->nlocal;
+  if (force->newton || force->kspace->tip4pflag) natom += atom->nghost;
+
+  double **f = atom->f;
+  for (i = 0; i < natom; i++) {
+    forward_reverse_copy<direction>(f_orig[i][0],f[i][0]);
+    forward_reverse_copy<direction>(f_orig[i][1],f[i][1]);
+    forward_reverse_copy<direction>(f_orig[i][2],f[i][2]);
+  }
+
+  double *q = atom->q;
+  for (int i = 0; i < natom; i++)
+     forward_reverse_copy<direction>(q_orig[i],q[i]);
+
+  forward_reverse_copy<direction>(eng_vdwl_orig,force->pair->eng_vdwl);
+  forward_reverse_copy<direction>(eng_coul_orig,force->pair->eng_coul);
+
+  for (int i = 0; i < 6; i++)
+	  forward_reverse_copy<direction>(pvirial_orig[i] ,force->pair->virial[i]);
+
+  if (update->eflag_atom) {
+    double *peatom = force->pair->eatom;
+    for (i = 0; i < natom; i++) forward_reverse_copy<direction>(peatom_orig[i],peatom[i]);
+  }
+  if (update->vflag_atom) {
+    double **pvatom = force->pair->vatom;
+    for (i = 0; i < natom; i++)
+      for (int j = 0; j < 6; j++)
+      forward_reverse_copy<direction>(pvatom_orig[i][j],pvatom[i][j]);
+  }
+
+  if (force->kspace) {
+     forward_reverse_copy<direction>(energy_orig,force->kspace->energy);
+     for (int j = 0; j < 6; j++)
+         forward_reverse_copy<direction>(kvirial_orig[j],force->kspace->virial[j]);
+	  
+     if (update->eflag_atom) {
+        double *keatom = force->kspace->eatom;
+        for (i = 0; i < natom; i++) forward_reverse_copy<direction>(keatom_orig[i],keatom[i]);
+     }
+     if (update->vflag_atom) {
+        double **kvatom = force->kspace->vatom;
+        for (i = 0; i < natom; i++) 
+	  for (int j = 0; j < 6; j++)
+             forward_reverse_copy<direction>(kvatom_orig[i][0],kvatom[i][0]);
+     }
+  }
+}
+
+/* ----------------------------------------------------------------------------------------------
+
+   ---------------------------------------------------------------------------------------------- */
 void FixConstantPH::backup_qfev()
 {
   int i;
