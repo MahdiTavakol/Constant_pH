@@ -90,12 +90,11 @@ void FixConstantPH::post_force(int vflag)
       calculate_df();
       calculate_dU();
       integrate_lambda();
-      compute_Hs<1>();
    }
    /* The force on hydrogens must be updated at every step otherwise at 
       steps at this fix is not active the pH would be very low and there
       will be a jump in pH in nevery steps                               */
-   set_force(); // I am not sure with change_parameter it should be here or not!!!!
+   compute_Hs<1>();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -198,13 +197,14 @@ void FixConstantPH::compute_Hs()
 
    invoked_vector = update->ntimestep;
 
-   if (atom->nmax > nmax) {    // reallocate working arrays if necessary
-      deallocate_storage();
-      allocate_storage();
-   }
+
 
    if (stage == 0)
    {
+      if (atom->nmax > nmax) {    // reallocate working arrays if necessary
+         deallocate_storage();
+         allocate_storage();
+      }
       backup_qfev();      // backup charge, force, energy, virial array values
       modify_params(0.0); //should define a change_parameters(const int);
       update_lmp(); // update the lammps force and virial values
@@ -214,11 +214,11 @@ void FixConstantPH::compute_Hs()
       modify_params(1.0); //should define a change_parameters(const double);
       update_lmp();
       HB = compute_epair();
+      restore_qfev();      // restore charge, force, energy, virial array values
+      restore_params();    // restore pair parameters and charge values
    }
    if (stage == 1)
    {
-      restore_qfev();      // restore charge, force, energy, virial array values
-      restore_params();    // restore pair parameters and charge values
       modify_params(lambda); //should define a change_parameters(const double);
       update_lmp();
    }
