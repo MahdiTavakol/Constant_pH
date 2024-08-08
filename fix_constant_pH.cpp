@@ -41,12 +41,12 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
   typeH = utils::inumeric(FLERR,arg[4],flase,lmp);
   if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH); 
-  igroupW = group->find(arg[5]);
-  if (igroupW == -1) error->all(FLERR,"Cannot find the hydronium ions hydrogen groups for fix constant_pH");
+  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
+  if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
   // For hydronium the initial charges are qO=-0.834, qH1=0.611, qH2=0.612, qH3=0.611 (based on TIP3P water model)
   // if m is the number of igroupW atoms, m-1 atoms in the igroupW should be given a charge of lambda/3.0 
   // and then the last atom must be given the charge of m*lambda/3 - (m-1)*lambda/3. This is done to count for rounding errors
-  groupWbit = group->bitmask(igroupW);
+
 	
   pK = utils::numeric(FLERR, arg[6], false, lmp);
   pH = utils::numeric(FLERR, arg[7], false, lmp);
@@ -63,10 +63,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
          error->one(FLERR, "Cannot find fix constant_pH the GFF correction file {}",arg[iarg+1]);
        iarg = iarg + 2;
     }
-    if ((strcmp(arg[iarg],"qs") == 0)
+    if ((strcmp(arg[iarg],"Qs") == 0)
     {
-       qHW = utils::numeric(FLERR, arg[iarg+1]);
-       iarg = iarg + 1;
+       qH = utils::numeric(FLERR, arg[iarg+1]);
+       qHW = utils::numeric(FLERR, arg[iarg+2]);
+       iarg = iarg + 3;
     }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
@@ -143,16 +144,27 @@ void FixConstantPH::init()
 	
     int * type = atom->type;
     int nlocal = atom->nlocal;
-    int num_Hs_local = 0;
+    int * nums = new int[2];
+    int * nums_local = new int[2];
+    nums_local[0] = 0;
+    nums_local[1] = 0;
     for (int i = 0; i < nlocal; i++)
-	if (type[i] == typeH)
-	    num_Hs_local++;
+    {
+        if (type[i] == typeH)
+	    nums_local[0]++;
+	else if (type[i] == typeHW)
+	    nums_local[1]++;
+    }
 
-    MPI_Allreduce(&num_Hs_local,&num_Hs,MPI_INT,MPI_SUM,world);
-    num_HWs = group->count(groupWbit);
+    MPI_Allreduce(&num_local,&nums,2,MPI_INT,MPI_SUM,world);
+    num_Hs = nums[0];
+    num_HWs = nums[1];
 
     if (num_HWs != 3*num_Hs) 
 	error->warning(FLERR,"In the fix constant_pH the number of hydrogen atoms of the hydronium group should be three times the number of titrable groups");
+    delete [] nums_local;
+    delete [] nums;
+
 	
     GFF_lambda = 0.0;
     if (GFF_flag)
@@ -358,7 +370,6 @@ void FixConstantPH::modify_params(const double& scale)
 	    if (type[i] == typeH || type[j] == typeH)
 	    	epsilon[i][j] = epsilon_init[i][j] * scale;
 
-    int numWH = group->count(igroupW);
     for (int i = 0; i < nlocal; i++)
     {
         if (type[i] == typeH)
