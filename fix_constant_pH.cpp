@@ -53,7 +53,8 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   pK = utils::numeric(FLERR, arg[6], false, lmp);
   pH = utils::numeric(FLERR, arg[7], false, lmp);
   T = utils::numeric(FLERR, arg[8], false, lmp);
-   
+
+  GFF_flag = false;
   int iarg = 9;
   while (iarg < narg) {
     if (strcmp(arg[iarg], "GFF") == 0)
