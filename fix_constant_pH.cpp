@@ -46,8 +46,8 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   // For hydronium the initial charges are qO=-0.834, qH1=0.611, qH2=0.612, qH3=0.611 (based on TIP3P water model)
   // if m is the number of igroupW atoms, m-1 atoms in the igroupW should be given a charge of lambda/3.0 
   // and then the last atom must be given the charge of m*lambda/3 - (m-1)*lambda/3. This is done to count for rounding errors
-  warning->all(FLERR, "Number of hydronium hydrogen atoms must be three times the number of protonable hydrogens");
   groupWbit = group->bitmask(igroupW);
+	
   pK = utils::numeric(FLERR, arg[6], false, lmp);
   pH = utils::numeric(FLERR, arg[7], false, lmp);
   T = utils::numeric(FLERR, arg[8], false, lmp);
@@ -140,8 +140,20 @@ void FixConstantPH::init()
          for (int j = i; j <= ntypes+1; j++)
              epsilon_init[i][j] = epsilon[i][j];
 
+	
+    int * type = atom->type;
+    int nlocal = atom->nlocal;
+    int num_Hs_local = 0;
+    for (int i = 0; i < nlocal; i++)
+	if (type[i] == typeH)
+	    num_Hs_local++;
 
+    MPI_Allreduce(&num_Hs_local,&num_Hs,MPI_INT,MPI_SUM,world);
+    num_HWs = group->count(groupWbit);
 
+    if (num_HWs != 3*num_Hs) 
+	error->warning(FLERR,"In the fix constant_pH the number of hydrogen atoms of the hydronium group should be three times the number of titrable groups");
+	
     GFF_lambda = 0.0;
     if (GFF_flag)
 	init_GFF();
@@ -346,7 +358,7 @@ void FixConstantPH::modify_params(const double& scale)
         if (type[i] == typeH)
 	    q[i] = scale;
 	if (mask[i] & groupWbit)
-	    q[i] = qHW + (-scale) * 1.0 /3.0;	
+	    q[i] = qHW + (-scale) * (double) numHs/ (double) numHWs;	
      }
 	    
 	    
