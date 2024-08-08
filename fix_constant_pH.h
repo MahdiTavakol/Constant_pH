@@ -10,7 +10,6 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.00.2----- */
 
 #ifdef FIX_CLASS
 // clang-format off
@@ -22,6 +21,7 @@ FixStyle(constant_pH,FixConstantPH);
 #define LMP_FIX_CONSTANTPH_H
 
 #include "fix.h"
+#include "pair.h"
 
 
 namespace LAMMPS_NS {
@@ -47,13 +47,18 @@ namespace LAMMPS_NS {
 	double a, b, s, m, w, r, d, k, h;
 	double m_lambda;
 	double HA, HB;
+	double U, dU;
+	
+	// Pair style parameters
+	char * pstyle, * pparam1;
 	Pair * pair1;
 	int pdim1;
 
 	// Lambda dynamics
 	double lambda, v_lambda;	
 
-	// Protonation and hydronium group num atoms
+	// Protonation and hydronium group parameters
+	double qHs, qHWs;
 	int num_Hs, num_HWs;
 
 	// The smoothing function 
@@ -66,6 +71,12 @@ namespace LAMMPS_NS {
 	int GFF_size;
 	double GFF_lambda;
 
+
+	class Fix *fixgpu;
+
+	// This is just a pointer to the non-bonded interaction parameters and does not have any allocated memory
+	// This should not be deallocated since the original pointer will be deallocated later on by the LAMMPS
+	double ** epsilon;
 	// _init is the initial value of hydrogen atoms properties which is multiplied by lambda at each step
 	double **epsilon_init;
 
@@ -79,7 +90,7 @@ namespace LAMMPS_NS {
  	double kvirial_orig[6];
 	double *keatom_orig, **kvatom_orig;
 
-	void integrate_lambda();
+
         template<int stage>
 	void compute_Hs();
 	void init_GFF();
@@ -90,9 +101,11 @@ namespace LAMMPS_NS {
 	void allocate_storage();
 	void deallocate_storage();
 	void backup_qfev();
-	void modify_params();
+	void restore_qfev();
+	void modify_params(const double& scale);
 	void modify_water();
 	void update_lmp();
+	double compute_epair();
 	};
 
 }    // namespace LAMMPS_NS
