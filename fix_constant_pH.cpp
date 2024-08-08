@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.00.2----- */
+/* ---v0.00.3----- */
 
 #include "fix.h"
 
@@ -56,7 +56,16 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
    
   int iarg = 9;
   while (iarg < narg) {
-    // for now, no other keywords
+    if (strcmp(arg[iarg], "GFF") == 0)
+    {
+       GFF_flag = true;
+       fp = fopen(arg[iarg+1],"r");
+       if (fp == nullptr)
+         error->one(FLERR, "Cannot find fix constant_pH the GFF correction file {}",arg[iarg+1]);
+       iarg = iarg + 2;
+    }
+    else
+       error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
   }
 
 }
@@ -65,8 +74,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
 
 FixConstantPH::~FixConstantPH()
 {
-   memory->destroy(epsilon_init);
+   memory->destroy(epsilon_init); 
+   memory->destroy(GFF);
    delete [] q_init;
+
+   if (fp && (comm->me == 0)) fclose(fp);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -74,10 +86,11 @@ FixConstantPH::~FixConstantPH()
 void FixConstantPH::post_force(int vflag)
 {
    if (update->ntimestep % nevery == 0) {
-      compute_Hs();
+      compute_Hs<0>();
       calculate_df();
       calculate_dU();
       integrate_lambda();
+      compute_Hs<1>();
    }
    /* The force on hydrogens must be updated at every step otherwise at 
       steps at this fix is not active the pH would be very low and there
@@ -118,7 +131,7 @@ void FixConstantPH::init()
     if (pdim == 2) double ** epsilon = (double **) ptr;
 
     int ntypes = atom->ntypes;
-    memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init);
+    memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init");
 
     // I am not sure about the limits of these two loops, please double check them
     for (int i = 0; i <= ntypes+1; i++)
@@ -129,6 +142,9 @@ void FixConstantPH::init()
     q_init = new double[nmax];
     for (int i = 0; i < nlocal; i++)
 	q_init[i] = q[i];
+
+    if (GFF_flag == true)
+	init_GFF();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -173,6 +189,7 @@ void FixConstantPH::calculate_dU()
 
 /* ----------------------------------------------------------------------- */
 
+template <int stage>
 void FixConstantPH::compute_Hs()
 {
    double **f = atom->f;
@@ -186,19 +203,25 @@ void FixConstantPH::compute_Hs()
       allocate_storage();
    }
 
-   backup_qfev();      // backup charge, force, energy, virial array values
-   modify_params(0.0); //should define a change_parameters(const int);
-   update_lmp(); // update the lammps force and virial values
-   HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0
-   restore_qfev();      // restore charge, force, energy, virial array values
-   restore_params();    // restore pair parameters and charge values
-   modify_params(1.0); //should define a change_parameters(const double);
-   update_lmp();
-   HB = compute_epair();
-   restore_qfev();      // restore charge, force, energy, virial array values
-   restore_params();    // restore pair parameters and charge values
-   modify_params(lambda); //should define a change_parameters(const double);
-   update_lmp();	
+   if (stage == 0)
+   {
+      backup_qfev();      // backup charge, force, energy, virial array values
+      modify_params(0.0); //should define a change_parameters(const int);
+      update_lmp(); // update the lammps force and virial values
+      HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0
+      restore_qfev();      // restore charge, force, energy, virial array values
+      restore_params();    // restore pair parameters and charge values
+      modify_params(1.0); //should define a change_parameters(const double);
+      update_lmp();
+      HB = compute_epair();
+   }
+   if (stage == 1)
+   {
+      restore_qfev();      // restore charge, force, energy, virial array values
+      restore_params();    // restore pair parameters and charge values
+      modify_params(lambda); //should define a change_parameters(const double);
+      update_lmp();
+   }
 }
 
 /* ----------------------------------------------------------------------
@@ -355,6 +378,63 @@ void FixConstantPH::update_lmp() {
    if (fixgpu) fixgpu->post_force(vflag);
 }
 
+/* ---------------------------------------------------------------------
+   Read the data file containing the term deltaGFF in equation 2 of 
+   https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::init_GFF()
+{
+   char line[100];
+   fgets(line,sizeof(line),fp);
+   line[strcspn(line,"\n")] = 0;
+   GFF_array_size = atoi(line);
+   memory->create(GFF,GFF_array_size,2,"constant_pH:GFF");
+   int i = 0;
+   while(fgets(line,sizeof(line), fp) != NULL && i < GFF_array_size)
+      {
+          line[strcspn(line,"\n")] = 0;
+	  token = strtok(line, ",");
+	  if (token != NULL) 
+	      _lambda = atof(token);
+	  else 
+	      error->one(FLERR,"The GFF correction file in the fix constant_pH has a wrong format!");
+	  token = strtok(line, ",");
+	  if (token != NULL)
+	      _GFF = atof(token);
+	  else
+	      error->one(FLERR,"The GFF correction file in the fix constant_pH has a wrong format!");
+	  GFF[i][0] = _lambda;
+	  GFF[i][1] = _GFF;
+	  i++;   
+      }	
+    if (fp && (comm->me == 0)) fclose(fp);
+}
+
+/* ---------------------------------------------------------------------
+   Add forcefield correction term deltaGFF in equation 2 of
+   https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_GFF()
+{
+   int i = 0;
+   while (i < GFF_array_size && GFF_array[i][0] < lambda) i++;
+
+   if (i == 0)
+   {
+      error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
+      GFF = GFF_array[0][1] + ((GFF_array[1][1]-GFF_array[0][1])/(GFF_array[1][0]-GFF_array[0][0]))*(lambda - GFF_array[0][0]);
+   }
+   if (i > 0 && i < GFF_array_size - 1)
+      GFF = GFF_array[i-1] + ((FF_array[i][1]-GFF_array[i-1][1])/(FF_array[i][0]-GFF_array[i-1][0]))*(lambda - GFF_array[i-1][0]);
+   if (i == GFF_array_size - 1)
+   {
+      error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
+      GFF = GFF_array[i] + ((FF_array[i][1]-GFF_array[i-1][1])/(FF_array[i][0]-GFF_array[i-1][0]))*(lambda - GFF_array[i][0]);
+   }
+}
+   
 
 /* ----------------------------------------------------------------------
    memory usage of local atom-based array --> Needs to be updated at the end
