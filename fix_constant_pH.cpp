@@ -510,7 +510,7 @@ double FixConstantPH::compute_epair()
 
    double energy_local = 0.0;
    double energy = 0.0;
-   if (pairflag && force->pair) energy_flag += force->pair->eng_vdwl + force->pair->eng_coul;
+   if (force->pair) energy_local += force->pair->eng_vdwl + force->pair->eng_coul;
 
    /* As the bond, angle, dihedral and improper energies 
       do not change with the espilon, we do not need to 
