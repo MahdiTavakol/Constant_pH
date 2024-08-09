@@ -344,11 +344,10 @@ void FixConstantPH::backup_restore_qfev()
   if (force->newton || force->kspace->tip4pflag) natom += atom->nghost;
 
   double **f = atom->f;
-  for (i = 0; i < natom; i++) {
-    forward_reverse_copy<direction>(f_orig[i][0],f[i][0]);
-    forward_reverse_copy<direction>(f_orig[i][1],f[i][1]);
-    forward_reverse_copy<direction>(f_orig[i][2],f[i][2]);
-  }
+  for (i = 0; i < natom; i++)
+    for (int j = 0 ; j < 3; j++)
+       forward_reverse_copy<direction>(f_orig[i][j],f[i][j]);
+  
 
   double *q = atom->q;
   for (int i = 0; i < natom; i++)
@@ -388,158 +387,6 @@ void FixConstantPH::backup_restore_qfev()
      }
   }
 }
-
-/* ----------------------------------------------------------------------------------------------
-
-   ---------------------------------------------------------------------------------------------- */
-void FixConstantPH::backup_qfev()
-{
-  int i;
-
-  int nall = atom->nlocal + atom->nghost;
-  int natom = atom->nlocal;
-  if (force->newton || force->kspace->tip4pflag) natom += atom->nghost;
-
-  double **f = atom->f;
-  for (i = 0; i < natom; i++) {
-    f_orig[i][0] = f[i][0];
-    f_orig[i][1] = f[i][1];
-    f_orig[i][2] = f[i][2];
-  }
-
-  double *q = atom->q;
-  for (int i = 0; i < natom; i++)
-     q_orig[i] = q[i];
-
-  eng_vdwl_orig = force->pair->eng_vdwl;
-  eng_coul_orig = force->pair->eng_coul;
-
-  pvirial_orig[0] = force->pair->virial[0];
-  pvirial_orig[1] = force->pair->virial[1];
-  pvirial_orig[2] = force->pair->virial[2];
-  pvirial_orig[3] = force->pair->virial[3];
-  pvirial_orig[4] = force->pair->virial[4];
-  pvirial_orig[5] = force->pair->virial[5];
-
-  if (update->eflag_atom) {
-    double *peatom = force->pair->eatom;
-    for (i = 0; i < natom; i++) peatom_orig[i] = peatom[i];
-  }
-  if (update->vflag_atom) {
-    double **pvatom = force->pair->vatom;
-    for (i = 0; i < natom; i++) {
-      pvatom_orig[i][0] = pvatom[i][0];
-      pvatom_orig[i][1] = pvatom[i][1];
-      pvatom_orig[i][2] = pvatom[i][2];
-      pvatom_orig[i][3] = pvatom[i][3];
-      pvatom_orig[i][4] = pvatom[i][4];
-      pvatom_orig[i][5] = pvatom[i][5];
-    }
-  }
-
-  if (force->kspace) {
-     energy_orig = force->kspace->energy;
-     kvirial_orig[0] = force->kspace->virial[0];
-     kvirial_orig[1] = force->kspace->virial[1];
-     kvirial_orig[2] = force->kspace->virial[2];
-     kvirial_orig[3] = force->kspace->virial[3];
-     kvirial_orig[4] = force->kspace->virial[4];
-     kvirial_orig[5] = force->kspace->virial[5];
-
-     if (update->eflag_atom) {
-        double *keatom = force->kspace->eatom;
-        for (i = 0; i < natom; i++) keatom_orig[i] = keatom[i];
-     }
-     if (update->vflag_atom) {
-        double **kvatom = force->kspace->vatom;
-        for (i = 0; i < natom; i++) {
-          kvatom_orig[i][0] = kvatom[i][0];
-          kvatom_orig[i][1] = kvatom[i][1];
-          kvatom_orig[i][2] = kvatom[i][2];
-          kvatom_orig[i][3] = kvatom[i][3];
-          kvatom_orig[i][4] = kvatom[i][4];
-          kvatom_orig[i][5] = kvatom[i][5];
-        }
-     }
-  }
-}
-
-/* -------------------------------------------------------------------------
-
-   ------------------------------------------------------------------------- */
-   
-void FixConstantPH::restore_qfev()
-{
-  int i;
-
-  int nall = atom->nlocal + atom->nghost;
-  int natom = atom->nlocal;
-  if (force->newton || force->kspace->tip4pflag) natom += atom->nghost;
-
-  double **f = atom->f;
-  for (i = 0; i < natom; i++) {
-    f[i][0] = f_orig[i][0];
-    f[i][1] = f_orig[i][1];
-    f[i][2] = f_orig[i][2];
-  }
-
-  double *q = atom->q;
-  for (int i = 0; i < natom; i++)
-     q[i] = q_orig[i];
-
-  force->pair->eng_vdwl = eng_vdwl_orig;
-  force->pair->eng_coul = eng_coul_orig;
-
-  force->pair->virial[0] = pvirial_orig[0];
-  force->pair->virial[1] = pvirial_orig[1];
-  force->pair->virial[2] = pvirial_orig[2];
-  force->pair->virial[3] = pvirial_orig[3];
-  force->pair->virial[4] = pvirial_orig[4];
-  force->pair->virial[5] = pvirial_orig[5];
-
-  if (update->eflag_atom) {
-    double *peatom = force->pair->eatom;
-    for (i = 0; i < natom; i++) peatom[i] = peatom_orig[i];
-  }
-  if (update->vflag_atom) {
-    double **pvatom = force->pair->vatom;
-    for (i = 0; i < natom; i++) {
-      pvatom[i][0] = pvatom_orig[i][0];
-      pvatom[i][1] = pvatom_orig[i][1];
-      pvatom[i][2] = pvatom_orig[i][2];
-      pvatom[i][3] = pvatom_orig[i][3];
-      pvatom[i][4] = pvatom_orig[i][4];
-      pvatom[i][5] = pvatom_orig[i][5];
-    }
-  }
-
-  if (force->kspace) {
-     energy_orig = force->kspace->energy;
-     force->kspace->virial[0] = kvirial_orig[0];
-     force->kspace->virial[1] = kvirial_orig[1];
-     force->kspace->virial[2] = kvirial_orig[2];
-     force->kspace->virial[3] = kvirial_orig[3];
-     force->kspace->virial[4] = kvirial_orig[4];
-     force->kspace->virial[5] = kvirial_orig[5];
-
-     if (update->eflag_atom) {
-        double *keatom = force->kspace->eatom;
-        for (i = 0; i < natom; i++) keatom[i] = keatom_orig[i];
-     }
-     if (update->vflag_atom) {
-        double **kvatom = force->kspace->vatom;
-        for (i = 0; i < natom; i++) {
-          kvatom[i][0] = kvatom_orig[i][0];
-          kvatom[i][1] = kvatom_orig[i][1];
-          kvatom[i][2] = kvatom_orig[i][2];
-          kvatom[i][3] = kvatom_orig[i][3];
-          kvatom[i][4] = kvatom_orig[i][4];
-          kvatom[i][5] = kvatom_orig[i][5];
-        }
-     }
-  }
-}
-
 
 /* ----------------------------------------------------------------------
    modify force and kspace in lammps according
