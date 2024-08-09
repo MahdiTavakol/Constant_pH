@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.00.8----- */
+/* ---v0.01.0----- */
 
 #include "fix.h"
 #include "fix_constant_pH.h"
@@ -31,6 +31,7 @@
 #include "modify.h"
 
 #include <cstring>
+#include <map>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -55,13 +56,15 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   pH = utils::numeric(FLERR, arg[7], false, lmp);
   T = utils::numeric(FLERR, arg[8], false, lmp);
   
-  pstyle = "test";
+  pstyle = utils::strdup(arg[9]);
+  
+
 
   qHs = 0.0;
   qHWs = 0.612;
 
   GFF_flag = false;
-  int iarg = 9;
+  int iarg = 10;
   while (iarg < narg) {
     if (strcmp(arg[iarg], "GFF") == 0)
     {
@@ -91,6 +94,9 @@ FixConstantPH::~FixConstantPH()
 {
    memory->destroy(epsilon_init); 
    memory->destroy(GFF);
+   
+   delete [] pparam1;
+   delete [] pstyle;
 
    if (fp && (comm->me == 0)) fclose(fp);
 }
@@ -108,10 +114,63 @@ int FixConstantPH::setmask()
   return mask;	
 }
 
+/* ----------------------------------------------------------------------
+   Setup
+   ---------------------------------------------------------------------- */
+   
+void FixConstantPH::init()
+{
+   std::map<std::string, std::string> pair_params;
+   
+   pair_params["lj/cut/soft/omp"] = "lambda";
+   pair_params["lj/cut/coul/cut/soft/gpu"] = "lambda";
+   pair_params["lj/cut/coul/cut/soft/omp"] = "lambda";
+   pair_params["lj/cut/coul/long/soft"] = "lambda";
+   pair_params["lj/cut/coul/long/soft/gpu"] = "lambda";
+   pair_params["lj/cut/coul/long/soft/omp"] = "lambda";
+   pair_params["lj/cut/tip4p/long/soft"] = "lambda";
+   pair_params["lj/cut/tip4p/long/soft/omp"] = "lambda";
+   pair_params["lj/charmm/coul/long/soft"] = "lambda";
+   pair_params["lj/charmm/coul/long/soft/omp"] = "lambda";
+   pair_params["lj/class2/soft"] = "lambda";
+   pair_params["lj/class2/coul/cut/soft"] = "lambda";
+   pair_params["lj/class2/coul/long/soft"] = "lambda";
+   pair_params["coul/cut/soft"] = "lambda";
+   pair_params["coul/cut/soft/omp"] = "lambda";
+   pair_params["coul/long/soft"] = "lambda";
+   pair_params["coul/long/soft/omp"] = "lambda";
+   pair_params["tip4p/long/soft"] = "lambda";
+   pair_params["tip4p/long/soft/omp"] = "lambda";
+   pair_params["morse/soft"] = "lambda";
+   
+   pair_params["lj/charmm/coul/charmm"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/gpu"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/intel"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/kk"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/omp"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/implicit"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/implicit/kk"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/implicit/omp"] = "epsilon";
+   pair_params["lj/charmm/coul/long"] = "epsilon";
+   pair_params["lj/charmm/coul/long/gpu"] = "epsilon";
+   pair_params["lj/charmm/coul/long/intel"] = "epsilon";
+   pair_params["lj/charmm/coul/long/kk"] = "epsilon";
+   pair_params["lj/charmm/coul/long/opt"] = "epsilon";
+   pair_params["lj/charmm/coul/long/omp"] = "epsilon";
+   pair_params["lj/charmm/coul/msm"] = "epsilon";
+   pair_params["lj/charmm/coul/msm/omp"] = "epsilon";
+   pair_params["lj/charmmfsw/coul/charmmfsh"] = "epsilon";
+   pair_params["lj/charmmfsw/coul/long"] = "epsilon";
+   pair_params["lj/charmmfsw/coul/long/kk"] = "epsilon";
+   
+   char* pparam1 = new char[pair_params[pstyle].length()+1];
+   std::strcpy(pparam1,pair_params[pstyle].c_str());
+   
+}
 
 /* ---------------------------------------------------------------------- */
 
-void FixConstantPH::init()
+void FixConstantPH::setup(int /*vflag*/)
 {
    // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
     w = 200.0;
@@ -135,7 +194,7 @@ void FixConstantPH::init()
         pair1 = force->pair_match(pstyle,1); // I need to define the pstyle variable
     void *ptr1 = pair1->extract(pparam1,pdim1);
     if (ptr1 == nullptr)
-        error->all(FLERR,"Fix constant_pH pair style param not supported");
+        error->all(FLERR,"Fix constant_pH pair style {} was not found",pstyle);
     if (pdim1 != 2)
          error->all(FLERR,"Pair style parameter {} is not compatible with fix constant_pH", pparam1);
          
@@ -401,7 +460,70 @@ void FixConstantPH::backup_restore_qfev()
 	  for (int j = 0; j < 6; j++)
              forward_reverse_copy<direction>(kvatom_orig,kvatom,i,j);
      }
-  }
+  }// clang-format off
+/* ----------------------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+/* ---v0.00.8----- */
+
+#include "fix.h"
+#include "fix_constant_pH.h"
+
+#include "atom.h"
+#include "atom_masks.h"
+#include "pair.h"
+#include "error.h"
+#include "force.h"
+#include "group.h"
+#include "memory.h"
+#include "timer.h"
+#include "comm.h"
+#include "kspace.h"
+#include "update.h"
+#include "math_const.h"
+#include "modify.h"
+
+#include <cstring>
+
+using namespace LAMMPS_NS;
+using namespace FixConst;
+using namespace MathConst;
+
+/* ---------------------------------------------------------------------- */
+
+FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
+  Fix(lmp, narg, arg)
+{
+  if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
+  nevery = utils::inumeric(FLERR,arg[3],false,lmp);
+  if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
+  typeH = utils::inumeric(FLERR,arg[4],false,lmp);
+  if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH); 
+  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
+  if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
+  // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
+
+	
+  pK = utils::numeric(FLERR, arg[6], false, lmp);
+  pH = utils::numeric(FLERR, arg[7], false, lmp);
+  T = utils::numeric(FLERR, arg[8], false, lmp);
+  
+  pstyle = "test";
+
+  qHs = 0.0;
+  qHWs = 0.612;
+
+  GFF_flag = false;
+
 }
 
 /* --------------------------------------------------------------
@@ -429,9 +551,6 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 	if (type[i] == typeHW)
 	    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
      }
-	    
-	    
-    // I need to add bond, angle, dihedral, improper and charge parameters
 	
 }
 
