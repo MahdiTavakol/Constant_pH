@@ -93,19 +93,24 @@ namespace LAMMPS_NS {
 
         template<int stage>
 	void compute_Hs();
-	void init_GFF();
-	void calculate_GFF();
 	void calculate_df();
 	void calculate_dU();
 	void integrate_lambda();
 	void allocate_storage();
 	void deallocate_storage();
-	void backup_qfev();
-	void restore_qfev();
-	void modify_params(const double& scale);
+        template <typename type, int direction>
+	void forward_reverse_copy();
+	template <int direction>
+	void backup_restore_qfev();
+	void init_GFF();
+	void calculate_GFF();
+	void modify_epsilon_q(const double& scale);
 	void modify_water();
 	void update_lmp();
 	double compute_epair();
+	void update_a_lambda();
+	void update_v_lambda();
+	void update_lambda();
 	};
 
 }    // namespace LAMMPS_NS
