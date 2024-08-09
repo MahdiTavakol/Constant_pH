@@ -32,14 +32,10 @@ namespace LAMMPS_NS {
 	~FixConstantPH() override;
 	int setmask() override;
 	void init() override;
-	void setup(int) override;
 	void initial_integrate(int) override;
 	void post_force(int) override;
 	void post_integrate() override;
-	double compute_scalar() override;
-	double compute_vector(int) override;
 	double memory_usage() override;
-	void init_list(int, class NeighList*) override;
 
      private:
 	// Input variables for constant values
@@ -99,8 +95,12 @@ namespace LAMMPS_NS {
 	void integrate_lambda();
 	void allocate_storage();
 	void deallocate_storage();
-        template <typename type, int direction>
-	void forward_reverse_copy(type& a, type& b);
+        template < int direction>
+	void forward_reverse_copy(double& a, double& b);
+        template < int direction>
+	void forward_reverse_copy(double* a, double* b, int i);
+        template < int direction>
+	void forward_reverse_copy(double** a, double** b, int i, int j);
 	template <int direction>
 	void backup_restore_qfev();
 	void init_GFF();
