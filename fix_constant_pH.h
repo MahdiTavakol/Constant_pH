@@ -32,6 +32,7 @@ namespace LAMMPS_NS {
 	~FixConstantPH() override;
 	int setmask() override;
 	void init() override;
+	void setup(int) override;
 	void initial_integrate(int) override;
 	void post_force(int) override;
 	void post_integrate() override;
@@ -73,7 +74,7 @@ namespace LAMMPS_NS {
 
 	// This is just a pointer to the non-bonded interaction parameters and does not have any allocated memory
 	// This should not be deallocated since the original pointer will be deallocated later on by the LAMMPS
-	double ** epsilon;
+	double **epsilon;
 	// _init is the initial value of hydrogen atoms properties which is multiplied by lambda at each step
 	double **epsilon_init;
 
