@@ -259,11 +259,11 @@ void FixConstantPH::compute_Hs()
    {
       allocate_storage();
       backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
-      modify_params(0.0); //should define a change_parameters(const int);
+      modify_epsilon_q(0.0); //should define a change_parameters(const int);
       update_lmp(); // update the lammps force and virial values
       HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0
       backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
-      modify_params(1.0); //should define a change_parameters(const double);
+      modify_epsilon_q(1.0); //should define a change_parameters(const double);
       update_lmp();
       HB = compute_epair();
       backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
@@ -271,7 +271,7 @@ void FixConstantPH::compute_Hs()
    }
    if (stage == 1)
    {
-      modify_params(lambda); //should define a change_parameters(const double);
+      modify_epsilon_q(lambda); //should define a change_parameters(const double);
       update_lmp();
    }
 }
