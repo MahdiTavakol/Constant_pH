@@ -47,7 +47,6 @@ namespace LAMMPS_NS {
 	double pK, pH, T;
 
 	double a, b, s, m, w, r, d, k, h;
-	double m_lambda;
 	double HA, HB;
 	double U, dU;
 	
@@ -57,7 +56,7 @@ namespace LAMMPS_NS {
 	int pdim1;
 
 	// Lambda dynamics
-	double lambda, v_lambda;	
+	double lambda, v_lambda, a_lambda, m_lambda;	
 
 	// Protonation and hydronium group parameters
 	double qHs, qHWs;
