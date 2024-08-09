@@ -95,21 +95,19 @@ FixConstantPH::~FixConstantPH()
    if (fp && (comm->me == 0)) fclose(fp);
 }
 
-/* ---------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------
 
-void FixConstantPH::post_force(int vflag)
+   ---------------------------------------------------------------------- */
+
+int FixConstantPH::setmask()
 {
-   if (update->ntimestep % nevery == 0) {
-      compute_Hs<0>();
-      calculate_df();
-      calculate_dU();
-      integrate_lambda();
-   }
-   /* The force on hydrogens must be updated at every step otherwise at 
-      steps at this fix is not active the pH would be very low and there
-      will be a jump in pH in nevery steps                               */
-   compute_Hs<1>();
+  int mask = 0;
+  mask |= INITIAL_INTEGRATE; // the 1st half of the velocity verlet algorithm --> update half step v_lambda and update lambda
+  mask |= POST_FORCE; // calculate the lambda 
+  mask |= FINAL_INTEGRATE; // the 2nd half of the velocity verlet algorithm --> update t
+  return mask;	
 }
+
 
 /* ---------------------------------------------------------------------- */
 
@@ -184,21 +182,45 @@ void FixConstantPH::init()
     fixgpu = modify->get_fix_by_id("package_gpu");
 }
 
+/* ----------------------------------------------------------------------
+   1st half of the velocity verlet algorithm for the lambda
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::initial_integrate(int /*vflag*/)
+{
+   if (update->ntimestep % nevery == 0)
+   {
+      update_v_lambda();
+      update_x_lambda();
+   }
+}
+
 /* ---------------------------------------------------------------------- */
 
-void FixConstantPH::integrate_lambda()
+void FixConstantPH::post_force(int vflag)
 {
-   if (GFF_flag) calculate_GFF();
-   double NA = 6.022*1e23;
-   double RT = force->boltz * T * NA;
-   double  f_lambda = -(HB-HA + df*RT*log(10)*(pK-pH) + dU - GFF_lambda);
-   double  a_lambda = f_lambda / m_lambda;
-   double dt_lambda = update->dt;
-   double  H_lambda = (1-lambda)*HA + lambda*HB + f*RT*log(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
-   // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
-   lambda += (1.0/2.0)*(a_lambda)*(dt_lambda)*(dt_lambda) + v_lambda*dt_lambda;
-   v_lambda += a_lambda * dt_lambda;
+   if (update->ntimestep % nevery == 0) {
+      compute_Hs<0>();
+      calculate_df();
+      calculate_dU();
+      update_a_lambda();
+   }
+   /* The force on hydrogens must be updated at every step otherwise at 
+      steps at this fix is not active the pH would be very low and there
+      will be a jump in pH in nevery steps                               */
+   compute_Hs<1>();
 }
+
+/* ----------------------------------------------------------------------
+   The 2nd half of the velocity verlet algorithm for the lambda parameter
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::post_integrate()
+{
+   if (update->ntimestep % nevery == 0)
+       update_v_lambda();
+}
+
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::calculate_df()
@@ -261,7 +283,13 @@ void FixConstantPH::compute_Hs()
 
 void FixConstantPH::allocate_storage()
 {
-  int nlocal = atom->nlocal; // nlocal is fine since before the next atom exchange between MPI ranks these variables will be destroyed.
+  /* It should be nmax since in the case that 
+     the newton flag is on the force in the 
+     ghost atoms also must be update and the 
+     nmax contains the maximum number of nlocal 
+     and nghost atoms.
+  */
+  int nlocal = atom->nmax; 
   memory->create(f_orig, nlocal, 3, "constant_pH:f_orig");
   memory->create(q_orig, nlocal, "constant_pH:q_orig");
   memory->create(peatom_orig, nlocal, "constant_pH:peatom_orig");
@@ -298,6 +326,7 @@ void FixConstantPH::forward_reverse_copy(type &a,type &b)
    if (direction == 1) a = b;
    if (direction == -1) b = a;
 }
+
 /* ----------------------------------------------------------------------
    backup and restore arrays with charge, force, energy, virial
    taken from src/FEP/compute_fep.cpp
@@ -511,121 +540,6 @@ void FixConstantPH::restore_qfev()
   }
 }
 
-/* --------------------------------------------------------------------------
-   -------------------------------------------------------------------------- */// clang-format off
-       qH = utils::numeric(FLERR, arg[iarg+1]);
-       qHW = utils::numeric(FLERR, arg[iarg+2]);
-       iarg = iarg + 3;
-    }
-    else
-       error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
-  }
-
-}
-
-/* ---------------------------------------------------------------------- */
-
-FixConstantPH::~FixConstantPH()
-{
-   memory->destroy(epsilon_init); 
-   memory->destroy(GFF);
-
-   if (fp && (comm->me == 0)) fclose(fp);
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::post_force(int vflag)
-{
-   if (update->ntimestep % nevery == 0) {
-      compute_Hs<0>();
-      calculate_df();
-      calculate_dU();
-      integrate_lambda();
-   }
-   /* The force on hydrogens must be updated at every step otherwise at 
-      steps at this fix is not active the pH would be very low and there
-      will be a jump in pH in nevery steps                               */
-   compute_Hs<1>();
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::init()
-{
-   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
-    w = 200.0;
-    s = 0.3;
-    h = 4.0;
-    k = 2.533;
-    a = 0.034041;
-    b = 0.005238;
-    r = 16.458;
-    m = 0.1507;
-    d = 2.0;
-    // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
-    m_lambda = 20;
-
-
-    pair1 = nullptr;
-  
-    if (lmp->suffix_enable)
-        pair1 = force->pair_match(std::string(pstyle)+"/"+lmp->suffix,1);
-    if (pair1 == nullptr)
-        pair1 = force->pair_match(pstyle,1); // I need to define the pstyle variable
-    void *ptr1 = pair1->extract(pparam1,pdim1);
-    if (ptr1 == nullptr)
-        error->all(FLERR,"Fix constant_pH pair style param not supported");
-    if (pdim1 != 2)
-         error->all(FLERR,"Pair style parameter {} is not compatible with fix constant_pH", pparam1);
-   
-    if (pdim1 == 2) double ** epsilon = (double **) ptr1;
-
-    int ntypes = atom->ntypes;
-    memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init");
-
-    // I am not sure about the limits of these two loops, please double check them
-    for (int i = 0; i <= ntypes+1; i++)
-         for (int j = i; j <= ntypes+1; j++)
-             epsilon_init[i][j] = epsilon[i][j];
-
-	
-    int * type = atom->type;
-    int nlocal = atom->nlocal;
-    int * nums = new int[2];
-    int * nums_local = new int[2];
-    nums_local[0] = 0;
-    nums_local[1] = 0;
-    for (int i = 0; i < nlocal; i++)
-    {
-
-
-void FixConstantPH::modify_params(const double& scale)
-{
-    int nlocal = atom->nlocal;
-    int * mask = atom->mask;
-    int * type = atom->type;
-    int ntypes = atom->ntypes;
-    double * q = atom->q;
-
-    // not sure about the range of these two loops
-    for (int i = 0; i < ntypes + 1; i++)
-	for (int j = i; j < ntypes + 1; j++)
-	    if (type[i] == typeH || type[j] == typeH)
-	    	epsilon[i][j] = epsilon_init[i][j] * scale;
-
-    for (int i = 0; i < nlocal; i++)
-    {
-        if (type[i] == typeH)
-	    q[i] = qHs + scale;
-	if (type[i] == typeHW)
-	    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
-     }
-	    
-	    
-    // I need to add bond, angle, dihedral, improper and charge parameters
-	
-}
 
 /* ----------------------------------------------------------------------
    modify force and kspace in lammps according
@@ -705,6 +619,37 @@ void FixConstantPH::calculate_GFF()
       GFF_lambda = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i][0]);
    }
 }
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::update_a_lambda()
+{
+   if (GFF_flag) calculate_GFF();
+   double NA = 6.022*1e23;
+   double RT = force->boltz * T * NA;
+   double  f_lambda = -(HB-HA + df*RT*log(10)*(pK-pH) + dU - GFF_lambda);
+   double  a_lambda = f_lambda / m_lambda;
+   double dt_lambda = update->dt;
+   double  H_lambda = (1-lambda)*HA + lambda*HB + f*RT*log(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
+   // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::update_v_lambda()
+{
+   double dt_lambda = update->dt;
+   v_lambda += 0.5*a_lambda*dt_lambda;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::update_lambda()
+{
+   double dt_lambda = update->dt;
+   lambda += v_lambda * dt_lambda;
+}
+
    
 /* ---------------------------------------------------------------------
 
