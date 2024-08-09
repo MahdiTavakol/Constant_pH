@@ -504,7 +504,19 @@ void FixConstantPH::update_lambda()
 
 double FixConstantPH::compute_epair()
 {
-   return 0.0;
+   invoked_scalar = update->ntimestep;
+   if (update->eflag_global != invoked_scalar)
+      error->all(FLERR,"Energy was not tallied on the needed timestep");
+
+   double energy_local = 0.0;
+   if (pairflag && force->pair) energy_flag += force->pair->eng_vdwl + force->pair->eng_coul;
+
+   /* As the bond, angle, dihedral and improper energies 
+      do not change with the espilon, we do not need to 
+      include them in the energy. We are interested in 
+      their difference afterall */
+
+   MPI_Allreduce(energy_local,
 }
 
 /* ----------------------------------------------------------------------
