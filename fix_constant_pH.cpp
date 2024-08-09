@@ -383,7 +383,7 @@ void FixConstantPH::backup_restore_qfev()
         double **kvatom = force->kspace->vatom;
         for (i = 0; i < natom; i++) 
 	  for (int j = 0; j < 6; j++)
-             forward_reverse_copy<direction>(kvatom_orig[i][0],kvatom[i][0]);
+             forward_reverse_copy<direction>(kvatom_orig[i][j],kvatom[i][j]);
      }
   }
 }
