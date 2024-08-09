@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.00.7----- */
+/* ---v0.00.8----- */
 
 #include "fix.h"
 #include "fix_constant_pH.h"
@@ -320,12 +320,28 @@ void FixConstantPH::deallocate_storage()
    Forward-reverse copy function to be used in backup_restore_qfev()
    ---------------------------------------------------------------------- */
 
-template <typename type, int direction>
-void FixConstantPH::forward_reverse_copy(type &a,type &b)
+template  <int direction>
+void FixConstantPH::forward_reverse_copy(double &a,double &b)
 {
    if (direction == 1) a = b;
    if (direction == -1) b = a;
 }
+
+template  <int direction>
+void FixConstantPH::forward_reverse_copy(double* a,double* b, int i)
+{
+   if (direction == 1) a[i] = b[i];
+   if (direction == -1) b[i] = a[i];
+}
+
+template  <int direction>
+void FixConstantPH::forward_reverse_copy(double** a,double** b, int i, int j)
+{
+   if (direction == 1) a[i][j] = b[i][j];
+   if (direction == -1) b[i][j] = a[i][j];
+}
+
+
 
 /* ----------------------------------------------------------------------
    backup and restore arrays with charge, force, energy, virial
@@ -346,47 +362,80 @@ void FixConstantPH::backup_restore_qfev()
   double **f = atom->f;
   for (i = 0; i < natom; i++)
     for (int j = 0 ; j < 3; j++)
-       forward_reverse_copy<direction>(f_orig[i][j],f[i][j]);
+       forward_reverse_copy<direction>(f_orig,f,i,j);
   
 
   double *q = atom->q;
   for (int i = 0; i < natom; i++)
-     forward_reverse_copy<direction>(q_orig[i],q[i]);
+     forward_reverse_copy<direction>(q_orig,q,i);
 
   forward_reverse_copy<direction>(eng_vdwl_orig,force->pair->eng_vdwl);
   forward_reverse_copy<direction>(eng_coul_orig,force->pair->eng_coul);
 
   for (int i = 0; i < 6; i++)
-	  forward_reverse_copy<direction>(pvirial_orig[i] ,force->pair->virial[i]);
+	  forward_reverse_copy<direction>(pvirial_orig ,force->pair->virial, i);
 
   if (update->eflag_atom) {
     double *peatom = force->pair->eatom;
-    for (i = 0; i < natom; i++) forward_reverse_copy<direction>(peatom_orig[i],peatom[i]);
+    for (i = 0; i < natom; i++) forward_reverse_copy<direction>(peatom_orig,peatom, i);
   }
   if (update->vflag_atom) {
     double **pvatom = force->pair->vatom;
     for (i = 0; i < natom; i++)
       for (int j = 0; j < 6; j++)
-      forward_reverse_copy<direction>(pvatom_orig[i][j],pvatom[i][j]);
+      forward_reverse_copy<direction>(pvatom_orig,pvatom,i,j);
   }
 
   if (force->kspace) {
      forward_reverse_copy<direction>(energy_orig,force->kspace->energy);
      for (int j = 0; j < 6; j++)
-         forward_reverse_copy<direction>(kvirial_orig[j],force->kspace->virial[j]);
+         forward_reverse_copy<direction>(kvirial_orig,force->kspace->virial,j);
 	  
      if (update->eflag_atom) {
         double *keatom = force->kspace->eatom;
-        for (i = 0; i < natom; i++) forward_reverse_copy<direction>(keatom_orig[i],keatom[i]);
+        for (i = 0; i < natom; i++) forward_reverse_copy<direction>(keatom_orig,keatom,i);
      }
      if (update->vflag_atom) {
         double **kvatom = force->kspace->vatom;
         for (i = 0; i < natom; i++) 
 	  for (int j = 0; j < 6; j++)
-             forward_reverse_copy<direction>(kvatom_orig[i][j],kvatom[i][j]);
+             forward_reverse_copy<direction>(kvatom_orig,kvatom,i,j);
      }
   }
 }
+
+/* --------------------------------------------------------------
+
+   -------------------------------------------------------------- */
+   
+void FixConstantPH::modify_epsilon_q(const double& scale)
+{
+    int nlocal = atom->nlocal;
+    int * mask = atom->mask;
+    int * type = atom->type;
+    int ntypes = atom->ntypes;
+    double * q = atom->q;
+
+    // not sure about the range of these two loops
+    for (int i = 0; i < ntypes + 1; i++)
+	for (int j = i; j < ntypes + 1; j++)
+	    if (type[i] == typeH || type[j] == typeH)
+	    	epsilon[i][j] = epsilon_init[i][j] * scale;
+
+    for (int i = 0; i < nlocal; i++)
+    {
+        if (type[i] == typeH)
+	    q[i] = qHs + scale;
+	if (type[i] == typeHW)
+	    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
+     }
+	    
+	    
+    // I need to add bond, angle, dihedral, improper and charge parameters
+	
+}
+
+
 
 /* ----------------------------------------------------------------------
    modify force and kspace in lammps according
