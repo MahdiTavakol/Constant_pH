@@ -509,6 +509,7 @@ double FixConstantPH::compute_epair()
       error->all(FLERR,"Energy was not tallied on the needed timestep");
 
    double energy_local = 0.0;
+   double energy = 0.0;
    if (pairflag && force->pair) energy_flag += force->pair->eng_vdwl + force->pair->eng_coul;
 
    /* As the bond, angle, dihedral and improper energies 
@@ -516,7 +517,8 @@ double FixConstantPH::compute_epair()
       include them in the energy. We are interested in 
       their difference afterall */
 
-   MPI_Allreduce(energy_local,
+   MPI_Allreduce(&energy_local,&energy,1,MPI_DOUBLE,MPI_SUM,world);
+   return energy;
 }
 
 /* ----------------------------------------------------------------------
