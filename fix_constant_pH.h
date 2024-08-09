@@ -33,7 +33,9 @@ namespace LAMMPS_NS {
 	int setmask() override;
 	void init() override;
 	void setup(int) override;
+	void initial_integrate(int) override;
 	void post_force(int) override;
+	void post_integrate() override;
 	double compute_scalar() override;
 	double compute_vector(int) override;
 	double memory_usage() override;
