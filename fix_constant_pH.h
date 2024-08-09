@@ -101,7 +101,7 @@ namespace LAMMPS_NS {
 	void allocate_storage();
 	void deallocate_storage();
         template <typename type, int direction>
-	void forward_reverse_copy();
+	void forward_reverse_copy(type& a, type& b);
 	template <int direction>
 	void backup_restore_qfev();
 	void init_GFF();
