@@ -191,7 +191,7 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
    if (update->ntimestep % nevery == 0)
    {
       update_v_lambda();
-      update_x_lambda();
+      update_lambda();
    }
 }
 
