@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.00.3----- */
+/* ---v0.00.7----- */
 
 #include "fix.h"
 #include "fix_constant_pH.h"
