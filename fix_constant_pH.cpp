@@ -144,25 +144,25 @@ void FixConstantPH::init()
    pair_params["tip4p/long/soft/omp"] = "lambda";
    pair_params["morse/soft"] = "lambda";
    
-   pair_params["lj/charmm/coul/charmm"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/gpu"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/intel"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/long"] = "epsilon";
-   pair_params["lj/charmm/coul/long/gpu"] = "epsilon";
-   pair_params["lj/charmm/coul/long/intel"] = "epsilon";
-   pair_params["lj/charmm/coul/long/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/long/opt"] = "epsilon";
-   pair_params["lj/charmm/coul/long/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/msm"] = "epsilon";
-   pair_params["lj/charmm/coul/msm/omp"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/charmmfsh"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/long"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/long/kk"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm"] = "lj14_1";
+   pair_params["lj/charmm/coul/charmm/gpu"] = "lj14_1";
+   pair_params["lj/charmm/coul/charmm/intel"] = "lj14_1";
+   pair_params["lj/charmm/coul/charmm/kk"] = "lj14_1";
+   pair_params["lj/charmm/coul/charmm/omp"] = "lj14_1";
+   pair_params["lj/charmm/coul/charmm/implicit"] = "lj14_1";
+   pair_params["lj/charmm/coul/charmm/implicit/kk"] = "lj14_1";
+   pair_params["lj/charmm/coul/charmm/implicit/omp"] = "lj14_1";
+   pair_params["lj/charmm/coul/long"] = "lj14_1";
+   pair_params["lj/charmm/coul/long/gpu"] = "lj14_1";
+   pair_params["lj/charmm/coul/long/intel"] = "lj14_1";
+   pair_params["lj/charmm/coul/long/kk"] = "lj14_1";
+   pair_params["lj/charmm/coul/long/opt"] = "lj14_1";
+   pair_params["lj/charmm/coul/long/omp"] = "lj14_1";
+   pair_params["lj/charmm/coul/msm"] = "lj14_1";
+   pair_params["lj/charmm/coul/msm/omp"] = "lj14_1";
+   pair_params["lj/charmmfsw/coul/charmmfsh"] = "lj14_1";
+   pair_params["lj/charmmfsw/coul/long"] = "lj14_1";
+   pair_params["lj/charmmfsw/coul/long/kk"] = "lj14_1";
 
    if (pair_params.find(pstyle) == pair_params.end())
       error->all(FLERR,"The pair style {} is not currently supported in fix constant_pH",pstyle);
