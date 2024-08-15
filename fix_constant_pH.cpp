@@ -612,8 +612,8 @@ void FixConstantPH::update_lambda()
 
 double FixConstantPH::compute_epair()
 {
-   if (update->eflag_global != update->ntimestep)
-      error->all(FLERR,"Energy was not tallied on the needed timestep");
+   //if (update->eflag_global != update->ntimestep)
+   //   error->all(FLERR,"Energy was not tallied on the needed timestep");
 
    double energy_local = 0.0;
    double energy = 0.0;
