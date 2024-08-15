@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.01.4----- */
+/* ---v0.01.5----- */
 
 #include "fix.h"
 #include "fix_constant_pH.h"
@@ -228,7 +228,7 @@ void FixConstantPH::setup(int /*vflag*/)
 	    nums_local[1]++;
     }
 
-    MPI_Allreduce(&nums_local,&nums,2,MPI_INT,MPI_SUM,world);
+    MPI_Allreduce(nums_local,nums,2,MPI_INT,MPI_SUM,world);
     num_Hs = nums[0];
     num_HWs = nums[1];
 
