@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.01.1----- */
+/* ---v0.01.4----- */
 
 #include "fix.h"
 #include "fix_constant_pH.h"
@@ -208,8 +208,8 @@ void FixConstantPH::setup(int /*vflag*/)
     memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init");
 
     // I am not sure about the limits of these two loops, please double check them
-    for (int i = 0; i <= ntypes+1; i++)
-        for (int j = i; j <= ntypes+1; j++)
+    for (int i = 0; i < ntypes+1; i++)
+        for (int j = i; j < ntypes+1; j++)
              epsilon_init[i][j] = epsilon[i][j];
 
 
@@ -259,7 +259,7 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 }
 
 /* ---------------------------------------------------------------------- */
-
+ntypes
 void FixConstantPH::post_force(int vflag)
 {
    if (update->ntimestep % nevery == 0) {
@@ -339,7 +339,7 @@ void FixConstantPH::compute_Hs()
    }
 }
 
-/* ----------------------------------------------------------------------
+/* -------------------------------------------------ntypesntypes---------------------
    manage storage for charge, force, energy, virial arrays
    taken from src/FEP/compute_fep.cpp
 ------------------------------------------------------------------------- */
