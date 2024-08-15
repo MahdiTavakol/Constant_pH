@@ -259,7 +259,7 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 }
 
 /* ---------------------------------------------------------------------- */
-ntypes
+
 void FixConstantPH::post_force(int vflag)
 {
    if (update->ntimestep % nevery == 0) {
