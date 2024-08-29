@@ -431,7 +431,7 @@ void FixConstantPH::backup_restore_qfev()
     for (int j = 0 ; j < 3; j++)
        forward_reverse_copy<direction>(f_orig,f,i,j);
   
-0
+
   double *q = atom->q;
   for (int i = 0; i < natom; i++)
      forward_reverse_copy<direction>(q_orig,q,i);
