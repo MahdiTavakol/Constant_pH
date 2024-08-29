@@ -539,12 +539,12 @@ void FixConstantPH::init_GFF()
       {
           double _lambda, _GFF;
           line[strcspn(line,"\n")] = 0;
-	  char * token = stok(line, ",");
+	  char * token = strtok(line, ",");
 	  if (token != NULL) 
 	      _lambda = atof(token);
 	  else 
 	      error->one(FLERR,"The GFF correction file in the fix constant_pH has a wrong format!");
-	  token = stok(line, ",");
+	  token = strtok(line, ",");
 	  if (token != NULL)
 	      _GFF = atof(token);
 	  else
@@ -607,7 +607,135 @@ void FixConstantPH::update_v_lambda()
 
 /* ---------------------------------------------------------------------- */
 
-void FixConstantPH::update_lambda()
+void FixConstantPH::update_lambda()// clang-format off
+/* ----------------------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+/* ---v0.01.5----- */
+
+#define DEBUG
+#ifdef DEBUG
+#include <iostream>
+#endif
+
+#include "fix.h"
+#include "fix_constant_pH.h"
+
+#include "atom.h"
+#include "atom_masks.h"
+#include "pair.h"
+#include "error.h"
+
+#include "force.h"
+#include "group.h"
+#include "memory.h"
+#include "timer.h"
+#include "comm.h"
+#include "kspace.h"
+#include "update.h"
+#include "math_const.h"
+#include "modify.h"
+
+#include <cstring>
+#include <map>
+
+using namespace LAMMPS_NS;
+using namespace FixConst;
+using namespace MathConst;
+
+/* ---------------------------------------------------------------------- */
+
+FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
+  Fix(lmp, narg, arg)
+{
+  if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
+  nevery = utils::inumeric(FLERR,arg[3],false,lmp);
+  if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
+  typeH = utils::inumeric(FLERR,arg[4],false,lmp);
+  if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH); 
+  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
+  if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
+  // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
+
+	
+  pK = utils::numeric(FLERR, arg[6], false, lmp);
+  pH = utils::numeric(FLERR, arg[7], false, lmp);
+  T = utils::numeric(FLERR, arg[8], false, lmp);
+  
+// clang-format off
+/* ----------------------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+/* ---v0.01.5----- */
+
+#define DEBUG
+#ifdef DEBUG
+#include <iostream>
+#endif
+
+#include "fix.h"
+#include "fix_constant_pH.h"
+
+#include "atom.h"
+#include "atom_masks.h"
+#include "pair.h"
+#include "error.h"
+
+#include "force.h"
+#include "group.h"
+#include "memory.h"
+#include "timer.h"
+#include "comm.h"
+#include "kspace.h"
+#include "update.h"
+#include "math_const.h"
+#include "modify.h"
+
+#include <cstring>
+#include <map>
+
+using namespace LAMMPS_NS;
+using namespace FixConst;
+using namespace MathConst;
+
+/* ---------------------------------------------------------------------- */
+
+FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
+  Fix(lmp, narg, arg)
+{
+  if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
+  nevery = utils::inumeric(FLERR,arg[3],false,lmp);
+  if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
+  typeH = utils::inumeric(FLERR,arg[4],false,lmp);
+  if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH); 
+  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
+  if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
+  // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
+
+	
+  pK = utils::numeric(FLERR, arg[6], false, lmp);
+  pH = utils::numeric(FLERR, arg[7], false, lmp);
+  T = utils::numeric(FLERR, arg[8], false, lmp);
+  
+
 {
    double dt_lambda = update->dt;
    lambda += v_lambda * dt_lambda;
