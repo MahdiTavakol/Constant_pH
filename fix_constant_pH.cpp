@@ -586,14 +586,14 @@ void FixConstantPH::update_a_lambda()
 {
    if (GFF_flag) calculate_GFF();
    double NA = 6.022*1e23;
-   double RT = force->boltz * T * NA;
-   double  f_lambda = -(HB-HA + dU*RT*log(10)*(pK-pH) - GFF_lambda);
+   double kT = force->boltz * T;
+   double  f_lambda = -(HB-HA + dU*kT*log(10)*(pK-pH) - GFF_lambda);
    double  a_lambda = f_lambda / m_lambda;
    #ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif
    double dt_lambda = update->dt;
-   double  H_lambda = (1-lambda)*HA + lambda*HB + f*RT*log(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
+   double  H_lambda = (1-lambda)*HA + lambda*HB + U*kT*log(10)*(pK-pH) + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
 }
 
