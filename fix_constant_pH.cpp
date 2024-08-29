@@ -170,7 +170,7 @@ void FixConstantPH::init()
    pair_params["lj/charmmfsw/coul/long/kk"] = "lj14_1";
 
    if (pair_params.find(pstyle) == pair_params.end())
-      error->all(FLERR,"The pair style {} is not currently supported in fix constant_pH",pstyle);
+      error->all(FLERR,"The pair style {} is not currently suppoed in fix constant_pH",pstyle);
    
    pparam1 = new char[pair_params[pstyle].length()+1];
    std::strcpy(pparam1,pair_params[pstyle].c_str());
@@ -311,8 +311,8 @@ void FixConstantPH::calculate_dU()
    dU1 = -((lambda-1-b)/(2*a*a))*U1;
    dU2 = -((lambda+b)/(2*a*a))*U2;
    dU3 = -((lambda-0.5)/(s*s))*U3;
-   dU4 = -0.5*w*r*2*exp(-r*r*(lambda+0.5)*(lambda+0.5))/sqrt(MY_PI);
-   dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(MY_PI);
+   dU4 = -0.5*w*r*2*exp(-r*r*(lambda+0.5)*(lambda+0.5))/sq(MY_PI);
+   dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sq(MY_PI);
 
     U =  U1 +  U2 +  U3 +  U4 +  U5;
    dU = dU1 + dU2 + dU3 + dU4 + dU5;
@@ -539,12 +539,12 @@ void FixConstantPH::init_GFF()
       {
           double _lambda, _GFF;
           line[strcspn(line,"\n")] = 0;
-	  char * token = strtok(line, ",");
+	  char * token = stok(line, ",");
 	  if (token != NULL) 
 	      _lambda = atof(token);
 	  else 
 	      error->one(FLERR,"The GFF correction file in the fix constant_pH has a wrong format!");
-	  token = strtok(line, ",");
+	  token = stok(line, ",");
 	  if (token != NULL)
 	      _GFF = atof(token);
 	  else
@@ -586,14 +586,14 @@ void FixConstantPH::update_a_lambda()
 {
    if (GFF_flag) calculate_GFF();
    double NA = 6.022*1e23;
-   double RT = force->boltz * T * NA;
-   double  f_lambda = -(HB-HA + dU*RT*log(10)*(pK-pH) - GFF_lambda);
+   double kT = force->boltz * T;
+   double  f_lambda = -(HB-HA + dU*kT*log(10)*(pK-pH) - GFF_lambda);
    double  a_lambda = f_lambda / m_lambda;
    #ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif
    double dt_lambda = update->dt;
-   double  H_lambda = (1-lambda)*HA + lambda*HB + f*RT*log(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
+   double  H_lambda = (1-lambda)*HA + lambda*HB + U*kT*log(10)*(pK-pH) + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
 }
 
