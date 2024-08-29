@@ -277,10 +277,6 @@ void FixConstantPH::post_force(int vflag)
       steps at this fix is not active the pH would be very low and there
       will be a jump in pH in nevery steps                               */
    compute_Hs<1>();
-
-   #ifdef DEBUG
-   std::cout << "The lambda is " << this->lambda << std::endl;
-   #endif 
 }
 
 /* ----------------------------------------------------------------------
@@ -593,6 +589,9 @@ void FixConstantPH::update_a_lambda()
    double RT = force->boltz * T * NA;
    double  f_lambda = -(HB-HA + df*RT*log(10)*(pK-pH) + dU - GFF_lambda);
    double  a_lambda = f_lambda / m_lambda;
+   #ifdef DEBUG
+	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
+   #endif
    double dt_lambda = update->dt;
    double  H_lambda = (1-lambda)*HA + lambda*HB + f*RT*log(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
