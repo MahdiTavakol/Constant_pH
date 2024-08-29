@@ -181,7 +181,7 @@ void FixConstantPH::init()
 
 void FixConstantPH::setup(int /*vflag*/)
 {
-   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - #define DEBUGTable S2
+   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
     w = 200.0;
     s = 0.3;
     h = 4.0;
@@ -221,7 +221,7 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     int * type = atom->type;
     int nlocal = atom->nlocal;
-    int * nums = new int[2];#define DEBUG
+    int * nums = new int[2];
     int * nums_local = new int[2];
     nums_local[0] = 0;
     nums_local[1] = 0;
