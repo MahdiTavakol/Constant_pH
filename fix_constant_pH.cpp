@@ -13,6 +13,11 @@
 ------------------------------------------------------------------------- */
 /* ---v0.01.5----- */
 
+#define DEBUG
+#ifdef DEBUG
+#include <iostream>
+#endif
+
 #include "fix.h"
 #include "fix_constant_pH.h"
 
@@ -176,7 +181,7 @@ void FixConstantPH::init()
 
 void FixConstantPH::setup(int /*vflag*/)
 {
-   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
+   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - #define DEBUGTable S2
     w = 200.0;
     s = 0.3;
     h = 4.0;
@@ -216,7 +221,7 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     int * type = atom->type;
     int nlocal = atom->nlocal;
-    int * nums = new int[2];
+    int * nums = new int[2];#define DEBUG
     int * nums_local = new int[2];
     nums_local[0] = 0;
     nums_local[1] = 0;
@@ -272,6 +277,10 @@ void FixConstantPH::post_force(int vflag)
       steps at this fix is not active the pH would be very low and there
       will be a jump in pH in nevery steps                               */
    compute_Hs<1>();
+
+   #ifdef DEBUG
+   std::cout << "The lambda is " << this->lambda << std::endl;
+   #endif 
 }
 
 /* ----------------------------------------------------------------------
