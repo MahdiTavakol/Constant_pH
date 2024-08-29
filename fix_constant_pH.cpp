@@ -308,8 +308,8 @@ void FixConstantPH::calculate_dU()
    U3 = d*exp(-(lambda-0.5)*(lambda-0.5)/(2*s*s));
    U4 = 0.5*w*(1-erff(r*(lambda+m)));
    U5 = 0.5*w*(1+erff(r*(lambda-1-m)));
-   dU1 = -((lambda-1-b)/(2*a*a))*U1;
-   dU2 = -((lambda+b)/(2*a*a))*U2;
+   dU1 = -((lambda-1-b)/(a*a))*U1;
+   dU2 = -((lambda+b)/(a*a))*U2;
    dU3 = -((lambda-0.5)/(s*s))*U3;
    dU4 = -0.5*w*r*2*exp(-r*r*(lambda+0.5)*(lambda+0.5))/sqrt(MY_PI);
    dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(MY_PI);
