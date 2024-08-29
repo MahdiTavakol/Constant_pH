@@ -587,7 +587,7 @@ void FixConstantPH::update_a_lambda()
    if (GFF_flag) calculate_GFF();
    double NA = 6.022*1e23;
    double RT = force->boltz * T * NA;
-   double  f_lambda = -(HB-HA + df*RT*log(10)*(pK-pH) + dU - GFF_lambda);
+   double  f_lambda = -(HB-HA + dU*RT*log(10)*(pK-pH) - GFF_lambda);
    double  a_lambda = f_lambda / m_lambda;
    #ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
