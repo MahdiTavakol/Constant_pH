@@ -378,12 +378,12 @@ void FixConstantPH::compute_Hs()
       std::cout << "Hey I am here" << std::endl;
       allocate_storage();
       backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
-      //modify_epsilon_q(0.0); //should define a change_parameters(const int);
+      modify_epsilon_q(0.0); //should define a change_parameters(const int);
       update_lmp(); // update the lammps force and virial values
       HA = compute_epair(); // I need to define my own version using compute pe/atom // HA is for the deprotonated state with lambda==0
       backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
-      //modify_epsilon_q(1.0); //should define a change_parameters(const double);
-      update_lmp();
+      modify_epsilon_q(1.0); //should define a change_parameters(const double);
+      ();
       HB = compute_epair();           // HB is for the protonated state with lambda==1 
       backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
       deallocate_storage();
@@ -391,8 +391,7 @@ void FixConstantPH::compute_Hs()
    if (stage == 1)
    {
       lambda = 0.0;
-      //modify_epsilon_q(lambda); //should define a change_parameters(const double);
-      update_lmp();
+      modify_epsilon_q(lambda); //should define a change_parameters(const double);
    }
 }
 
@@ -545,10 +544,10 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     for (int i = 0; i < nlocal; i++)
     {
 	int print_counter = 0;
-        //if (type[i] == typeH)
-	//    q[i] = qHs + scale;
-	//if (type[i] == typeHW)
-	//    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
+        if (type[i] == typeH)
+	    q[i] = qHs + scale;
+	if (type[i] == typeHW)
+	    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
      }
 	
 }
