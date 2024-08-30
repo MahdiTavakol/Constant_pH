@@ -86,6 +86,14 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
        qHWs = utils::numeric(FLERR, arg[iarg+2],false,lmp);
        iarg = iarg + 3;
     }
+    if ((strcmp(arg[iarg],"Print_Udwp") == 0))
+    {
+	print_Udwp_flag = true;
+	Udwp_fp = fopen(arg[iarg+1],"w");
+	if (Udwp_fp == nullptr(
+	    error->one(FLERR, "Cannot find fix constant_pH the Udwp debugging file {}",arg[iarg+1]);
+	iarg = iarg + 2;
+    }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
   }
@@ -105,6 +113,7 @@ FixConstantPH::~FixConstantPH()
    delete [] pstyle;
 
    if (fp && (comm->me == 0)) fclose(fp);
+   if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
 }
 
 /* ----------------------------------------------------------------------
@@ -182,15 +191,15 @@ void FixConstantPH::init()
 void FixConstantPH::setup(int /*vflag*/)
 {
    // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
-    w = 200.0;
+    w = 50.0;
     s = 0.3;
-    h = 4.0;
-    k = 2.533;
-    a = 0.034041;
-    b = 0.005238;
-    r = 16.458;
-    m = 0.1507;
-    d = 2.0;
+    h = 10.0;
+    k = 6.267;
+    a = 0.05130;
+    b = 0.001411;
+    r = 21.428;
+    m = 0.1078;
+    d = 5.0;
     // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
     m_lambda = 20;
 
@@ -246,6 +255,9 @@ void FixConstantPH::setup(int /*vflag*/)
     GFF_lambda = 0.0;
     if (GFF_flag)
 	init_GFF();
+
+    if (print_Udwp_flag)
+	print_Udwp();
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 }
@@ -311,11 +323,31 @@ void FixConstantPH::calculate_dU()
    dU1 = -((lambda-1-b)/(a*a))*U1;
    dU2 = -((lambda+b)/(a*a))*U2;
    dU3 = -((lambda-0.5)/(s*s))*U3;
-   dU4 = -0.5*w*r*2*exp(-r*r*(lambda+0.5)*(lambda+0.5))/sqrt(MY_PI);
-   dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(MY_PI);
+   dU4 = -0.5*w*r*2*exp(-r*r*(lambda+m)*(lambda+m))/sqrt(M_PI);
+   dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(M_PI);
 
     U =  U1 +  U2 +  U3 +  U4 +  U5;
    dU = dU1 + dU2 + dU3 + dU4 + dU5;
+}
+
+*/ ---------------------------------------------------------------------- */
+
+void FixConstantPH::print_Udwp()
+{
+    double lambda_backup = this->lambda;
+    int n_points = 100;
+	
+    lambda = -0.5;
+    double dlambda = 2.0/(double)n_points;
+
+    fprintf(Udwp_fp,"Lambda,U,dU\n");
+    for (int i = 0; i <= n_points; i++) {
+	calculate_dU();
+        fprintf(Udwp_fp,"%f,%f,%f\n",lambda,U,dU);
+	lambda += dlambda;
+    }
+    fclose(Udwp_fp);
+    lambda = lambda_backup;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -587,13 +619,13 @@ void FixConstantPH::update_a_lambda()
    if (GFF_flag) calculate_GFF();
    double NA = 6.022*1e23;
    double kT = force->boltz * T;
-   double  f_lambda = -(HB-HA + kT*log(10)*(pK-pH) + dU - GFF_lambda);
+   double  f_lambda = -(HB-HA + df*kT*log(10)*(pK-pH) + dU - GFF_lambda);
    double  a_lambda = f_lambda / m_lambda;
    #ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif
    double dt_lambda = update->dt;
-   double  H_lambda = (1-lambda)*HA + lambda*HB + kT*log(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
+   double  H_lambda = (1-lambda)*HA + lambda*HB + f*kT*log(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
 }
 
