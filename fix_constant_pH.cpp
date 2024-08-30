@@ -107,10 +107,22 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
 
 FixConstantPH::~FixConstantPH()
 {
-   memory->destroy(epsilon_init); 
+   #ifdef DEBUG
+       std::cout << "Releasing epsilon" << std::endl;
+   #endif
+   memory->destroy(epsilon_init);
+   #ifdef DEBUG
+       std::cout << "Releasing GFF" << std::endl;
+   #endif
    memory->destroy(GFF);
-   
+
+   #ifdef DEBUG
+       std::cout << "Releasing pparam1" << std::endl;
+   #endif
    delete [] pparam1;
+   #ifdef DEBUG
+       std::cout << "Releasing pstyle" << std::endl;
+   #endif
    delete [] pstyle;
 
    if (fp && (comm->me == 0)) fclose(fp);
