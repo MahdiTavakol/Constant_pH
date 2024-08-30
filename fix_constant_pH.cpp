@@ -369,7 +369,7 @@ void FixConstantPH::print_Udwp()
 template <int stage>
 void FixConstantPH::compute_Hs()
 {
-   if (stage == 0)
+   if (stage == -1)
    {
       allocate_storage();
       backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
