@@ -539,8 +539,20 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 
     for (int i = 0; i < nlocal; i++)
     {
+	int print_counter = 0;
         if (type[i] == typeH)
+	{
+#ifdef DEBUG
+	    if (print_counter == 0)
+	    std::cout << "The original q for " << i << " is " << q[i] << std::endl; 
+#endif
 	    q[i] = qHs + scale;
+#ifdef DEBUG
+	   if (print_counter == 0)
+	   std::cout << "Then it is changed to " << q[i] << std::endl;
+	   print_counter++;
+#endif
+	}
 	if (type[i] == typeHW)
 	    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
      }
