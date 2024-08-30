@@ -647,7 +647,7 @@ void FixConstantPH::update_a_lambda()
    double  f_lambda = -(HB-HA + df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda);
    this->a_lambda = f_lambda / m_lambda;
    #ifdef DEBUG
-	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
+	//std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif
 
    double  H_lambda = (1-lambda)*HA + lambda*HB + f*kT*log(10)*(pK-pH) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
