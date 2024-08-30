@@ -385,6 +385,7 @@ void FixConstantPH::compute_Hs()
    }
    if (stage == 1)
    {
+      lambda = 1.0;
       modify_epsilon_q(lambda); //should define a change_parameters(const double);
       update_lmp();
    }
