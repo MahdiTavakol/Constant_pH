@@ -420,7 +420,7 @@ void FixConstantPH::deallocate_storage()
 {
   memory->destroy(q_orig);
   memory->destroy(f_orig);
-  memory->destroy(peatom_orig);3
+  memory->destroy(peatom_orig);
   memory->destroy(pvatom_orig);
   memory->destroy(keatom_orig);
   memory->destroy(kvatom_orig);
