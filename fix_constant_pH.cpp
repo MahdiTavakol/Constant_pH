@@ -285,6 +285,8 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
    {
       update_v_lambda();
       update_lambda();
+      v_lambda = 0.0;
+      lambda = 0.0;
    }
 }
 
@@ -313,6 +315,8 @@ void FixConstantPH::post_integrate()
 {
    if (update->ntimestep % nevery == 0)
        update_v_lambda();
+       v_lambda = 0.0;
+       lambda = 0.0;
 }
 
 /* ---------------------------------------------------------------------- */
