@@ -673,7 +673,7 @@ double FixConstantPH::compute_epair()
 
    double energy_local = 0.0;
    double energy = 0.0;
-   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul)/static_cast<double> nlocal; // To convert to kcal/mol the total energy must be devided by the number of atoms
+   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul)/static_cast<double> (nlocal); // To convert to kcal/mol the total energy must be devided by the number of atoms
 
    /* As the bond, angle, dihedral and improper energies 
       do not change with the espilon, we do not need to 
