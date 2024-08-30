@@ -420,7 +420,7 @@ void FixConstantPH::deallocate_storage()
 {
   memory->destroy(q_orig);
   memory->destroy(f_orig);
-  memory->destroy(peatom_orig);
+  memory->destroy(peatom_orig);3
   memory->destroy(pvatom_orig);
   memory->destroy(keatom_orig);
   memory->destroy(kvatom_orig);
@@ -530,10 +530,11 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     double * q = atom->q;
 
     // not sure about the range of these two loops
-    for (int i = 0; i < ntypes + 1; i++)
+    /*for (int i = 0; i < ntypes + 1; i++)
 	for (int j = i; j < ntypes + 1; j++)
 	    if (type[i] == typeH || type[j] == typeH)
 	    	epsilon[i][j] = epsilon_init[i][j] * scale;
+    */
 
     for (int i = 0; i < nlocal; i++)
     {
