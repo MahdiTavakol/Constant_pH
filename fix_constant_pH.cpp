@@ -114,7 +114,7 @@ FixConstantPH::~FixConstantPH()
    #ifdef DEBUG
        std::cout << "Releasing GFF" << std::endl;
    #endif
-   memory->destroy(GFF);
+   if (GFF) memory->destroy(GFF);
 
    #ifdef DEBUG
        std::cout << "Releasing pparam1" << std::endl;
@@ -297,6 +297,7 @@ void FixConstantPH::post_force(int vflag)
       calculate_df();
       calculate_dU();
       update_a_lambda();
+      compute_q_total();
    }
    /* The force on hydrogens must be updated at every step otherwise at 
       steps at this fix is not active the pH would be very low and there
@@ -663,6 +664,23 @@ void FixConstantPH::update_lambda()
 
    
 /* ---------------------------------------------------------------------
+
+void FixConstantPH::compute_q_total()
+{
+   double * q = atom->q;
+   double nlocal = atom->nlocal;
+   double q_local = 0.0;
+   double q_total;
+   double tolerance = 0.001;
+
+   for (int i = 0; i <nlocal; i++)
+       q_local += q[i];
+
+    MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
+
+    if (q_total >= tolerance || q_total <= -tolerance)
+    	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {}",q_total);
+}
 
    --------------------------------------------------------------------- */
 
