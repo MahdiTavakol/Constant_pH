@@ -72,7 +72,7 @@ namespace LAMMPS_NS {
         // Parameters for printing the Udwp
         bool print_Udwp_flag;
         FILE *Udwp_fp;
-        void print_Udwp;
+        void print_Udwp();
 
 
 	class Fix *fixgpu;
