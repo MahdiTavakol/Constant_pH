@@ -81,13 +81,13 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
          error->one(FLERR, "Cannot find fix constant_pH the GFF correction file {}",arg[iarg+1]);
        iarg = iarg + 2;
     }
-    if ((strcmp(arg[iarg],"Qs") == 0))
+    else if ((strcmp(arg[iarg],"Qs") == 0))
     {
        qHs = utils::numeric(FLERR, arg[iarg+1],false,lmp);
        qHWs = utils::numeric(FLERR, arg[iarg+2],false,lmp);
        iarg = iarg + 3;
     }
-    if ((strcmp(arg[iarg],"Print_Udwp") == 0))
+    else if ((strcmp(arg[iarg],"Print_Udwp") == 0))
     {
 	print_Udwp_flag = true;
 	Udwp_fp = fopen(arg[iarg+1],"w");
