@@ -553,8 +553,8 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 
 void FixConstantPH::update_lmp() {
    int eflag = 1;
-   int vflag = 0;
-  /* timer->stamp();
+   int vflag = 1;
+   timer->stamp();
    if (force->pair && force->pair->compute_flag) {
      force->pair->compute(eflag, vflag);
      timer->stamp(Timer::PAIR);
@@ -565,7 +565,7 @@ void FixConstantPH::update_lmp() {
    }
 
    // accumulate force/energy/virial from /gpu pair styles
-   if (fixgpu) fixgpu->post_force(vflag);*/
+   if (fixgpu) fixgpu->post_force(vflag);
 }
 
 /* ---------------------------------------------------------------------
