@@ -690,11 +690,11 @@ double FixConstantPH::compute_epair()
    //if (update->eflag_global != update->ntimestep)
    //   error->all(FLERR,"Energy was not tallied on the needed timestep");
 
-   int nlocal = atom->nlocal;
+   int natoms = atom->natoms;
 
    double energy_local = 0.0;
    double energy = 0.0;
-   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul)/static_cast<double> (nlocal); // To convert to kcal/mol the total energy must be devided by the number of atoms
+   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul);
 
    /* As the bond, angle, dihedral and improper energies 
       do not change with the espilon, we do not need to 
@@ -702,6 +702,7 @@ double FixConstantPH::compute_epair()
       their difference afterall */
 
    MPI_Allreduce(&energy_local,&energy,1,MPI_DOUBLE,MPI_SUM,world);
+   energy /= static_cast<double> (natoms); // To convert to kcal/mol the total energy must be devided by the number of atoms
    return energy;
 }
 
