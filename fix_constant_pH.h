@@ -74,6 +74,9 @@ namespace LAMMPS_NS {
         FILE *Udwp_fp;
         void print_Udwp();
 
+        //
+        void compute_q_total();
+
 
 	class Fix *fixgpu;
 
