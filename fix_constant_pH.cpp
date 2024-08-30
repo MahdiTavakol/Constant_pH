@@ -678,7 +678,7 @@ void FixConstantPH::compute_q_total()
 
     MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
 
-    if (q_total >= tolerance || q_total <= -tolerance)
+    if ((q_total >= tolerance || q_total <= -tolerance) && comm->me == 0)
     	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {}",q_total);
 }
 
