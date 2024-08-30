@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.01.17----- */
+/* ---v0.01.22----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -51,9 +51,15 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
   if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
+  pHdependenceFile = fopen(arg[4],"r"); // The idea here is that a file is given to the command
+ // The command reads the file the type and charge of each atom before and after protonation 
   typeH = utils::inumeric(FLERR,arg[4],false,lmp);
-  if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH); 
-  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
+  if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH);
+  typeO_nonH = utils::inumeric(FLERR,arg[5],false,lmp);
+  if (typeO-nonH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeO_nonH);
+  typeO_H = utils::inumeric(FLERR,arg[6],false,lmp);
+  if (typeO-H > atom-<ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeO_H); 
+  typeHW = utils::inumeric(FLERR,arg[7],false,lmp);
   if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
   // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
 
@@ -385,7 +391,6 @@ void FixConstantPH::compute_Hs()
    }
    if (stage == 1)
    {
-      lambda = 0.0;
       modify_epsilon_q(lambda); //should define a change_parameters(const double);
       update_lmp();
    }
