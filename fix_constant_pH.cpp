@@ -371,6 +371,7 @@ void FixConstantPH::compute_Hs()
 {
    if (stage == -1)
    {
+      std::cout << "Hey I am here" << std::endl;
       allocate_storage();
       backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
       //modify_epsilon_q(0.0); //should define a change_parameters(const int);
