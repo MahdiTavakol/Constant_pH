@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.01.16----- */
+/* ---v0.01.17----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -214,7 +214,7 @@ void FixConstantPH::setup(int /*vflag*/)
     m = 0.1078;
     d = 5.0;
     // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
-    m_lambda = 200;
+    m_lambda = 2000;
 
 
     pair1 = nullptr;
