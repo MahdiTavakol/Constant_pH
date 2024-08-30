@@ -663,7 +663,7 @@ void FixConstantPH::update_lambda()
 }
 
    
-/* ---------------------------------------------------------------------
+/* --------------------------------------------------------------------- */
 
 void FixConstantPH::compute_q_total()
 {
@@ -682,7 +682,7 @@ void FixConstantPH::compute_q_total()
     	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {}",q_total);
 }
 
-   --------------------------------------------------------------------- */
+/* --------------------------------------------------------------------- */
 
 double FixConstantPH::compute_epair()
 {
