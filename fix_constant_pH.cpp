@@ -383,7 +383,6 @@ void FixConstantPH::compute_Hs()
       HA = compute_epair(); // I need to define my own version using compute pe/atom // HA is for the deprotonated state with lambda==0
       backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
       modify_epsilon_q(1.0); //should define a change_parameters(const double);
-      ();
       HB = compute_epair();           // HB is for the protonated state with lambda==1 
       backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
       deallocate_storage();
