@@ -540,10 +540,10 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     for (int i = 0; i < nlocal; i++)
     {
 	int print_counter = 0;
-        if (type[i] == typeH)
-	    q[i] = qHs + scale;
-	if (type[i] == typeHW)
-	    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
+        //if (type[i] == typeH)
+	//    q[i] = qHs + scale;
+	//if (type[i] == typeHW)
+	//    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
      }
 	
 }
