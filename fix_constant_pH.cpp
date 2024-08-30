@@ -70,6 +70,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   qHWs = 0.612;
 
   GFF_flag = false;
+  print_Udwp_flag = false;
   int iarg = 10;
   while (iarg < narg) {
     if (strcmp(arg[iarg], "GFF") == 0)
@@ -90,7 +91,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
     {
 	print_Udwp_flag = true;
 	Udwp_fp = fopen(arg[iarg+1],"w");
-	if (Udwp_fp == nullptr(
+	if (Udwp_fp == nullptr) 
 	    error->one(FLERR, "Cannot find fix constant_pH the Udwp debugging file {}",arg[iarg+1]);
 	iarg = iarg + 2;
     }
@@ -361,11 +362,11 @@ void FixConstantPH::compute_Hs()
       backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
       modify_epsilon_q(0.0); //should define a change_parameters(const int);
       update_lmp(); // update the lammps force and virial values
-      HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0
+      HA = compute_epair(); // I need to define my own version using compute pe/atom // Check if HA is for lambda=0 
       backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
       modify_epsilon_q(1.0); //should define a change_parameters(const double);
       update_lmp();
-      HB = compute_epair();
+      HB = compute_epair(); 
       backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
       deallocate_storage();
    }
@@ -618,14 +619,15 @@ void FixConstantPH::update_a_lambda()
 {
    if (GFF_flag) calculate_GFF();
    double NA = 6.022*1e23;
+   double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double  f_lambda = -(HB-HA + df*kT*log(10)*(pK-pH) + dU - GFF_lambda);
+   double  f_lambda = -(HB-HA + kj2kcal*df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda);
    double  a_lambda = f_lambda / m_lambda;
    #ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif
    double dt_lambda = update->dt;
-   double  H_lambda = (1-lambda)*HA + lambda*HB + f*kT*log(10)*(pK-pH) + U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
+   double  H_lambda = (1-lambda)*HA + lambda*HB + kj2kcal*f*kT*log(10)*(pK-pH) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
 }
 
@@ -655,9 +657,11 @@ double FixConstantPH::compute_epair()
    //if (update->eflag_global != update->ntimestep)
    //   error->all(FLERR,"Energy was not tallied on the needed timestep");
 
+   int nlocal = atom->nlocal;
+
    double energy_local = 0.0;
    double energy = 0.0;
-   if (force->pair) energy_local += force->pair->eng_vdwl + force->pair->eng_coul;
+   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul)/static_cast<double> nlocal; // To convert to kcal/mol the total energy must be devided by the number of atoms
 
    /* As the bond, angle, dihedral and improper energies 
       do not change with the espilon, we do not need to 
