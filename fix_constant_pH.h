@@ -69,6 +69,11 @@ namespace LAMMPS_NS {
 	int GFF_size;
 	double GFF_lambda;
 
+        // Parameters for printing the Udwp
+        bool print_Udwp_flag;
+        FILE *Udwp_fp;
+        void print_Udwp();
+
 
 	class Fix *fixgpu;
 
