@@ -214,7 +214,7 @@ void FixConstantPH::setup(int /*vflag*/)
     m = 0.1078;
     d = 5.0;
     // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
-    m_lambda = 20;
+    m_lambda = 200;
 
 
     pair1 = nullptr;
@@ -633,12 +633,14 @@ void FixConstantPH::update_a_lambda()
    double NA = 6.022*1e23;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
+   df = 1.0;
+   f = 1.0;
    double  f_lambda = -(HB-HA + kj2kcal*df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda);
-   double  a_lambda = f_lambda / m_lambda;
+   this->a_lambda = f_lambda / m_lambda;
    #ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif
-   double dt_lambda = update->dt;
+
    double  H_lambda = (1-lambda)*HA + lambda*HB + kj2kcal*f*kT*log(10)*(pK-pH) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
 }
@@ -648,7 +650,7 @@ void FixConstantPH::update_a_lambda()
 void FixConstantPH::update_v_lambda()
 {
    double dt_lambda = update->dt;
-   v_lambda += 0.5*a_lambda*dt_lambda;
+   this->v_lambda += 0.5*this->a_lambda*dt_lambda;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -656,7 +658,7 @@ void FixConstantPH::update_v_lambda()
 void FixConstantPH::update_lambda()
 {
    double dt_lambda = update->dt;
-   lambda += v_lambda * dt_lambda;
+   this->lambda += this->v_lambda * dt_lambda;
 }
 
    
