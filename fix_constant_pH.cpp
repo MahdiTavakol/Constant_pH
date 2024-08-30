@@ -283,10 +283,8 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 {
    if (update->ntimestep % nevery == 0)
    {
-      //update_v_lambda();
-      //update_lambda();
-      v_lambda = 0.0;
-      lambda = 0.0;
+      update_v_lambda();
+      update_lambda();
    }
 }
 
@@ -296,10 +294,10 @@ void FixConstantPH::post_force(int vflag)
 {
    if (update->ntimestep % nevery == 0) {
       compute_Hs<0>();
-      //calculate_df();
-      //calculate_dU();
-      //update_a_lambda();
-      //compute_q_total();
+      calculate_df();
+      calculate_dU();
+      update_a_lambda();
+      compute_q_total();
    }
    /* The force on hydrogens must be updated at every step otherwise at 
       steps at this fix is not active the pH would be very low and there
@@ -313,10 +311,8 @@ void FixConstantPH::post_force(int vflag)
 
 void FixConstantPH::post_integrate()
 {
-   //if (update->ntimestep % nevery == 0)
-       //update_v_lambda();
-       v_lambda = 0.0;
-       lambda = 0.0;
+   if (update->ntimestep % nevery == 0)
+       update_v_lambda();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -373,9 +369,8 @@ void FixConstantPH::print_Udwp()
 template <int stage>
 void FixConstantPH::compute_Hs()
 {
-   if (stage == -1)
+   if (stage == 0)
    {
-      std::cout << "Hey I am here" << std::endl;
       allocate_storage();
       backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
       modify_epsilon_q(0.0); //should define a change_parameters(const int);
@@ -389,7 +384,6 @@ void FixConstantPH::compute_Hs()
    }
    if (stage == 1)
    {
-      lambda = 0.0;
       modify_epsilon_q(lambda); //should define a change_parameters(const double);
    }
 }
