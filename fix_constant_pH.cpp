@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.01.17----- */
+/* ---v0.01.30----- */
 
 #define DEBUG
 #ifdef DEBUG
