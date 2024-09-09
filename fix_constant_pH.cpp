@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.01.22----- */
+/* ---v0.02.00----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -51,8 +51,14 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
   if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
-  pHdependenceFile = fopen(arg[4],"r"); // The idea here is that a file is given to the command
- // The command reads the file the type and charge of each atom before and after protonation 
+  // The idea here is that a file is given to the command
+  pH1StructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before protonation
+  pH2StructureFile = fopen(arg[5],"r"); // The command reads the file the type and charge of each atom after  protonation
+
+
+
+
+
   typeH = utils::inumeric(FLERR,arg[4],false,lmp);
   if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH);
   typeO_nonH = utils::inumeric(FLERR,arg[5],false,lmp);
@@ -131,8 +137,16 @@ FixConstantPH::~FixConstantPH()
    #endif
    delete [] pstyle;
 
+
+   memory->destroy(pH1Types);
+   memory->destroy(pH2Types);
+   memory->destroy(pH1qs);
+   memory->destroy(pH2qs);
+
    if (fp && (comm->me == 0)) fclose(fp);
    if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
+
+   
 }
 
 /* ----------------------------------------------------------------------
@@ -277,6 +291,9 @@ void FixConstantPH::setup(int /*vflag*/)
 
     if (print_Udwp_flag)
 	print_Udwp();
+
+
+    read_pH_structure_files();
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 }
@@ -321,6 +338,52 @@ void FixConstantPH::post_integrate()
        update_v_lambda();
 }
 
+/* ---------------------------------------------------------------------- */
+
+void read_pH_structure_files()
+{
+   char buff[128];
+   if (comm->me == 0)
+   {
+       fgets(line,sizeof(line),pH1StructureFile);
+       line[strcspn(line,"\n")] = '\0';
+
+       char *token = strtok(line,",");
+       pH1nTypes = stoi(token);
+       memory->create(pH1Types,pH1nTypes,"constant_pH:pH1Types");
+       memory->create(pH1qs,pH1qs,"constant_pH:pH1qs");
+       for (int i = 0; i < pH1nTypes; i++)
+	  if (fgets(line,sizeof(line),pH1StructureFile) == NULL)
+	       error->all(FLERR,"Error in reading the pH1 structure file in fix constant_pH");
+	  line[strcspn(line,"\n")] = '\0';
+	  token = strtok(line,",");
+	  pH1Types[i] = stoi(token);
+	  token = strtok(NULL,",");
+	  pH1qs[i] = stoi(token);
+
+
+       fgets(line,sizeof(line),pH2StructureFile);
+       line[strcspn(line,"\n")] = '\0';
+
+       token = strtok(line,",");
+       pH2nTypes = stoi(token);
+       memory->create(pH2Types,pH2nTypes,"constant_pH:pH2Types");
+       memory->create(pH2qs,pH2qs,"constant_pH:pH2qs");
+       for (int i = 0; i < pH2nTypes; i++)
+	  if (fgets(line,sizeof(line),pH2StructureFile) == NULL)
+	       error->all(FLERR,"Error in reading the pH2 structure file in fix constant_pH");
+	  line[strcspn(line,"\n")] = '\0';
+	  token = strtok(line,",");
+	  pH2Types[i] = stoi(token);
+	  token = strtok(NULL,",");
+	  pH2qs[i] = stoi(token);
+
+
+	   fclose(pH1StructureFile);
+	   fclose(pH2StructureFile);
+   }
+   if (pH1nTypes != pH2nTypes) error->all(FLERR,"Error: n1Types {} and n2Types {} must be equal in fix constant_pH", pH1nTypes,pH2nTypes);
+}
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::calculate_df()
