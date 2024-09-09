@@ -137,7 +137,6 @@ FixConstantPH::~FixConstantPH()
    delete [] pstyle;
 
 
-   memory->destroy(pHTypes);
    memory->destroy(pH1qs);
    memory->destroy(pH2qs);
    memory->destroy(protonatable);
@@ -296,7 +295,7 @@ void FixConstantPH::setup(int /*vflag*/)
     read_pH_structure_files();
     calculate_dq();
 	
-    memory->create(protonatable,atom->ntypes,"constant_pH:protonable");
+    
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 }
@@ -345,6 +344,12 @@ void FixConstantPH::post_integrate()
 
 void read_pH_structure_files()
 {
+   /* File format
+    * pHnTypes
+    * type1, qBeforeProtonation, qAfterProtonation
+    * ...
+    * ...
+    */
    char buff[128];
    if (comm->me == 0)
    {
@@ -353,20 +358,28 @@ void read_pH_structure_files()
 
        char *token = strtok(line,",");
        pHnTypes = stoi(token);
-       memory->create(pHTypes,pHnTypes,"constant_pH:pHTypes");
-       memory->create(pH1qs,pHnTypes,"constant_pH:pH1qs");
-       memory->create(pH2qs,pHnTypes,"constant_pH:pH2qs");
+       int ntypes = atom->ntypes;
+       memory->create(protonatable,atom->ntypes,"constant_pH:protonable");
+       memory->create(pH1qs,ntypes,"constant_pH:pH1qs");
+       memory->create(pH2qs,ntypes,"constant_pH:pH2qs");
+       for (int i = 0; i < ntypes; i++)
+       {
+	   protonable[i] = 0;
+	   pH1qs[i] = 0.0;
+           pH2qs[i] = 0.0;
+       }
        for (int i = 0; i < pHnTypes; i++)
        {
 	  if (fgets(line,sizeof(line),pHStructureFile) == NULL)
 	       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
 	  line[strcspn(line,"\n")] = '\0';
 	  token = strtok(line,",");
-	  pHTypes[i] = stoi(token);
+	  int type = stoi(token);
+	  protonable[type-1] = 1;
 	  token = strtok(NULL,",");
-	  pH1qs[i] = stoi(token);
+	  pH1qs[type-1] = stoi(token);
 	  token = strtok(NULL,",");
-          pH2qs[i] = stoi(token);
+          pH2qs[type-1] = stoi(token);
        }
        fclose(pHStructureFile);
    }
@@ -385,20 +398,6 @@ void FixConstantPH::calculate_dq()
        q_total_2 += pH2qs[i];
    }
    dq = abs(q_total_2 - q_total_1);
-}
-
-/* ---------------------------------------------------------------------- */
-
-void fill_protonatable()
-{
-   int ntypes = atom->ntypes;
-   int type = atom->type;
-   for (int i = 0; i < ntypes; i++)
-   {
-       protonable[i] = 0;
-       for (int j = 0; j < pHnTypes; j++)
-          if (type[i] == pHTypes[j]) protonable[i] = 1;
-   }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -624,15 +623,12 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 
     for (int i = 0; i < nlocal; i++)
     {
-	if (protonable[i] == 1)
+	if (protonable[type[i]] == 1)
         {
-            q[i] = pH1qs[i] + scale * pH2qs[i]; // Check if scale == 1 is for the protonated state.
-	    
+            q[type[i]] = pH1qs[type[i]] + scale * pH2qs[type[i]]; // Check if scale == 1 is for the protonated state.
 	}
-        if (type[i] == typeH)
-	    q[i] = qHs + scale;
 	if (type[i] == typeHW)
-	    q[i] = qHWs + (-scale) * (double) num_Hs/ (double) num_HWs;	
+	    q[i] = qHWs + (-scale) * dq * (double) num_Hs/ (double) num_HWs; //Please modify this so that the total charge is neutral.	
      }
 	
 }
