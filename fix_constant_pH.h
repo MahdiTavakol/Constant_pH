@@ -47,6 +47,9 @@ namespace LAMMPS_NS {
         int * pH1Types, * pH2Types;
         double *pH1qs, *pH2qs;
 
+        // Charge difference between structure 1 and structure 2
+        double dq;
+
 	// Input variables for constant values
 	int typeH, typeHW;
 	double pK, pH, T;
