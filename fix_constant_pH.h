@@ -39,6 +39,14 @@ namespace LAMMPS_NS {
 	double memory_usage() override;
 
      private:
+	// Sturcture files
+        FILE *pH1StructureFile, *pH2StructureFile;
+
+	// Atom types and charges that change due to protonation
+        int pH1nTypes, pH2nTypes;
+        int * pH1Types, * pH2Types;
+        double *pH1qs, *pH2qs;
+
 	// Input variables for constant values
 	int typeH, typeHW;
 	double pK, pH, T;
