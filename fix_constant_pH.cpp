@@ -294,6 +294,8 @@ void FixConstantPH::setup(int /*vflag*/)
 
 
     read_pH_structure_files();
+
+    calculate_dq();
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 }
@@ -384,6 +386,22 @@ void read_pH_structure_files()
    }
    if (pH1nTypes != pH2nTypes) error->all(FLERR,"Error: n1Types {} and n2Types {} must be equal in fix constant_pH", pH1nTypes,pH2nTypes);
 }
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_dq()
+{
+   double q_total_1 = 0.0;
+   double q_total_2 = 0.0;
+
+   for (int i = 0; i < pH1nTypes; i++)
+       q_total_1 += pH1qs[i];
+   for (int i = 0; i < pH2nTypes; i++)
+       q_total_2 += pH2qs[i];
+
+   dq = abs(q_total_2 - q_total_1);
+}
+
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::calculate_df()
