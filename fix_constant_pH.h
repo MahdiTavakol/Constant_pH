@@ -40,15 +40,18 @@ namespace LAMMPS_NS {
 
      private:
 	// Sturcture files
-        FILE *pH1StructureFile, *pH2StructureFile;
+        FILE *pHStructureFile;
 
 	// Atom types and charges that change due to protonation
-        int pH1nTypes, pH2nTypes;
-        int * pH1Types, * pH2Types;
+        int pHnTypes;
+        int * pHTypes;
         double *pH1qs, *pH2qs;
 
         // Charge difference between structure 1 and structure 2
         double dq;
+
+        // Whether it is protonable or not
+        bool * protonable;
 
 	// Input variables for constant values
 	int typeH, typeHW;
