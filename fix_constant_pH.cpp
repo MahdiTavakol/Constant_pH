@@ -52,8 +52,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
   if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
   // The idea here is that a file is given to the command
-  pH1StructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before protonation
-  pH2StructureFile = fopen(arg[5],"r"); // The command reads the file the type and charge of each atom after  protonation
+  pHStructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
 
 
 
@@ -138,10 +137,10 @@ FixConstantPH::~FixConstantPH()
    delete [] pstyle;
 
 
-   memory->destroy(pH1Types);
-   memory->destroy(pH2Types);
+   memory->destroy(pHTypes);
    memory->destroy(pH1qs);
    memory->destroy(pH2qs);
+   memory->destroy(protonatable);
 
    if (fp && (comm->me == 0)) fclose(fp);
    if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
@@ -293,9 +292,11 @@ void FixConstantPH::setup(int /*vflag*/)
 	print_Udwp();
 
 
-    read_pH_structure_files();
 
+    read_pH_structure_files();
     calculate_dq();
+	
+    memory->create(protonatable,atom->ntypes,"constant_pH:protonable");
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 }
@@ -347,44 +348,28 @@ void read_pH_structure_files()
    char buff[128];
    if (comm->me == 0)
    {
-       fgets(line,sizeof(line),pH1StructureFile);
+       fgets(line,sizeof(line),pHStructureFile);
        line[strcspn(line,"\n")] = '\0';
 
        char *token = strtok(line,",");
-       pH1nTypes = stoi(token);
-       memory->create(pH1Types,pH1nTypes,"constant_pH:pH1Types");
-       memory->create(pH1qs,pH1qs,"constant_pH:pH1qs");
-       for (int i = 0; i < pH1nTypes; i++)
-	  if (fgets(line,sizeof(line),pH1StructureFile) == NULL)
-	       error->all(FLERR,"Error in reading the pH1 structure file in fix constant_pH");
+       pHnTypes = stoi(token);
+       memory->create(pHTypes,pHnTypes,"constant_pH:pHTypes");
+       memory->create(pH1qs,pHnTypes,"constant_pH:pH1qs");
+       memory->create(pH2qs,pHnTypes,"constant_pH:pH2qs");
+       for (int i = 0; i < pHnTypes; i++)
+       {
+	  if (fgets(line,sizeof(line),pHStructureFile) == NULL)
+	       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
 	  line[strcspn(line,"\n")] = '\0';
 	  token = strtok(line,",");
-	  pH1Types[i] = stoi(token);
+	  pHTypes[i] = stoi(token);
 	  token = strtok(NULL,",");
 	  pH1qs[i] = stoi(token);
-
-
-       fgets(line,sizeof(line),pH2StructureFile);
-       line[strcspn(line,"\n")] = '\0';
-
-       token = strtok(line,",");
-       pH2nTypes = stoi(token);
-       memory->create(pH2Types,pH2nTypes,"constant_pH:pH2Types");
-       memory->create(pH2qs,pH2qs,"constant_pH:pH2qs");
-       for (int i = 0; i < pH2nTypes; i++)
-	  if (fgets(line,sizeof(line),pH2StructureFile) == NULL)
-	       error->all(FLERR,"Error in reading the pH2 structure file in fix constant_pH");
-	  line[strcspn(line,"\n")] = '\0';
-	  token = strtok(line,",");
-	  pH2Types[i] = stoi(token);
 	  token = strtok(NULL,",");
-	  pH2qs[i] = stoi(token);
-
-
-	   fclose(pH1StructureFile);
-	   fclose(pH2StructureFile);
+          pH2qs[i] = stoi(token);
+       }
+       fclose(pHStructureFile);
    }
-   if (pH1nTypes != pH2nTypes) error->all(FLERR,"Error: n1Types {} and n2Types {} must be equal in fix constant_pH", pH1nTypes,pH2nTypes);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -392,14 +377,28 @@ void read_pH_structure_files()
 void FixConstantPH::calculate_dq()
 {
    double q_total_1 = 0.0;
-   double q_total_2 = 0.0;
+   double q_total_2 = 0.0;create
 
-   for (int i = 0; i < pH1nTypes; i++)
+   for (int i = 0; i < pHnTypes; i++)
+   {
        q_total_1 += pH1qs[i];
-   for (int i = 0; i < pH2nTypes; i++)
        q_total_2 += pH2qs[i];
-
+   }
    dq = abs(q_total_2 - q_total_1);
+}
+
+/* ---------------------------------------------------------------------- */
+
+void fill_protonatable()
+{
+   int ntypes = atom->ntypes;
+   int type = atom->type;
+   for (int i = 0; i < ntypes; i++)
+   {
+       protonable[i] = 0;
+       for (int j = 0; j < pHnTypes; j++)
+          if (type[i] == pHTypes[j]) protonable[i] = 1;
+   }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -414,7 +413,7 @@ void FixConstantPH::calculate_df()
 
 void FixConstantPH::calculate_dU()
 {
-   double U1, U2, U3, U4, U5;
+   double U1, U2, U3, U4, U5;createcreatecreate
    double dU1, dU2, dU3, dU4, dU5;
    U1 = -k*exp(-(lambda-1-b)*(lambda-1-b)/(2*a*a));
    U2 = -k*exp(-(lambda+b)*(lambda+b)/(2*a*a));
@@ -625,7 +624,11 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 
     for (int i = 0; i < nlocal; i++)
     {
-	int print_counter = 0;
+	if (protonable[i] == 1)
+        {
+            q[i] = pH1qs[i] + scale * pH2qs[i]; // Check if scale == 1 is for the protonated state.
+	    
+	}
         if (type[i] == typeH)
 	    q[i] = qHs + scale;
 	if (type[i] == typeHW)
