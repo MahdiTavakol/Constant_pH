@@ -119,13 +119,13 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
 FixConstantPH::~FixConstantPH()
 {
    #ifdef DEBUG
-       std::cout << "Releasing epsilon" << std::endl;
+       std::cout << "Releasing epsilon_init" << std::endl;
    #endif
    memory->destroy(epsilon_init);
    #ifdef DEBUG
        std::cout << "Releasing GFF" << std::endl;
    #endif
-   if (GFF) memory->destroy(GFF);
+   if (GFF != nulltpr) memory->destroy(GFF);
 
    #ifdef DEBUG
        std::cout << "Releasing pparam1" << std::endl;
@@ -139,7 +139,7 @@ FixConstantPH::~FixConstantPH()
 
    memory->destroy(pH1qs);
    memory->destroy(pH2qs);
-   memory->destroy(protonatable);
+   memory->destroy(protonable);
 
    deallocate_storage();
 
@@ -284,6 +284,7 @@ void FixConstantPH::setup(int /*vflag*/)
 
 	
     GFF_lambda = 0.0;
+    GFF = nullptr;
     if (GFF_flag)
 	init_GFF();
 
@@ -513,8 +514,11 @@ void FixConstantPH::deallocate_storage()
   memory->destroy(f_orig);
   memory->destroy(peatom_orig);
   memory->destroy(pvatom_orig);
-  memory->destroy(keatom_orig);
-  memory->destroy(kvatom_orig);
+  if (force->kspace)
+  {
+      memory->destroy(keatom_orig);
+      memory->destroy(kvatom_orig);
+  }
 
   f_orig = nullptr;
   peatom_orig = keatom_orig = nullptr;
