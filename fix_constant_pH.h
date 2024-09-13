@@ -61,6 +61,7 @@ namespace LAMMPS_NS {
 	double U, dU;
 	
 	// Pair style parameters
+        // I am not sure why I do not release the pstyle
 	char * pstyle, * pparam1;
 	Pair * pair1;
 	int pdim1;
@@ -102,6 +103,7 @@ namespace LAMMPS_NS {
 
         int nmax;
 
+        // These pointers are allocated and deallocated through allocate_storage() and deallocate_storage() functions
         // _org is for value of parameters before the update_lmp() with modified parameters act on them
   	double *q_orig;
  	double **f_orig;
