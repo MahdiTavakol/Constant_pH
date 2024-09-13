@@ -99,6 +99,9 @@ namespace LAMMPS_NS {
 	// _init is the initial value of hydrogen atoms properties which is multiplied by lambda at each step
 	double **epsilon_init;
 
+
+        int nmax;
+
         // _org is for value of parameters before the update_lmp() with modified parameters act on them
   	double *q_orig;
  	double **f_orig;
