@@ -297,6 +297,8 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
+
+    nmax = atom->nmax;
     allocate_storage();
 }
 
