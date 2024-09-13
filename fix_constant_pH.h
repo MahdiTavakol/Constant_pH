@@ -43,7 +43,7 @@ namespace LAMMPS_NS {
         FILE *pHStructureFile;
 
 	// Atom types and charges that change due to protonation
-        int * pHTypes;
+        int pHnTypes;
         double *pH1qs, *pH2qs;
 
         // Charge difference between structure 1 and structure 2
