@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.00----- */
+/* ---v0.02.02----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -141,10 +141,10 @@ FixConstantPH::~FixConstantPH()
    memory->destroy(pH2qs);
    memory->destroy(protonatable);
 
+   deallocate_storage();
+
    if (fp && (comm->me == 0)) fclose(fp);
    if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
-
-   
 }
 
 /* ----------------------------------------------------------------------
@@ -197,12 +197,12 @@ void FixConstantPH::init()
    pair_params["lj/charmm/coul/charmm/implicit"] = "lj14_1";
    pair_params["lj/charmm/coul/charmm/implicit/kk"] = "lj14_1";
    pair_params["lj/charmm/coul/charmm/implicit/omp"] = "lj14_1";
-   pair_params["lj/charmm/coul/long"] = "lj14_1";
-   pair_params["lj/charmm/coul/long/gpu"] = "lj14_1";
-   pair_params["lj/charmm/coul/long/intel"] = "lj14_1";
-   pair_params["lj/charmm/coul/long/kk"] = "lj14_1";
-   pair_params["lj/charmm/coul/long/opt"] = "lj14_1";
-   pair_params["lj/charmm/coul/long/omp"] = "lj14_1";
+   pair_params["lj/charmm/coul/long"] = "epsilon";
+   pair_params["lj/charmm/coul/long/gpu"] = "epsilon";
+   pair_params["lj/charmm/coul/long/intel"] = "epsilon";
+   pair_params["lj/charmm/coul/long/kk"] = "epsilon";
+   pair_params["lj/charmm/coul/long/opt"] = "epsilon";
+   pair_params["lj/charmm/coul/long/omp"] = "epsilon";
    pair_params["lj/charmm/coul/msm"] = "lj14_1";
    pair_params["lj/charmm/coul/msm/omp"] = "lj14_1";
    pair_params["lj/charmmfsw/coul/charmmfsh"] = "lj14_1";
@@ -253,7 +253,7 @@ void FixConstantPH::setup(int /*vflag*/)
     memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init");
 
     // I am not sure about the limits of these two loops, please double check them
-    for (int i = 0; i < ntypes+1; i++)
+    for (int i = 1; i < ntypes+1; i++)
         for (int j = i; j < ntypes+1; j++)
              epsilon_init[i][j] = epsilon[i][j];
 
@@ -295,9 +295,9 @@ void FixConstantPH::setup(int /*vflag*/)
     read_pH_structure_files();
     calculate_dq();
 	
-    
-	
     fixgpu = modify->get_fix_by_id("package_gpu");
+
+    allocate_storage();
 }
 
 /* ----------------------------------------------------------------------
@@ -315,7 +315,7 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 
 /* ---------------------------------------------------------------------- */
 
-void FixConstantPH::post_force(int vflag)
+void FixConstantPH::post_force(inallocatet vflag)
 {
    if (update->ntimestep % nevery == 0) {
       compute_Hs<0>();
@@ -456,17 +456,21 @@ void FixConstantPH::compute_Hs()
 {
    if (stage == -1)
    {
-      allocate_storage();
+      if (nmax > atom->nmax)
+      {
+	  nmax = atom->nmax;
+          allocate_storage();
+	  deallocate_storage();
+      }
       backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
-      //modify_epsilon_q(0.0); //should define a change_parameters(const int);
+      modify_epsilon_q(0.0); //should define a change_parameters(const int);
       update_lmp(); // update the lammps force and virial values
       HA = compute_epair(); // I need to define my own version using compute pe/atom // HA is for the deprotonated state with lambda==0
       backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
-      //modify_epsilon_q(1.0); //should define a change_parameters(const double);
+      modify_epsilon_q(1.0); //should define a change_parameters(const double);
       update_lmp();
       HB = compute_epair();           // HB is for the protonated state with lambda==1 
       backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
-      deallocate_storage();
    }
    if (stage == 1)
    {
@@ -615,12 +619,17 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     double * q = atom->q;
 
     // not sure about the range of these two loops
-    /*for (int i = 0; i < ntypes + 1; i++)
+    for (int i = 1; i < ntypes + 1; i++)
 	for (int j = i; j < ntypes + 1; j++)
 	    if (type[i] == typeH || type[j] == typeH)
 	    	epsilon[i][j] = epsilon_init[i][j] * scale;
-    */
 
+
+    // update the forcefield parameters
+    pair->reinit();
+
+	
+    // update the charges
     for (int i = 0; i < nlocal; i++)
     {
 	if (protonable[type[i]] == 1)
