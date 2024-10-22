@@ -120,6 +120,7 @@ namespace LAMMPS_NS {
         void check_num_HWs();
         void read_pH_structure_files()
         void restore_epsilon();
+	void calculate_dq();
 	void calculate_df();
 	void calculate_dU();
 	void integrate_lambda();
