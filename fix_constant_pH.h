@@ -118,7 +118,7 @@ namespace LAMMPS_NS {
         template<int stage>
 	void compute_Hs();
         void check_num_HWs();
-        void read_pH_structure_files()
+        void read_pH_structure_files();
         void restore_epsilon();
 	void calculate_dq();
 	void calculate_df();
