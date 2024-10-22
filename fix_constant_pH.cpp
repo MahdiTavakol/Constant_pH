@@ -288,7 +288,7 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 
 /* ---------------------------------------------------------------------- */
 
-void FixConstantPH::post_force(inallocatet vflag)
+void FixConstantPH::post_force(int vflag)
 {
    if (update->ntimestep % nevery == 0) {
       compute_Hs<0>();
