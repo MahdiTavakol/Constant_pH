@@ -115,7 +115,7 @@ FixConstantPH::~FixConstantPH()
    #ifdef DEBUG
        std::cout << "Releasing GFF" << std::endl;
    #endif
-   if (GFF != nulltpr) memory->destroy(GFF);
+   if (GFF != nullptr) memory->destroy(GFF);
 
    #ifdef DEBUG
        std::cout << "Releasing pparam1" << std::endl;
