@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.02----- */
+/* ---v0.02.03----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -51,20 +51,10 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
   if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
-  // The idea here is that a file is given to the command
+  // Reading the file that contains the charges before and after protonation/deprotonation
   pHStructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
-
-
-
-
-
-  typeH = utils::inumeric(FLERR,arg[4],false,lmp);
-  if (typeH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeH);
-  typeO_nonH = utils::inumeric(FLERR,arg[5],false,lmp);
-  if (typeO-nonH > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeO_nonH);
-  typeO_H = utils::inumeric(FLERR,arg[6],false,lmp);
-  if (typeO-H > atom-<ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeO_H); 
-  typeHW = utils::inumeric(FLERR,arg[7],false,lmp);
+  // Hydronium ion hydrogen atoms
+  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
   if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
   // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
 
@@ -189,25 +179,25 @@ void FixConstantPH::init()
    pair_params["tip4p/long/soft/omp"] = "lambda";
    pair_params["morse/soft"] = "lambda";
    
-   pair_params["lj/charmm/coul/charmm"] = "lj14_1";
-   pair_params["lj/charmm/coul/charmm/gpu"] = "lj14_1";
-   pair_params["lj/charmm/coul/charmm/intel"] = "lj14_1";
-   pair_params["lj/charmm/coul/charmm/kk"] = "lj14_1";
-   pair_params["lj/charmm/coul/charmm/omp"] = "lj14_1";
-   pair_params["lj/charmm/coul/charmm/implicit"] = "lj14_1";
-   pair_params["lj/charmm/coul/charmm/implicit/kk"] = "lj14_1";
-   pair_params["lj/charmm/coul/charmm/implicit/omp"] = "lj14_1";
+   pair_params["lj/charmm/coul/charmm"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/gpu"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/intel"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/kk"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/omp"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/implicit"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/implicit/kk"] = "epsilon";
+   pair_params["lj/charmm/coul/charmm/implicit/omp"] = "epsilon";
    pair_params["lj/charmm/coul/long"] = "epsilon";
    pair_params["lj/charmm/coul/long/gpu"] = "epsilon";
    pair_params["lj/charmm/coul/long/intel"] = "epsilon";
    pair_params["lj/charmm/coul/long/kk"] = "epsilon";
    pair_params["lj/charmm/coul/long/opt"] = "epsilon";
    pair_params["lj/charmm/coul/long/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/msm"] = "lj14_1";
-   pair_params["lj/charmm/coul/msm/omp"] = "lj14_1";
-   pair_params["lj/charmmfsw/coul/charmmfsh"] = "lj14_1";
-   pair_params["lj/charmmfsw/coul/long"] = "lj14_1";
-   pair_params["lj/charmmfsw/coul/long/kk"] = "lj14_1";
+   pair_params["lj/charmm/coul/msm"] = "epsilon";
+   pair_params["lj/charmm/coul/msm/omp"] = "epsilon";
+   pair_params["lj/charmmfsw/coul/charmmfsh"] = "epsilon";
+   pair_params["lj/charmmfsw/coul/long"] = "epsilon";
+   pair_params["lj/charmmfsw/coul/long/kk"] = "epsilon";
 
    if (pair_params.find(pstyle) == pair_params.end())
       error->all(FLERR,"The pair style {} is not currently supported in fix constant_pH",pstyle);
@@ -252,35 +242,10 @@ void FixConstantPH::setup(int /*vflag*/)
     int ntypes = atom->ntypes;
     memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init");
 
-    // I am not sure about the limits of these two loops, please double check them
+    // The limits for these two loops are correct.
     for (int i = 1; i < ntypes+1; i++)
         for (int j = i; j < ntypes+1; j++)
              epsilon_init[i][j] = epsilon[i][j];
-
-
-	
-    int * type = atom->type;
-    int nlocal = atom->nlocal;
-    int * nums = new int[2];
-    int * nums_local = new int[2];
-    nums_local[0] = 0;
-    nums_local[1] = 0;
-    for (int i = 0; i < nlocal; i++)
-    {
-        if (type[i] == typeH)
-	    nums_local[0]++;
-	else if (type[i] == typeHW)
-	    nums_local[1]++;
-    }
-
-    MPI_Allreduce(nums_local,nums,2,MPI_INT,MPI_SUM,world);
-    num_Hs = nums[0];
-    num_HWs = nums[1];
-
-    if (num_HWs != 3*num_Hs) 
-	error->warning(FLERR,"In the fix constant_pH the number of hydrogen atoms of the hydronium group should be three times the number of titrable groups");
-    delete [] nums_local;
-    delete [] nums;
 
 	
     GFF_lambda = 0.0;
@@ -292,9 +257,14 @@ void FixConstantPH::setup(int /*vflag*/)
 	print_Udwp();
 
 
-
+    // Reading the structure of protonable states before and after protonation.
     read_pH_structure_files();
+
+    // Calculating the change in the charge due to the protonation
     calculate_dq();
+
+    // Checking if we have enough hydronium ions to neutralize the system
+    check_num_HWs();
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
@@ -393,14 +363,41 @@ void read_pH_structure_files()
 void FixConstantPH::calculate_dq()
 {
    double q_total_1 = 0.0;
-   double q_total_2 = 0.0;create
+   double q_total_2 = 0.0;
 
-   for (int i = 0; i < pHnTypes; i++)
+   int ntypes = atom->ntypes;
+
+   for (int i = 0; i < ntypes; i++)
    {
-       q_total_1 += pH1qs[i];
-       q_total_2 += pH2qs[i];
+       q_total_1 += protonable[i] * pH1qs[i]; // if it is not protonable the protonable[i] == 0
+       q_total_2 += protonable[i] * pH2qs[i];
    }
    dq = abs(q_total_2 - q_total_1);
+}
+
+/* ----------------------------------------------------------------------
+   Checking if we have enough of HWs for neutralizing the system total charge
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::check_num_HWs()
+{
+   double tol = 1e-5;
+   int * type = atom->type;
+   int nlocal = atom->nlocal;
+   int num_local, num;
+   num = 0;
+   num_local = 0;
+   for (int i = 0; i < nlocal; i++)
+   {
+      if (type[i] == typeHW)
+        num_local++;
+   }
+
+   MPI_Allreduce(&num_local,&num,1,MPI_INT,MPI_SUM,world);
+   num_HWs = num;
+
+   if (std::abs(numHWs-dq) > tol)
+      error->warning(FLERR,"In the fix constant_pH the number of hydrogen atoms of the hydronium group must be equal to the charge change due to the titration!");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -474,6 +471,7 @@ void FixConstantPH::compute_Hs()
       update_lmp();
       HB = compute_epair();           // HB is for the protonated state with lambda==1 
       backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
+      restore_epsilon();  // I need to define this function later on
    }
    if (stage == 1)
    {
@@ -628,7 +626,7 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     for (int i = 1; i < ntypes + 1; i++)
 	for (int j = i; j < ntypes + 1; j++)
 	    if (type[i] == typeH || type[j] == typeH)
-	    	epsilon[i][j] = epsilon_init[i][j] * scale;
+	    	epsilon[i][j] = epsilon_init[i][j] * scale; // scale == 1 should be for the protonated state
 
 
     // update the forcefield parameters
@@ -640,10 +638,10 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     {
 	if (protonable[type[i]] == 1)
         {
-            q[type[i]] = pH1qs[type[i]] + scale * pH2qs[type[i]]; // Check if scale == 1 is for the protonated state.
+            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]); // scale == 1 should be for the protonated state
 	}
 	if (type[i] == typeHW)
-	    q[i] = qHWs + (-scale) * dq * (double) num_Hs/ (double) num_HWs; //Please modify this so that the total charge is neutral.	
+	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //Please modify this so that the total charge is neutral.	
      }
 	
 }
