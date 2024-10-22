@@ -318,6 +318,7 @@ void FixConstantPH::post_integrate()
 void read_pH_structure_files()
 {
    /* File format
+    * Comment 
     * pHnTypes
     * type1, qBeforeProtonation, qAfterProtonation
     * ...
@@ -326,6 +327,7 @@ void read_pH_structure_files()
    char buff[128];
    if (comm->me == 0)
    {
+       fgets(line,sizeof(line),pHStructureFile);
        fgets(line,sizeof(line),pHStructureFile);
        line[strcspn(line,"\n")] = '\0';
 
@@ -356,6 +358,9 @@ void read_pH_structure_files()
        }
        fclose(pHStructureFile);
    }
+   MPI_Bcast(protonable,pHntypes,MPI_INT,0,world);
+   MPI_Bcast(pH1qs,pHntypes,MPI_DOUBLE,0,world);
+   MPI_Bcast(pH2qs,pHntypes,MPI_DOUBLE,0,world);
 }
 
 /* ---------------------------------------------------------------------- */
