@@ -71,7 +71,7 @@ namespace LAMMPS_NS {
 
 	// Protonation and hydronium group parameters
 	double qHs, qHWs;
-	int num_Hs, num_HWs;
+	int num_HWs;
 
 	// The smoothing function 
 	double f, df;
@@ -117,6 +117,8 @@ namespace LAMMPS_NS {
 
         template<int stage>
 	void compute_Hs();
+        void check_num_HWs();
+        void restore_epsilon();
 	void calculate_df();
 	void calculate_dU();
 	void integrate_lambda();
