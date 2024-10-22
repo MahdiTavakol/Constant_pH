@@ -324,6 +324,13 @@ void read_pH_structure_files()
     * ...
     * ...
     */
+
+   /*Allocating the required memory*/
+   int ntypes = atom->ntypes;
+   memory->create(protonatable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
+   memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
+   memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
+	
    char buff[128];
    if (comm->me == 0)
    {
@@ -333,10 +340,6 @@ void read_pH_structure_files()
 
        char *token = strtok(line,",");
        pHnTypes = stoi(token);
-       int ntypes = atom->ntypes;
-       memory->create(protonatable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
-       memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
-       memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
        for (int i = 1; i < ntypes+1; i++)
        {
 	   protonable[i] = 0;
@@ -358,9 +361,9 @@ void read_pH_structure_files()
        }
        fclose(pHStructureFile);
    }
-   MPI_Bcast(protonable,pHntypes,MPI_INT,0,world);
-   MPI_Bcast(pH1qs,pHntypes,MPI_DOUBLE,0,world);
-   MPI_Bcast(pH2qs,pHntypes,MPI_DOUBLE,0,world);
+   MPI_Bcast(protonable,ntypes,MPI_INT,0,world);
+   MPI_Bcast(pH1qs,ntypes,MPI_DOUBLE,0,world);
+   MPI_Bcast(pH2qs,ntypes,MPI_DOUBLE,0,world);
 }
 
 /* ---------------------------------------------------------------------- */
