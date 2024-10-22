@@ -331,7 +331,10 @@ void FixConstantPH::read_pH_structure_files()
    memory->create(protonable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
    memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
    memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
-	
+
+
+   if (!pHStructureFile)
+       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
    char line[128];
    if (comm->me == 0)
    {
