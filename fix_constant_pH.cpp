@@ -332,10 +332,10 @@ void read_pH_structure_files()
        char *token = strtok(line,",");
        pHnTypes = stoi(token);
        int ntypes = atom->ntypes;
-       memory->create(protonatable,atom->ntypes,"constant_pH:protonable");
-       memory->create(pH1qs,ntypes,"constant_pH:pH1qs");
-       memory->create(pH2qs,ntypes,"constant_pH:pH2qs");
-       for (int i = 0; i < ntypes; i++)
+       memory->create(protonatable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
+       memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
+       memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
+       for (int i = 1; i < ntypes+1; i++)
        {
 	   protonable[i] = 0;
 	   pH1qs[i] = 0.0;
@@ -348,11 +348,11 @@ void read_pH_structure_files()
 	  line[strcspn(line,"\n")] = '\0';
 	  token = strtok(line,",");
 	  int type = stoi(token);
-	  protonable[type-1] = 1;
+	  protonable[type] = 1;
 	  token = strtok(NULL,",");
-	  pH1qs[type-1] = stoi(token);
+	  pH1qs[type] = stoi(token);
 	  token = strtok(NULL,",");
-          pH2qs[type-1] = stoi(token);
+          pH2qs[type] = stoi(token);
        }
        fclose(pHStructureFile);
    }
@@ -367,7 +367,7 @@ void FixConstantPH::calculate_dq()
 
    int ntypes = atom->ntypes;
 
-   for (int i = 0; i < ntypes; i++)
+   for (int i = 1; i < ntypes+1; i++)
    {
        q_total_1 += protonable[i] * pH1qs[i]; // if it is not protonable the protonable[i] == 0
        q_total_2 += protonable[i] * pH2qs[i];
@@ -641,8 +641,9 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
             q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]); // scale == 1 should be for the protonated state
 	}
 	if (type[i] == typeHW)
-	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //Please modify this so that the total charge is neutral.	
+	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral	
      }
+
 	
 }
 
@@ -682,25 +683,24 @@ void FixConstantPH::init_GFF()
    GFF_size = atoi(line);
    memory->create(GFF,GFF_size,2,"constant_pH:GFF");
    int i = 0;
-   while(fgets(line,sizeof(line), fp) != NULL && i < GFF_size)
-      {
-          double _lambda, _GFF;
-          line[strcspn(line,"\n")] = 0;
-	  char * token = strtok(line, ",");
-	  if (token != NULL) 
-	      _lambda = atof(token);
-	  else 
-	      error->one(FLERR,"The GFF correction file in the fix constant_pH has a wrong format!");
-	  token = strtok(line, ",");
-	  if (token != NULL)
-	      _GFF = atof(token);
-	  else
-	      error->one(FLERR,"The GFF correction file in the fix constant_pH has a wrong format!");
-	  GFF[i][0] = _lambda;
-	  GFF[i][1] = _GFF;
-	  i++;   
-      }	
-    if (fp && (comm->me == 0)) fclose(fp);
+   while(fgets(line,sizeof(line), fp) != NULL && i < GFF_size) {
+      double _lambda, _GFF;
+      line[strcspn(line,"\n")] = 0;
+      char * token = strtok(line, ",");
+      if (token != NULL) 
+	 _lambda = atof(token);
+      else 
+	 error->one(FLERR,"The GFF correction file in the fix constant_pH is in a wrong format!");
+      token = strtok(line, ",");
+      if (token != NULL)
+	 _GFF = atof(token);
+      else
+	 error->one(FLERR,"The GFF correction file in the fix constant_pH is in a wrong format!");
+      GFF[i][0] = _lambda;
+      GFF[i][1] = _GFF;
+      i++;   
+   }	
+   if (fp && (comm->me == 0)) fclose(fp);
 }
 
 /* ---------------------------------------------------------------------
