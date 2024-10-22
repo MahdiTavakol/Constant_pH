@@ -642,12 +642,23 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 	}
 	if (type[i] == typeHW)
 	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral	
-     }
-
-	
+     }	
 }
 
+/* ---------------------------------------------------------------------
+   Restore the epsilon values 
+   --------------------------------------------------------------------- */
 
+void ComputeThermoInteg::restore_epsilon()
+{
+    int ntypes = atom->ntypes;
+    
+    // I am not sure about the limits of these two loops, please double check them
+    for (int k = 0; k < ntypeAs; k++)
+        for (int i = 0; i < ntypes + 1; i++)
+            for (int j = i; j < ntypes + 1; j++)
+                epsilons[k][i][j] = epsilon_inits[k][i][j];
+}
 
 /* ----------------------------------------------------------------------
    modify force and kspace in lammps according
