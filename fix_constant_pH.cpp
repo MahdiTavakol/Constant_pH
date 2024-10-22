@@ -315,7 +315,7 @@ void FixConstantPH::post_integrate()
 
 /* ---------------------------------------------------------------------- */
 
-void read_pH_structure_files()
+void FixConstantPH::read_pH_structure_files()
 {
    /* File format
     * Comment 
