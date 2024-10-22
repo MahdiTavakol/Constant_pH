@@ -415,7 +415,7 @@ void FixConstantPH::calculate_df()
 
 void FixConstantPH::calculate_dU()
 {
-   double U1, U2, U3, U4, U5;createcreatecreate
+   double U1, U2, U3, U4, U5;
    double dU1, dU2, dU3, dU4, dU5;
    U1 = -k*exp(-(lambda-1-b)*(lambda-1-b)/(2*a*a));
    U2 = -k*exp(-(lambda+b)*(lambda+b)/(2*a*a));
@@ -482,7 +482,7 @@ void FixConstantPH::compute_Hs()
    }
 }
 
-/* -------------------------------------------------ntypesntypes---------------------
+/* ----------------------------------------------------------------------
    manage storage for charge, force, energy, virial arrays
    taken from src/FEP/compute_fep.cpp
 ------------------------------------------------------------------------- */
