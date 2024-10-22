@@ -23,12 +23,12 @@
 
 #include "atom.h"
 #include "atom_masks.h"
-#include "pair.h"
 #include "error.h"
 
 #include "force.h"
 #include "group.h"
 #include "memory.h"
+#include "pair.h"
 #include "timer.h"
 #include "comm.h"
 #include "kspace.h"
@@ -37,6 +37,7 @@
 #include "modify.h"
 
 #include <cstring>
+#include <string>
 #include <map>
 
 using namespace LAMMPS_NS;
@@ -331,7 +332,7 @@ void FixConstantPH::read_pH_structure_files()
    memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
    memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
 	
-   char buff[128];
+   char line[128];
    if (comm->me == 0)
    {
        fgets(line,sizeof(line),pHStructureFile);
@@ -339,7 +340,7 @@ void FixConstantPH::read_pH_structure_files()
        line[strcspn(line,"\n")] = '\0';
 
        char *token = strtok(line,",");
-       pHnTypes = stoi(token);
+       pHnTypes = std::stoi(token);
        for (int i = 1; i < ntypes+1; i++)
        {
 	   protonable[i] = 0;
@@ -352,12 +353,12 @@ void FixConstantPH::read_pH_structure_files()
 	       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
 	  line[strcspn(line,"\n")] = '\0';
 	  token = strtok(line,",");
-	  int type = stoi(token);
+	  int type = std::stoi(token);
 	  protonable[type] = 1;
 	  token = strtok(NULL,",");
-	  pH1qs[type] = stoi(token);
+	  pH1qs[type] = std::stoi(token);
 	  token = strtok(NULL,",");
-          pH2qs[type] = stoi(token);
+          pH2qs[type] = std::stoi(token);
        }
        fclose(pHStructureFile);
    }
@@ -380,7 +381,7 @@ void FixConstantPH::calculate_dq()
        q_total_1 += protonable[i] * pH1qs[i]; // if it is not protonable the protonable[i] == 0
        q_total_2 += protonable[i] * pH2qs[i];
    }
-   dq = abs(q_total_2 - q_total_1);
+   dq = std::abs(q_total_2 - q_total_1);
 }
 
 /* ----------------------------------------------------------------------
@@ -404,7 +405,7 @@ void FixConstantPH::check_num_HWs()
    MPI_Allreduce(&num_local,&num,1,MPI_INT,MPI_SUM,world);
    num_HWs = num;
 
-   if (std::abs(numHWs-dq) > tol)
+   if (std::abs(num_HWs-3.0*dq) > tol)
       error->warning(FLERR,"In the fix constant_pH the number of hydrogen atoms of the hydronium group must be equal to the charge change due to the titration!");
 }
 
@@ -638,7 +639,7 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 
 
     // update the forcefield parameters
-    pair->reinit();
+    pair1->reinit();
 
 	
     // update the charges
@@ -646,7 +647,7 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     {
 	if (protonable[type[i]] == 1)
         {
-            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]); // scale == 1 should be for the protonated state
+            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
 	}
 	if (type[i] == typeHW)
 	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral	
@@ -657,15 +658,14 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
    Restore the epsilon values 
    --------------------------------------------------------------------- */
 
-void ComputeThermoInteg::restore_epsilon()
+void FixConstantPH::restore_epsilon()
 {
     int ntypes = atom->ntypes;
     
-    // I am not sure about the limits of these two loops, please double check them
-    for (int k = 0; k < ntypeAs; k++)
-        for (int i = 0; i < ntypes + 1; i++)
-            for (int j = i; j < ntypes + 1; j++)
-                epsilons[k][i][j] = epsilon_inits[k][i][j];
+    // Right now, I am sure about the limits of these two loops
+    for (int i = 0; i < ntypes + 1; i++)
+        for (int j = i; j < ntypes + 1; j++)
+             epsilon[i][j] = epsilon_init[i][j];
 }
 
 /* ----------------------------------------------------------------------
