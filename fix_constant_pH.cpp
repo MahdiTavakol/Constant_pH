@@ -548,22 +548,22 @@ void FixConstantPH::deallocate_storage()
 template  <int direction>
 void FixConstantPH::forward_reverse_copy(double &a,double &b)
 {
-   if (direction == 1) a = b;
-   if (direction == -1) b = a;
+  if (direction == 1) a = b;
+  if (direction == -1) b = a;
 }
 
 template  <int direction>
 void FixConstantPH::forward_reverse_copy(double* a,double* b, int i)
 {
-   if (direction == 1) a[i] = b[i];
-   if (direction == -1) b[i] = a[i];
+  if (direction == 1) a[i] = b[i];
+  if (direction == -1) b[i] = a[i];
 }
 
 template  <int direction>
 void FixConstantPH::forward_reverse_copy(double** a,double** b, int i, int j)
 {
-   if (direction == 1) a[i][j] = b[i][j];
-   if (direction == -1) b[i][j] = a[i][j];
+  if (direction == 1) a[i][j] = b[i][j];
+  if (direction == -1) b[i][j] = a[i][j];
 }
 
 /* ----------------------------------------------------------------------
@@ -749,96 +749,7 @@ void FixConstantPH::calculate_GFF()
    if (i > 0 && i < GFF_size - 1)
       GFF_lambda = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i-1][0]);
    if (i == GFF_size - 1)
-   {// clang-format off
-#include "atom_masks.h"
-#include "error.h"
-
-#include "force.h"
-#include "group.h"
-#include "memory.h"
-#include "pair.h"
-#include "timer.h"
-#include "comm.h"
-#include "kspace.h"
-#include "update.h"
-#include "math_const.h"
-#include "modify.h"
-
-#include <cstring>
-#include <string>
-#include <map>
-
-using namespace LAMMPS_NS;
-using namespace FixConst;
-using namespace MathConst;
-
-/* ---------------------------------------------------------------------- */
-
-FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
-  Fix(lmp, narg, arg)
-{
-  if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
-  nevery = utils::inumeric(FLERR,arg[3],false,lmp);
-  if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
-  // Reading the file that contains the charges before and after protonation/deprotonation
-  pHStructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
-  error->warning(FLERR,"{}",arg[4]);
-  // Hydronium ion hydrogen atoms
-  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
-  if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
-  // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
-
-	
-  pK = utils::numeric(FLERR, arg[6], false, lmp);
-  pH = utils::numeric(FLERR, arg[7], false, lmp);
-  T = utils::numeric(FLERR, arg[8], false, lmp);
-  
-  pstyle = utils::strdup(arg[9]);
-  
-
-
-  qHs = 0.0;
-  qHWs = 0.612;
-
-  GFF_flag = false;
-  print_Udwp_flag = false;
-  int iarg = 10;
-  while (iarg < narg) {
-    if (strcmp(arg[iarg], "GFF") == 0)
-    {
-       GFF_flag = true;
-       fp = fopen(arg[iarg+1],"r");
-       if (fp == nullptr)
-         error->one(FLERR, "Cannot find fix constant_pH the GFF correction file {}",arg[iarg+1]);
-       iarg = iarg + 2;
-    }
-    else if ((strcmp(arg[iarg],"Qs") == 0))
-    {
-       qHs = utils::numeric(FLERR, arg[iarg+1],false,lmp);
-       qHWs = utils::numeric(FLERR, arg[iarg+2],false,lmp);
-       iarg = iarg + 3;
-    }
-    else if ((strcmp(arg[iarg],"Print_Udwp") == 0))
-    {
-	print_Udwp_flag = true;
-	Udwp_fp = fopen(arg[iarg+1],"w");
-	if (Udwp_fp == nullptr) 
-	    error->one(FLERR, "Cannot find fix constant_pH the Udwp debugging file {}",arg[iarg+1]);
-	iarg = iarg + 2;
-    }
-    else
-       error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
-  }
-  
-  fixgpu = nullptr;
-
-}
-
-/* ---------------------------------------------------------------------- */
-
-FixConstantPH::~FixConstantPH()
-{
-
+   {
       error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
       GFF_lambda = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i][0]);
    }
