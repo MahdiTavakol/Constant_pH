@@ -798,7 +798,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
 
 
   qHs = 0.0;
-  qHWs = 0.612;
+  qHWs = 0.278;
 
   GFF_flag = false;
   print_Udwp_flag = false;
@@ -891,13 +891,13 @@ void FixConstantPH::compute_q_total()
    double q_total;
    double tolerance = 0.001;
 
-   for (int i = 0; i <nlocal; i++)
-       q_local += q[i];
+   for (int i = 0; i < nlocal; i++)
+      q_local += q[i];
 
-    MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
 
-    if ((q_total >= tolerance || q_total <= -tolerance) && comm->me == 0)
-    	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {}",q_total);
+   if ((q_total >= tolerance || q_total <= -tolerance) && comm->me == 0)
+      error->warning(FLERR,"q_total in fix constant-pH is non-zero: {}",q_total);
 }
 
 /* --------------------------------------------------------------------- */
@@ -913,6 +913,9 @@ double FixConstantPH::compute_epair()
    double energy = 0.0;
    if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul);
 
+
+   /* I need to add the charge-charge correlation here 
+      according to Aho et al JCTC 2022. */
    /* As the bond, angle, dihedral and improper energies 
       do not change with the espilon, we do not need to 
       include them in the energy. We are interested in 
