@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.05----- */
+/* ---v0.02.07----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -74,7 +74,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
 
 
   qHs = 0.0;
-  qHWs = 0.612;
+  qHWs = 0.278;
 
   GFF_flag = false;
   print_Udwp_flag = false;
