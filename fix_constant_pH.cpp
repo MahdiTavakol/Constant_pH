@@ -391,6 +391,7 @@ void FixConstantPH::calculate_dq()
        q_total_2 += protonable[i] * pH2qs[i];
    }
    dq = std::abs(q_total_2 - q_total_1);
+   error->warning(FLERR,"dq={}",dq);
 }
 
 /* ----------------------------------------------------------------------
@@ -650,6 +651,9 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     // update the forcefield parameters
     pair1->reinit();
 
+    int q_changes_local[2];
+    int q_changes[2];
+
 	
     // update the charges
     for (int i = 0; i < nlocal; i++)
@@ -657,10 +661,16 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 	if (protonable[type[i]] == 1)
         {
             q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+	    q_changes_local[0]++;
 	}
 	if (type[i] == typeHW)
-	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral	
-     }	
+	{
+	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral
+	    q_changes_local[1]++;
+	}
+     }
+     MPI_Allreduce(&q_changes_local,&q_changes,2,MPI_INT,MPI_SUM,world);
+     error->warning(FLERR,"protonable q change = {}, HW q change = {}",q_changes[0],q_changes[1]);
 }
 
 /* ---------------------------------------------------------------------
