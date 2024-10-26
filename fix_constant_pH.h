@@ -10,7 +10,6 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.0.00----- */
 
 #ifdef FIX_CLASS
 // clang-format off
@@ -22,40 +21,128 @@ FixStyle(constant_pH,FixConstantPH);
 #define LMP_FIX_CONSTANTPH_H
 
 #include "fix.h"
+#include "pair.h"
 
 
 namespace LAMMPS_NS {
 
-	class FixConstantPH: public Fix {
-	public:
-		FixConstantPH(class LAMMPS*, int, char**);
-		~FixConstantPH() override;
-		int setmask() override;
-		void init() override;
-		void setup(int) override;
-		void post_force(int) override;
-		double compute_scalar() override;
-		double compute_vector(int) override;
-		double memory_usage() override;
-		void init_list(int, class NeighList*) override;
+  class FixConstantPH: public Fix {
+     public:
+	FixConstantPH(class LAMMPS*, int, char**);
+	~FixConstantPH() override;
+	int setmask() override;
+	void init() override;
+	void setup(int) override;
+	void initial_integrate(int) override;
+	void post_force(int) override;
+	void post_integrate() override;
+        double compute_vector(int) override;
+	double memory_usage() override;
 
-	private:
-		// Input variables for constant values
-		int igroupH, igroupW;
-		int groupHbit, groupWbit;
-		double pK, pH, T;
-		double a, b, s, m, w, r, d;
-		double m_lambda;
-		double HA, HB;
-		int nmax;
-                double *H_atom;
+     private:
+	// Sturcture files
+        FILE *pHStructureFile;
 
-		void integrate_lambda();
-		void compute_Hs();
-		void calculate_df();
-		void calculate_dU();
-		void set_force();
-		void modify_water();
+	// Atom types and charges that change due to protonation
+        int pHnTypes;
+        double *pH1qs, *pH2qs;
+        int * typePerProtMol;
+        int * protonable;
+
+        // Charge difference between structure 1 and structure 2
+        double dq;
+
+	// Input variables for constant values
+	int typeHW;
+	double pK, pH, T;
+
+	double a, b, s, m, w, r, d, k, h;
+	double HA, HB;
+	double U, dU;
+	
+	// Pair style parameters
+        // I am not sure why I do not release the pstyle
+	char * pstyle, * pparam1;
+	Pair * pair1;
+	int pdim1;
+
+	// Lambda dynamics
+	double lambda, v_lambda, a_lambda, m_lambda;	
+
+	// Protonation and hydronium group parameters
+	double qHs, qHWs;
+	int num_HWs;
+
+	// The smoothing function 
+	double f, df;
+
+	// Parameters for the forcefield modifiction term
+        bool GFF_flag;
+	FILE *fp;
+	double **GFF;
+	int GFF_size;
+	double GFF_lambda;
+
+        // Parameters for printing the Udwp
+        bool print_Udwp_flag;
+        FILE *Udwp_fp;
+        void print_Udwp();
+
+        //
+        void compute_q_total();
+
+
+	class Fix *fixgpu;
+
+	// This is just a pointer to the non-bonded interaction parameters and does not have any allocated memory
+	// This should not be deallocated since the original pointer will be deallocated later on by the LAMMPS
+	double **epsilon;
+	// _init is the initial value of hydrogen atoms properties which is multiplied by lambda at each step
+	double **epsilon_init;
+
+
+        int nmax;
+
+        // These pointers are allocated and deallocated through allocate_storage() and deallocate_storage() functions
+        // _org is for value of parameters before the update_lmp() with modified parameters act on them
+  	double *q_orig;
+ 	double **f_orig;
+  	double eng_vdwl_orig, eng_coul_orig;
+  	double pvirial_orig[6];
+  	double *peatom_orig, **pvatom_orig;
+ 	double energy_orig;
+ 	double kvirial_orig[6];
+	double *keatom_orig, **kvatom_orig;
+
+
+        template<int stage>
+	void compute_Hs();
+        void check_num_HWs();
+        void read_pH_structure_files();
+        void restore_epsilon();
+	void calculate_dq();
+	void calculate_df();
+	void calculate_dU();
+	void integrate_lambda();
+	void allocate_storage();
+	void deallocate_storage();
+        template < int direction>
+	void forward_reverse_copy(double& a, double& b);
+        template < int direction>
+	void forward_reverse_copy(double* a, double* b, int i);
+        template < int direction>
+	void forward_reverse_copy(double** a, double** b, int i, int j);
+	template <int direction>
+	void backup_restore_qfev();
+	void init_GFF();
+	void calculate_GFF();
+	void modify_epsilon_q(const double& scale);
+	void modify_water();
+	void update_lmp();
+	double compute_epair();
+	void update_a_lambda();
+	void update_v_lambda();
+	void update_lambda();
 	};
 
 }    // namespace LAMMPS_NS
