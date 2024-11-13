@@ -139,6 +139,7 @@ namespace LAMMPS_NS {
 	void modify_epsilon_q(const double& scale);
 	void modify_water();
 	void update_lmp();
+        void compute_f_lambda_charge_interpolation();
 	double compute_epair();
 	void update_a_lambda();
 	void update_v_lambda();
