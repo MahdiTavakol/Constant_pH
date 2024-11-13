@@ -788,6 +788,20 @@ void FixConstantPH::calculate_GFF()
    }
 }
 
+/* ----------------------------------------------------------------------
+   The linear charge interpolation method in Aho et al JCTC 2022
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::void compute_f_lambda_charge_interpolation()
+{
+   /* I can use two different approaches
+      either I can go with copying the compute_group_group
+      code with factor_lj = 0 or I can use the eng->coul
+      I prefer the second one as it is tidier and I guess 
+      it should be faster
+      */
+}
+
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::update_a_lambda()
