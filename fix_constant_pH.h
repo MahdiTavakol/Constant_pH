@@ -72,6 +72,10 @@ namespace LAMMPS_NS {
         // Lambda arrays
         double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas;
 
+        // The protonable groups
+        int *protonable_molecule_ids;
+         
+
 	// Protonation and hydronium group parameters
 	double qHs, qHWs;
 	int num_HWs;
