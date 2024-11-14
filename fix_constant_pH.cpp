@@ -826,10 +826,11 @@ void FixConstantPH::void compute_f_lambda_charge_interpolation()
       energy_local[i] = 0.0;
       if (force->pair) energy_local[i] += force->pair->eng_coul;
       // You need to add the kspace contribution too
-		  
-  
-  
   }
+
+  MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
+  for (int i = 0; i < n_lambdas; i++) energy[i] /= static_cast<double> (natoms); // convert to kcal/mol
+  delete [] energy_local;
 
   double energy_local = 0.0;
   double energy = 0.0;
