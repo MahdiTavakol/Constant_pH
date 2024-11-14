@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.09----- */
+/* ---v0.02.10----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -798,7 +798,7 @@ void FixConstantPH::calculate_GFF()
    The linear charge interpolation method in Aho et al JCTC 2022
    --------------------------------------------------------------------- */
 
-void FixConstantPH::void compute_f_lambda_charge_interpolation()
+void FixConstantPH::compute_f_lambda_charge_interpolation()
 {
    /* Two different approaches can be used
       either I can go with copying the compute_group_group
@@ -829,31 +829,11 @@ void FixConstantPH::void compute_f_lambda_charge_interpolation()
   }
 
   MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
-  for (int i = 0; i < n_lambdas; i++) energy[i] /= static_cast<double> (natoms); // convert to kcal/mol
-  delete [] energy_local;
-
-  double energy_local = 0.0;
-  double energy = 0.0;
-
-  if (force->pair) energy_local += force->pair->eng_coul;
-  /* What about the kspace contribution? */
-
-  
-
-      double energy_local = 0.0;
-   double energy = 0.0;
-   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul);
-
-   /* As the bond, angle, dihedral and improper energies 
-      do not change with the espilon, we do not need to 
-      include them in the energy. We are interested in 
-      their difference afterall */
-
-   MPI_Allreduce(&energy_local,&energy,1,MPI_DOUBLE,MPI_SUM,world);
-   energy /= static_cast<double> (natoms); // To convert to kcal/mol the total energy must be devided by the number of atoms
-   return energy;
-   
-    
+  for (int i = 0; i < n_lambdas; i++) { 
+      double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
+      a_lambdas[i] = force_i / m_lambdas[i]; 
+  }
+  delete [] energy_local;     
 }
 
 /* ---------------------------------------------------------------------- */
