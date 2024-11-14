@@ -47,7 +47,7 @@ using namespace MathConst;
 /* ---------------------------------------------------------------------- */
 
 FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
-  Fix(lmp, narg, arg)
+  Fix(lmp, narg, arg), lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
@@ -141,6 +141,12 @@ FixConstantPH::~FixConstantPH()
    memory->destroy(typePerProtMol);
    memory->destroy(protonable);
 
+
+   if (lambdas) delete [] lambdas;
+   if (v_lambdas) delete [] v_lambdas;
+   if (a_lambdas) delete [] a_lambdas;
+   if (m_lambdas) delete [] m_lambdas;
+
    deallocate_storage();
 
    if (fp && (comm->me == 0)) fclose(fp);
@@ -212,8 +218,8 @@ void FixConstantPH::init()
    if (pair_params.find(pstyle) == pair_params.end())
       error->all(FLERR,"The pair style {} is not currently supported in fix constant_pH",pstyle);
    
-   pparam1 = new char[pair_params[pstyle].length()+1];
-   std::strcpy(pparam1,pair_params[pstyle].c_str());
+    = new char[pair_params[pstyle].length()+1];
+   std::strcpy(,pair_params[pstyle].c_str());
    
 }
 
@@ -794,12 +800,59 @@ void FixConstantPH::calculate_GFF()
 
 void FixConstantPH::void compute_f_lambda_charge_interpolation()
 {
-   /* I can use two different approaches
+   /* Two different approaches can be used
       either I can go with copying the compute_group_group
       code with factor_lj = 0 or I can use the eng->coul
       I prefer the second one as it is tidier and I guess 
       it should be faster
       */
+
+  double * energy_local = new double[n_lambdas];
+  double * energy = new double[n_lambdas];
+
+  for (int i = 0; i < n_lambdas; i++) {
+      for (int j = 0; j < n_lambda_atoms[i]; j++) {
+	  double delta_q = q_prot[j] - q_deprot[j];
+	  // I need to figure out how to identify those atoms
+      }
+      for (int k = 0; k < n_lambdas; k++) {
+	  if (k == i) continue;
+	  for (int l = 0; l < n_lambda_atoms[k]; l++) {
+	      double q = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
+              // Double check if the q_prot and q_deprot are in the right place
+	      // how should I identify those atoms
+	  }
+      }
+      energy_local[i] = 0.0;
+      if (force->pair) energy_local[i] += force->pair->eng_coul;
+      // You need to add the kspace contribution too
+		  
+  
+  
+  }
+
+  double energy_local = 0.0;
+  double energy = 0.0;
+
+  if (force->pair) energy_local += force->pair->eng_coul;
+  /* What about the kspace contribution? */
+
+  
+
+      double energy_local = 0.0;
+   double energy = 0.0;
+   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul);
+
+   /* As the bond, angle, dihedral and improper energies 
+      do not change with the espilon, we do not need to 
+      include them in the energy. We are interested in 
+      their difference afterall */
+
+   MPI_Allreduce(&energy_local,&energy,1,MPI_DOUBLE,MPI_SUM,world);
+   energy /= static_cast<double> (natoms); // To convert to kcal/mol the total energy must be devided by the number of atoms
+   return energy;
+   
+    
 }
 
 /* ---------------------------------------------------------------------- */
