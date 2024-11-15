@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.10----- */
+/* ---v0.02.11----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -230,17 +230,15 @@ void FixConstantPH::setup(int /*vflag*/)
    // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
     w = 200; //50.0;
     s = 0.3; //0.3;
-    h = 10.0;
-    k = 4.417; //6.267;
-    a = 0.04208; //0.05130;
-    b = 0.002957; //0.001411;
+    h = 4; //0; //10.0;
+    k = 2.553; //0; //4.417; //6.267;
+    a = 0.034041; //0.04764; //0.04208; //0.05130;
+    b = 0.005238; //-0.09706; //0.002957; //0.001411;
     r = 16.458; //21.428;
     m = 0.1507; //0.1078;
-    d = 3.5; //5.0;
+    d = 2.0; //0.0; //3.5; //5.0;
     // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
     m_lambda = 20;
-
-
     pair1 = nullptr;
   
     if (lmp->suffix_enable)
@@ -458,9 +456,9 @@ void FixConstantPH::calculate_dU()
    U3 = d*exp(-(lambda-0.5)*(lambda-0.5)/(2*s*s));
    U4 = 0.5*w*(1-erff(r*(lambda+m)));
    U5 = 0.5*w*(1+erff(r*(lambda-1-m)));
-   dU1 = k*((lambda-1-b)/(a*a))*U1;
-   dU2 = k*((lambda+b)/(a*a))*U2;
-   dU3 = -d*((lambda-0.5)/(s*s))*U3;
+   dU1 = -((lambda-1-b)/(a*a))*U1;
+   dU2 = -((lambda+b)/(a*a))*U2;
+   dU3 = -((lambda-0.5)/(s*s))*U3;
    dU4 = -0.5*w*r*2*exp(-r*r*(lambda+m)*(lambda+m))/sqrt(M_PI);
    dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(M_PI);
 
@@ -674,7 +672,7 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
 
 
     // update the forcefield parameters
-    pair1->reinit();
+    //pair1->reinit();
 
     double q_changes_local[3] = {0.0,0.0,0.0};
     double q_changes[3] = {0.0,0.0,0.0};
@@ -851,15 +849,17 @@ void FixConstantPH::update_a_lambda()
    double NA = 6.022*1e23;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
+
    //df = 1.0;
    //f = 1.0;
-   double  f_lambda = -(HB-HA + df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda);
-   this->a_lambda = f_lambda / m_lambda;
+   double  f_lambda = -(HB-HA - df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda);
+
+   this->a_lambda = 4.184*0.0001*f_lambda / m_lambda;
    /*#ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif*/
 
-   double  H_lambda = (1-lambda)*HA + lambda*HB + f*kT*log(10)*(pK-pH) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
+   double  H_lambda = (1-lambda)*HA + lambda*HB - f*kT*log(10*(pK-pH)) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
 }
 
@@ -868,7 +868,7 @@ void FixConstantPH::update_a_lambda()
 void FixConstantPH::update_v_lambda()
 {
    double dt_lambda = update->dt;
-   this->v_lambda += 0.5*this->a_lambda*dt_lambda;
+   this->v_lambda += 0.5*this->a_lambda*dt_lambda*this->nevery;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -876,7 +876,7 @@ void FixConstantPH::update_v_lambda()
 void FixConstantPH::update_lambda()
 {
    double dt_lambda = update->dt;
-   this->lambda += this->v_lambda * dt_lambda;
+   this->lambda += this->v_lambda * dt_lambda*this->nevery;
 }
 
    
