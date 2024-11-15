@@ -1,5 +1,4 @@
-// clang-format off
-/* ----------------------------------------------------------------------
+/* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
    LAMMPS development team: developers@lammps.org
@@ -11,968 +10,151 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.10----- */
 
-#define DEBUG
-#ifdef DEBUG
-#include <iostream>
-#endif
+#ifdef FIX_CLASS
+// clang-format off
+FixStyle(constant_pH,FixConstantPH);
+// clang-format on
+#else
+
+#ifndef LMP_FIX_CONSTANTPH_H
+#define LMP_FIX_CONSTANTPH_H
 
 #include "fix.h"
-#include "fix_constant_pH.h"
-
-#include "atom.h"
-#include "atom_masks.h"
-#include "error.h"
-
-#include "force.h"
-#include "group.h"
-#include "memory.h"
 #include "pair.h"
-#include "timer.h"
-#include "comm.h"
-#include "kspace.h"
-#include "update.h"
-#include "math_const.h"
-#include "modify.h"
 
-#include <cstring>
-#include <string>
-#include <map>
 
-using namespace LAMMPS_NS;
-using namespace FixConst;
-using namespace MathConst;
+namespace LAMMPS_NS {
 
-/* ---------------------------------------------------------------------- */
+  class FixConstantPH: public Fix {
+     public:
+	FixConstantPH(class LAMMPS*, int, char**);
+	~FixConstantPH() override;
+	int setmask() override;
+	void init() override;
+	void setup(int) override;
+	void initial_integrate(int) override;
+	void post_force(int) override;
+	void post_integrate() override;
+        double compute_vector(int) override;
+	double memory_usage() override;
 
-FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
-  Fix(lmp, narg, arg), lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
-{
-  if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
-  nevery = utils::inumeric(FLERR,arg[3],false,lmp);
-  if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
-  // Reading the file that contains the charges before and after protonation/deprotonation
-  if (comm->me == 0) {
-      pHStructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
-      if (pHStructureFile == nullptr)
-         error->all(FLERR,"Unable to open the file");
-  }
-  // Hydronium ion hydrogen atoms
-  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
-  if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
-  // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
+     private:
+	// Sturcture files
+        FILE *pHStructureFile;
 
+	// Atom types and charges that change due to protonation
+        int pHnTypes;
+        double *pH1qs, *pH2qs;
+        int * typePerProtMol;
+        int * protonable;
+
+        // Charge difference between structure 1 and structure 2
+        double dq;
+
+	// Input variables for constant values
+	int typeHW;
+	double pK, pH, T;
+
+	double a, b, s, m, w, r, d, k, h;
+	double HA, HB;
+	double U, dU;
 	
-  pK = utils::numeric(FLERR, arg[6], false, lmp);
-  pH = utils::numeric(FLERR, arg[7], false, lmp);
-  T = utils::numeric(FLERR, arg[8], false, lmp);
-  
-  pstyle = utils::strdup(arg[9]);
-  
+	// Pair style parameters
+        // I am not sure why I do not release the pstyle
+	char * pstyle, * pparam1;
+	Pair * pair1;
+	int pdim1;
 
+	// Lambda dynamics
+	double lambda, v_lambda, a_lambda, m_lambda;
 
-  qHs = 0.0;
-  qHWs = 0.278;
+        // Lambda arrays
+        double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas;
 
-  GFF_flag = false;
-  print_Udwp_flag = false;
-  int iarg = 10;
-  while (iarg < narg) {
-    if (strcmp(arg[iarg], "GFF") == 0)
-    {
-       GFF_flag = true;
-       fp = fopen(arg[iarg+1],"r");
-       if (fp == nullptr)
-         error->one(FLERR, "Cannot find fix constant_pH the GFF correction file {}",arg[iarg+1]);
-       iarg = iarg + 2;
-    }
-    else if ((strcmp(arg[iarg],"Qs") == 0))
-    {
-       qHs = utils::numeric(FLERR, arg[iarg+1],false,lmp);
-       qHWs = utils::numeric(FLERR, arg[iarg+2],false,lmp);
-       iarg = iarg + 3;
-    }
-    else if ((strcmp(arg[iarg],"Print_Udwp") == 0))
-    {
-	print_Udwp_flag = true;
-	Udwp_fp = fopen(arg[iarg+1],"w");
-	if (Udwp_fp == nullptr) 
-	    error->one(FLERR, "Cannot find fix constant_pH the Udwp debugging file {}",arg[iarg+1]);
-	iarg = iarg + 2;
-    }
-    else
-       error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
-  }
-  
-  fixgpu = nullptr;
-  
-  
-  vector_flag = 1;
-  size_vector = 8;
-
-}
-
-/* ---------------------------------------------------------------------- */
-
-FixConstantPH::~FixConstantPH()
-{
-   #ifdef DEBUG
-       std::cout << "Releasing epsilon_init" << std::endl;
-   #endif
-   memory->destroy(epsilon_init);
-   #ifdef DEBUG
-       std::cout << "Releasing GFF" << std::endl;
-   #endif
-   if (GFF != nullptr) memory->destroy(GFF);
-
-   #ifdef DEBUG
-       std::cout << "Releasing pparam1" << std::endl;
-   #endif
-   delete [] pparam1;
-   #ifdef DEBUG
-       std::cout << "Releasing pstyle" << std::endl;
-   #endif
-   delete [] pstyle;
-
-
-   memory->destroy(pH1qs);
-   memory->destroy(pH2qs);
-   memory->destroy(typePerProtMol);
-   memory->destroy(protonable);
-
-
-   if (lambdas) delete [] lambdas;
-   if (v_lambdas) delete [] v_lambdas;
-   if (a_lambdas) delete [] a_lambdas;
-   if (m_lambdas) delete [] m_lambdas;
-
-   deallocate_storage();
-
-   if (fp && (comm->me == 0)) fclose(fp);
-   if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
-}
-
-/* ----------------------------------------------------------------------
-
-   ---------------------------------------------------------------------- */
-
-int FixConstantPH::setmask()
-{
-  int mask = 0;
-  mask |= INITIAL_INTEGRATE; // the 1st half of the velocity verlet algorithm --> update half step v_lambda and update lambda
-  mask |= POST_FORCE; // calculate the lambda 
-  mask |= FINAL_INTEGRATE; // the 2nd half of the velocity verlet algorithm --> update t
-  return mask;	
-}
-
-/* ----------------------------------------------------------------------
-   Setup
-   ---------------------------------------------------------------------- */
-   
-void FixConstantPH::init()
-{
-   std::map<std::string, std::string> pair_params;
-   
-   pair_params["lj/cut/soft/omp"] = "lambda";
-   pair_params["lj/cut/coul/cut/soft/gpu"] = "lambda";
-   pair_params["lj/cut/coul/cut/soft/omp"] = "lambda";
-   pair_params["lj/cut/coul/long/soft"] = "lambda";
-   pair_params["lj/cut/coul/long/soft/gpu"] = "lambda";
-   pair_params["lj/cut/coul/long/soft/omp"] = "lambda";
-   pair_params["lj/cut/tip4p/long/soft"] = "lambda";
-   pair_params["lj/cut/tip4p/long/soft/omp"] = "lambda";
-   pair_params["lj/charmm/coul/long/soft"] = "lambda";
-   pair_params["lj/charmm/coul/long/soft/omp"] = "lambda";
-   pair_params["lj/class2/soft"] = "lambda";
-   pair_params["lj/class2/coul/cut/soft"] = "lambda";
-   pair_params["lj/class2/coul/long/soft"] = "lambda";
-   pair_params["coul/cut/soft"] = "lambda";
-   pair_params["coul/cut/soft/omp"] = "lambda";
-   pair_params["coul/long/soft"] = "lambda";
-   pair_params["coul/long/soft/omp"] = "lambda";
-   pair_params["tip4p/long/soft"] = "lambda";
-   pair_params["tip4p/long/soft/omp"] = "lambda";
-   pair_params["morse/soft"] = "lambda";
-   
-   pair_params["lj/charmm/coul/charmm"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/gpu"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/intel"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/long"] = "epsilon";
-   pair_params["lj/charmm/coul/long/gpu"] = "epsilon";
-   pair_params["lj/charmm/coul/long/intel"] = "epsilon";
-   pair_params["lj/charmm/coul/long/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/long/opt"] = "epsilon";
-   pair_params["lj/charmm/coul/long/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/msm"] = "epsilon";
-   pair_params["lj/charmm/coul/msm/omp"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/charmmfsh"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/long"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/long/kk"] = "epsilon";
-
-   if (pair_params.find(pstyle) == pair_params.end())
-      error->all(FLERR,"The pair style {} is not currently supported in fix constant_pH",pstyle);
-   
-   pparam1 = new char[pair_params[pstyle].length()+1];
-   std::strcpy(pparam1,pair_params[pstyle].c_str());
-   
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::setup(int /*vflag*/)
-{
-   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
-    w = 200; //50.0;
-    s = 0.3; //0.3;
-    h = 10.0;
-    k = 4.417; //6.267;
-    a = 0.04208; //0.05130;
-    b = 0.002957; //0.001411;
-    r = 16.458; //21.428;
-    m = 0.1507; //0.1078;
-    d = 3.5; //5.0;
-    // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
-    m_lambda = 20;
-
-
-    pair1 = nullptr;
-  
-    if (lmp->suffix_enable)
-        pair1 = force->pair_match(std::string(pstyle)+"/"+lmp->suffix,1);
-    if (pair1 == nullptr)
-        pair1 = force->pair_match(pstyle,1); // I need to define the pstyle variable
-    void *ptr1 = pair1->extract(pparam1,pdim1);
-    if (ptr1 == nullptr)
-        error->all(FLERR,"Fix constant_pH pair style {} was not found",pstyle);
-    if (pdim1 != 2)
-         error->all(FLERR,"Pair style parameter {} is not compatible with fix constant_pH", pparam1);
+        // The protonable groups
+        int *protonable_molecule_ids;
          
-    epsilon = (double **) ptr1;
-    
-    int ntypes = atom->ntypes;
-    memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init");
 
-    // The limits for these two loops are correct.
-    for (int i = 1; i < ntypes+1; i++)
-        for (int j = i; j < ntypes+1; j++)
-             epsilon_init[i][j] = epsilon[i][j];
-
-	
-    GFF_lambda = 0.0;
-    GFF = nullptr;
-    if (GFF_flag)
-	init_GFF();
-
-    if (print_Udwp_flag)
-	print_Udwp();
-
-
-    // Reading the structure of protonable states before and after protonation.
-    read_pH_structure_files();
-
-    // Calculating the change in the charge due to the protonation
-    calculate_dq();
-
-    // Checking if we have enough hydronium ions to neutralize the system
-    check_num_HWs();
-	
-    fixgpu = modify->get_fix_by_id("package_gpu");
-
-
-    nmax = atom->nmax;
-    allocate_storage();
-}
-
-/* ----------------------------------------------------------------------
-   1st half of the velocity verlet algorithm for the lambda
-   ---------------------------------------------------------------------- */
-
-void FixConstantPH::initial_integrate(int /*vflag*/)
-{
-   if (update->ntimestep % nevery == 0)
-   {
-      update_v_lambda();
-      update_lambda();
-   }
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::post_force(int vflag)
-{
-   if (update->ntimestep % nevery == 0) {
-      compute_Hs<-1>();
-      calculate_df();
-      calculate_dU();
-      update_a_lambda();
-      compute_q_total();
-   }
-   /* The force on hydrogens must be updated at every step otherwise at 
-      steps at this fix is not active the pH would be very low and there
-      will be a jump in pH in nevery steps                               */
-   compute_Hs<1>();
-}
-
-/* ----------------------------------------------------------------------
-   The 2nd half of the velocity verlet algorithm for the lambda parameter
-   ---------------------------------------------------------------------- */
-
-void FixConstantPH::post_integrate()
-{
-   if (update->ntimestep % nevery == 0)
-       update_v_lambda();
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::read_pH_structure_files()
-{
-   /* File format
-    * Comment 
-    * pHnTypes
-    * type1,  number of type1 atoms in the protonable molecule, qBeforeProtonation, qAfterProtonation
-    * ...   U1 = -k*exp(-(lambda-1-b)*(lambda-1-b)/(2*a*a));
-   U2 = -k*exp(-(lambda+b)*(lambda+b)/(2*a*a));
-   U3 = d*exp(-(lambda-0.5)*(lambda-0.5)/(2*s*s));
-   U4 = 0.5*w*(1-erff(r*(lambda+m)));
-   U5 = 0.5*w*(1+erff(r*(lambda-1-m)));
-    * ...
-    */
-
-   /*Allocating the required memory*/
-   int ntypes = atom->ntypes;
-   memory->create(protonable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
-   memory->create(typePerProtMol,ntypes+1,"constant_pH:typePerProtMol");
-   memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
-   memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
-
-
-
-   char line[128];
-   if (comm->me == 0)
-   {
-       if (!pHStructureFile)
-           error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
-       fgets(line,sizeof(line),pHStructureFile);
-       fgets(line,sizeof(line),pHStructureFile);
-       line[strcspn(line,"\n")] = '\0';
-
-       char *token = strtok(line,",");
-       pHnTypes = std::stoi(token);
-       for (int i = 1; i < ntypes+1; i++)
-       {
-	   protonable[i] = 0;
-	   typePerProtMol[i] = 0;
-	   pH1qs[i] = 0.0;
-           pH2qs[i] = 0.0;
-       }   
-       for (int i = 0; i < pHnTypes; i++)
-       {
-	  if (fgets(line,sizeof(line),pHStructureFile) == nullptr)
-	       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
-	  line[strcspn(line,"\n")] = '\0';
-	  token = strtok(line,",");
-	  int type = std::stoi(token);
-	  protonable[type] = 1;
-	  token = strtok(NULL,",");
-	  typePerProtMol[type] = std::stoi(token);
-	  token = strtok(NULL,",");
-	  pH1qs[type] = std::stod(token);
-	  token = strtok(NULL,",");
-          pH2qs[type] = std::stod(token);
-       }
-       fclose(pHStructureFile);
-       pHStructureFile = nullptr;
-   }
-   
-   MPI_Bcast(protonable,ntypes+1,MPI_INT,0,world);
-   MPI_Bcast(typePerProtMol,ntypes+1,MPI_INT,0,world);
-   MPI_Bcast(pH1qs,ntypes+1,MPI_DOUBLE,0,world);
-   MPI_Bcast(pH2qs,ntypes+1,MPI_DOUBLE,0,world);
-   
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::calculate_dq()
-{
-   double q_total_1 = 0.0;
-   double q_total_2 = 0.0;
-
-   int ntypes = atom->ntypes;
-
-   for (int i = 1; i < ntypes+1; i++)
-   {
-       q_total_1 += typePerProtMol[i] * protonable[i] * pH1qs[i]; // if it is not protonable the protonable[i] == 0
-       q_total_2 += typePerProtMol[i] * protonable[i] * pH2qs[i];
-   }
-   
-   dq = std::abs(q_total_2 - q_total_1);
-}
-
-/* ----------------------------------------------------------------------
-   Checking if we have enough of HWs for neutralizing the system total charge
-   ---------------------------------------------------------------------- */
-
-void FixConstantPH::check_num_HWs()
-{
-   double tol = 1e-5;
-   int * type = atom->type;
-   int nlocal = atom->nlocal;
-   int num_local, num;
-   num = 0;
-   num_local = 0;
-   for (int i = 0; i < nlocal; i++)
-   {
-      if (type[i] == typeHW)
-        num_local++;
-   }
-
-   MPI_Allreduce(&num_local,&num,1,MPI_INT,MPI_SUM,world);
-   num_HWs = num;
-
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::calculate_df()
-{
-   f = 1.0/(1+exp(-50*(lambda-0.5)));
-   df = 50*exp(-50*(lambda-0.5))*(f*f);
-}
-
-/* ----------------------------------------------------------------------- */
-
-void FixConstantPH::calculate_dU()
-{
-   double U1, U2, U3, U4, U5;
-   double dU1, dU2, dU3, dU4, dU5;
-   U1 = -k*exp(-(lambda-1-b)*(lambda-1-b)/(2*a*a));
-   U2 = -k*exp(-(lambda+b)*(lambda+b)/(2*a*a));
-   U3 = d*exp(-(lambda-0.5)*(lambda-0.5)/(2*s*s));
-   U4 = 0.5*w*(1-erff(r*(lambda+m)));
-   U5 = 0.5*w*(1+erff(r*(lambda-1-m)));
-   dU1 = k*((lambda-1-b)/(a*a))*U1;
-   dU2 = k*((lambda+b)/(a*a))*U2;
-   dU3 = -d*((lambda-0.5)/(s*s))*U3;
-   dU4 = -0.5*w*r*2*exp(-r*r*(lambda+m)*(lambda+m))/sqrt(M_PI);
-   dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(M_PI);
-
-    U =  U1 +  U2 +  U3 +  U4 +  U5;
-   dU = dU1 + dU2 + dU3 + dU4 + dU5;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::print_Udwp()
-{
-    double lambda_backup = this->lambda;
-    int n_points = 100;
-	
-    lambda = -0.5;
-    double dlambda = 2.0/(double)n_points;
-
-    fprintf(Udwp_fp,"Lambda,U,dU\n");
-    for (int i = 0; i <= n_points; i++) {
-	calculate_dU();
-        fprintf(Udwp_fp,"%f,%f,%f\n",lambda,U,dU);
-	lambda += dlambda;
-    }
-    fclose(Udwp_fp);
-    lambda = lambda_backup;
-}
-
-/* ----------------------------------------------------------------------- */
-
-template <int stage>
-void FixConstantPH::compute_Hs()
-{
-   if (stage == -1)
-   {
-      if (nmax > atom->nmax)
-      {
-	  nmax = atom->nmax;
-          allocate_storage();
-	  deallocate_storage();
-      }
-      backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
-      modify_epsilon_q(0.0); //should define a change_parameters(const int);
-      update_lmp(); // update the lammps force and virial values
-      HA = compute_epair(); 
-      backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
-      modify_epsilon_q(1.0); //should define a change_parameters(const double);
-      update_lmp();
-      HB = compute_epair();           // HB is for the protonated state with lambda==1 
-      backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
-      restore_epsilon();
-   }
-   if (stage == 1)
-   {
-      modify_epsilon_q(lambda); //should define a change_parameters(const double);
-      //update_lmp(); This update_lmp() might not work here since I am not sure about the correct values for the eflag and vflag variables... Anyway, the epsilon and charge values have been updated according to the pH value and lammps will do the rest
-   }
-}
-
-/* ----------------------------------------------------------------------
-   manage storage for charge, force, energy, virial arrays
-   taken from src/FEP/compute_fep.cpp
-------------------------------------------------------------------------- */
-
-void FixConstantPH::allocate_storage()
-{
-  /* It should be nmax since in the case that 
-     the newton flag is on the force in the 
-     ghost atoms also must be update and the 
-     nmax contains the maximum number of nlocal 
-     and nghost atoms.
-  */
-  int nlocal = atom->nmax; 
-  memory->create(f_orig, nlocal, 3, "constant_pH:f_orig");
-  memory->create(q_orig, nlocal, "constant_pH:q_orig");
-  memory->create(peatom_orig, nlocal, "constant_pH:peatom_orig");
-  memory->create(pvatom_orig, nlocal, 6, "constant_pH:pvatom_orig");
-  if (force->kspace) {
-     memory->create(keatom_orig, nlocal, "constant_pH:keatom_orig");
-     memory->create(kvatom_orig, nlocal, 6, "constant_pH:kvatom_orig");
-  }
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::deallocate_storage()
-{
-  memory->destroy(q_orig);
-  memory->destroy(f_orig);
-  memory->destroy(peatom_orig);
-  memory->destroy(pvatom_orig);
-  if (force->kspace)
-  {
-      memory->destroy(keatom_orig);
-      memory->destroy(kvatom_orig);
-  }
-
-  f_orig = nullptr;
-  peatom_orig = keatom_orig = nullptr;
-  pvatom_orig = kvatom_orig = nullptr;
-}
-
-/* ----------------------------------------------------------------------
-   Forward-reverse copy function to be used in backup_restore_qfev()
-   ---------------------------------------------------------------------- */
-
-template  <int direction>
-void FixConstantPH::forward_reverse_copy(double &a,double &b)
-{
-  if (direction == 1) a = b;
-  if (direction == -1) b = a;
-}
-
-template  <int direction>
-void FixConstantPH::forward_reverse_copy(double* a,double* b, int i)
-{
-  if (direction == 1) a[i] = b[i];
-  if (direction == -1) b[i] = a[i];
-}
-
-template  <int direction>
-void FixConstantPH::forward_reverse_copy(double** a,double** b, int i, int j)
-{
-  if (direction == 1) a[i][j] = b[i][j];
-  if (direction == -1) b[i][j] = a[i][j];
-}
-
-/* ----------------------------------------------------------------------
-   backup and restore arrays with charge, force, energy, virial
-   taken from src/FEP/compute_fep.cpp
-   backup ==> direction == 1
-   restore ==> direction == -1
-------------------------------------------------------------------------- */
-
-template <int direction>
-void FixConstantPH::backup_restore_qfev()
-{
-  int i;
-
-
-  int nall = atom->nlocal + atom->nghost;
-  int natom = atom->nlocal;
-  if (force->newton || force->kspace->tip4pflag) natom += atom->nghost;
-
-  double **f = atom->f;
-  for (i = 0; i < natom; i++)
-    for (int j = 0 ; j < 3; j++)
-       forward_reverse_copy<direction>(f_orig,f,i,j);
-  
-
-  double *q = atom->q;
-  for (int i = 0; i < natom; i++)
-     forward_reverse_copy<direction>(q_orig,q,i);
-
-  forward_reverse_copy<direction>(eng_vdwl_orig,force->pair->eng_vdwl);
-  forward_reverse_copy<direction>(eng_coul_orig,force->pair->eng_coul);
-
-  for (int i = 0; i < 6; i++)
-	  forward_reverse_copy<direction>(pvirial_orig ,force->pair->virial, i);
-
-  if (update->eflag_atom) {
-    double *peatom = force->pair->eatom;
-    for (i = 0; i < natom; i++) forward_reverse_copy<direction>(peatom_orig,peatom, i);
-  }
-  if (update->vflag_atom) {
-    double **pvatom = force->pair->vatom;
-    for (i = 0; i < natom; i++)
-      for (int j = 0; j < 6; j++)
-      forward_reverse_copy<direction>(pvatom_orig,pvatom,i,j);
-  }
-
-  if (force->kspace) {
-     forward_reverse_copy<direction>(energy_orig,force->kspace->energy);
-     for (int j = 0; j < 6; j++)
-         forward_reverse_copy<direction>(kvirial_orig,force->kspace->virial,j);
-	  
-     if (update->eflag_atom) {
-        double *keatom = force->kspace->eatom;
-        for (i = 0; i < natom; i++) forward_reverse_copy<direction>(keatom_orig,keatom,i);
-     }
-     if (update->vflag_atom) {
-        double **kvatom = force->kspace->vatom;
-        for (i = 0; i < natom; i++) 
-	  for (int j = 0; j < 6; j++)
-             forward_reverse_copy<direction>(kvatom_orig,kvatom,i,j);
-     }
-  }
-}
-
-/* --------------------------------------------------------------
-
-   -------------------------------------------------------------- */
-   
-void FixConstantPH::modify_epsilon_q(const double& scale)
-{
-    int nlocal = atom->nlocal;
-    int * mask = atom->mask;
-    int * type = atom->type;
-    int ntypes = atom->ntypes;
-    double * q = atom->q;
-
-    // now, I am sure about the limits for these two loops
-    /*for (int i = 1; i < ntypes + 1; i++)
-	for (int j = i; j < ntypes + 1; j++)
-	{
-	    if ((protonable[i] == 1 && protonable[j] == 0) ||
-	        (protonable[i] == 0 || protonable[j] == 1))
-	    	epsilon[i][j] = epsilon_init[i][j] * std::sqrt(scale); // scale == 1 should be for the protonated state
-	    if (protonable[i] == 1 && protonable[j] == 1) 
-	        epsilon[i][j] = epsilon_init[i][j] * scale;
-	}*/
-
-
-    // update the forcefield parameters
-    pair1->reinit();
-
-    double q_changes_local[3] = {0.0,0.0,0.0};
-    double q_changes[3] = {0.0,0.0,0.0};
-
-	
-    // update the charges
-    for (int i = 0; i < nlocal; i++)
-    {
-	if (protonable[type[i]] == 1)
-        {
-            double q_init = q[i];
-            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
-	    q_changes_local[0]++;
-	    q_changes_local[2] += (q[i] - q_init);
-	}
-	if (type[i] == typeHW)
-	{
-	    double q_init = q[i];
-	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral
-	    q_changes_local[1]++;
-	    q_changes_local[2] += (q[i] - q_init);
-	}
-     }
-     MPI_Allreduce(&q_changes_local,&q_changes,3,MPI_INT,MPI_SUM,world);
-     //if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, q_total_change = {}",q_changes[0],q_changes[1],q_changes[2]);
-}
-
-/* ---------------------------------------------------------------------
-   Restore the epsilon values 
-   --------------------------------------------------------------------- */
-
-void FixConstantPH::restore_epsilon()
-{
-    int ntypes = atom->ntypes;
-    
-    // Right now, I am sure about the limits of these two loops
-    for (int i = 0; i < ntypes + 1; i++)
-        for (int j = i; j < ntypes + 1; j++)
-             epsilon[i][j] = epsilon_init[i][j];
-}
-
-/* ----------------------------------------------------------------------
-   modify force and kspace in lammps according
-   ---------------------------------------------------------------------- */
-
-void FixConstantPH::update_lmp() {
-   int eflag = ENERGY_GLOBAL;
-   int vflag = 0;
-   timer->stamp();
-   if (force->pair && force->pair->compute_flag) {
-     force->pair->compute(eflag, vflag);
-     timer->stamp(Timer::PAIR);
-   }
-   if (force->kspace && force->kspace->compute_flag) {
-     force->kspace->compute(eflag, vflag);
-     timer->stamp(Timer::KSPACE);
-   }
-
-   // accumulate force/energy/virial from /gpu pair styles
-   if (fixgpu) fixgpu->post_force(vflag);
-}
-
-/* ---------------------------------------------------------------------
-   Read the data file containing the term deltaGFF in equation 2 of 
-   https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
-   --------------------------------------------------------------------- */
-
-void FixConstantPH::init_GFF()
-{
-   char line[100];
-   fgets(line,sizeof(line),fp);
-   line[strcspn(line,"\n")] = 0;
-   GFF_size = atoi(line);
-   memory->create(GFF,GFF_size,2,"constant_pH:GFF");
-   int i = 0;
-   while(fgets(line,sizeof(line), fp) != NULL && i < GFF_size) {
-      double _lambda, _GFF;
-      line[strcspn(line,"\n")] = 0;
-      char * token = strtok(line, ",");
-      if (token != NULL) 
-	 _lambda = atof(token);
-      else 
-	 error->one(FLERR,"The GFF correction file in the fix constant_pH is in a wrong format!");
-      token = strtok(line, ",");
-      if (token != NULL)
-	 _GFF = atof(token);
-      else
-	 error->one(FLERR,"The GFF correction file in the fix constant_pH is in a wrong format!");
-      GFF[i][0] = _lambda;
-      GFF[i][1] = _GFF;
-      i++;   
-   }	
-   if (fp && (comm->me == 0)) fclose(fp);
-}
-
-/* ---------------------------------------------------------------------
-   Add forcefield correction term deltaGFF in equation 2 of
-   https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
-   --------------------------------------------------------------------- */
-
-void FixConstantPH::calculate_GFF()
-{
-   int i = 0;
-   while (i < GFF_size && GFF[i][0] < lambda) i++;
-
-   if (i == 0)
-   {
-      error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
-      GFF_lambda = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambda - GFF[0][0]);
-   }
-   if (i > 0 && i < GFF_size - 1)
-      GFF_lambda = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i-1][0]);
-   if (i == GFF_size - 1)
-   {
-      error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
-      GFF_lambda = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i][0]);
-   }
-}
-
-/* ----------------------------------------------------------------------
-   The linear charge interpolation method in Aho et al JCTC 2022
-   --------------------------------------------------------------------- */
-
-void FixConstantPH::compute_f_lambda_charge_interpolation()
-{
-   /* Two different approaches can be used
-      either I can go with copying the compute_group_group
-      code with factor_lj = 0 or I can use the eng->coul
-      I prefer the second one as it is tidier and I guess 
-      it should be faster
-   */
-
-
-   int natoms = atom->natoms;
-   int n_lambdas;
-   double * energy_local = new double[n_lambdas];
-   double * energy = new double[n_lambdas];
-   double * n_lambda_atoms = new double[n_lambdas];
-
-   for (int i = 0; i < n_lambdas; i++) {
-      for (int j = 0; j < n_lambda_atoms[i]; j++) {
-	  //double delta_q = q_prot[j] - q_deprot[j];
-	  // I need to figure out how to identify those atoms
-      }
-      for (int k = 0; k < n_lambdas; k++) {
-	  if (k == i) continue;
-	  for (int l = 0; l < n_lambda_atoms[k]; l++) {
-	      //double q = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
-              // Double check if the q_prot and q_deprot are in the right place
-	      // how should I identify those atoms
-	  }
-      }
-      energy_local[i] = 0.0;
-      if (force->pair) energy_local[i] += force->pair->eng_coul;
-      // You need to add the kspace contribution too
-   }
-
-   MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
-   for (int i = 0; i < n_lambdas; i++) { 
-      double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
-      a_lambdas[i] = force_i / m_lambdas[i]; 
-   }
-   
-   delete [] energy;
-   delete [] energy_local;
-   delete [] n_lambda_atoms;     
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::update_a_lambda()
-{
-   if (GFF_flag) calculate_GFF();
-   double NA = 6.022*1e23;
-   double kj2kcal = 0.239006;
-   double kT = force->boltz * T;
-   //df = 1.0;
-   //f = 1.0;
-   double  f_lambda = -(HB-HA + df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda);
-   this->a_lambda = f_lambda / m_lambda;
-   /*#ifdef DEBUG
-	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
-   #endif*/
-
-   double  H_lambda = (1-lambda)*HA + lambda*HB + f*kT*log(10)*(pK-pH) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
-   // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::update_v_lambda()
-{
-   double dt_lambda = update->dt;
-   this->v_lambda += 0.5*this->a_lambda*dt_lambda;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::update_lambda()
-{
-   double dt_lambda = update->dt;
-   this->lambda += this->v_lambda * dt_lambda;
-}
-
-   
-/* --------------------------------------------------------------------- */
-
-void FixConstantPH::compute_q_total()
-{
-   double * q = atom->q;
-   double nlocal = atom->nlocal;
-   double q_local = 0.0;
-   double q_total;
-   double tolerance = 0.001;
-
-   for (int i = 0; i <nlocal; i++)
-       q_local += q[i];
-
-    MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
-
-    if ((q_total >= tolerance || q_total <= -tolerance) && comm->me == 0)
-    	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {}",q_total);
-}
-
-/* --------------------------------------------------------------------- */
-
-double FixConstantPH::compute_epair()
-{
-   //if (update->eflag_global != update->ntimestep)
-   //   error->all(FLERR,"Energy was not tallied on the needed timestep");
-
-   int natoms = atom->natoms;
-
-   double energy_local = 0.0;
-   double energy = 0.0;
-   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul);
-
-   /* As the bond, angle, dihedral and improper energies 
-      do not change with the espilon, we do not need to 
-      include them in the energy. We are interested in 
-      their difference afterall */
-
-   MPI_Allreduce(&energy_local,&energy,1,MPI_DOUBLE,MPI_SUM,world);
-   energy /= static_cast<double> (natoms); // To convert to kcal/mol the total energy must be devided by the number of atoms
-   return energy;
-}
-
-/* ----------------------------------------------------------------------
-   implementing a method to access the HA, HB, lambda, v_lambda and 
-   a_lambda values 
-   ---------------------------------------------------------------------- */
-   
-double FixConstantPH::compute_vector(int i)
-{ 
-   double kj2kcal = 0.239006;
-   double kT = force->boltz * T;
-   switch(i)
-   {
-      case 0:
-        return HA;
-      case 1:
-        return HB;
-      case 2:
-        return df*kT*log(10)*(pK-pH);
-      case 3:
-        return kj2kcal*dU;
-      case 4:
-        return GFF_lambda;
-      case 5:
-        return lambda;
-      case 6:
-        return v_lambda;
-      case 7:
-        return a_lambda;
-   }
-   return 0.0;
-}
-
-/* ----------------------------------------------------------------------
-   memory usage of local atom-based array --> Needs to be updated at the end
-   ---------------------------------------------------------------------- */
-
-double FixConstantPH::memory_usage()
-{
-  int nmax = atom->nmax;
-  int nlocal = atom->nlocal;
-  int ntypes = atom->ntypes;
-  double pair_bytes = sizeof(Pair);
-  double GFF_bytes = 2.0 * GFF_size * sizeof(double);
-  double epsilon_init_bytes = (double) (ntypes + 1) * (double) (ntypes + 1) * sizeof(double);
-  double q_orig_bytes = (double) nlocal * sizeof(double);
-  double f_orig_bytes = (double) nlocal * 3.0 * sizeof(double);
-  double peatom_orig_bytes = (double) nlocal * sizeof(double);
-  double pvatom_orig_bytes = (double) nlocal * 6.0 * sizeof(double);
-  double keatom_orig_bytes = (double) nlocal * sizeof(double);
-  double kvatom_orig_bytes = (double) nlocal * 6.0 * sizeof(double);
-  double bytes = pair_bytes + GFF_bytes + epsilon_init_bytes + \
-	         q_orig_bytes + f_orig_bytes + peatom_orig_bytes + \
-                 pvatom_orig_bytes + keatom_orig_bytes + kvatom_orig_bytes;
-  return bytes;
-}
+	// Protonation and hydronium group parameters
+	double qHs, qHWs;
+	int num_HWs;
+
+	// The smoothing function 
+	double f, df;
+
+	// Parameters for the forcefield modifiction term
+        bool GFF_flag;
+	FILE *fp;
+	double **GFF;
+	int GFF_size;
+	double GFF_lambda;
+
+        // Parameters for printing the Udwp
+        bool print_Udwp_flag;
+        FILE *Udwp_fp;
+        void print_Udwp();
+
+        //
+        void compute_q_total();
+
+
+	class Fix *fixgpu;
+
+	// This is just a pointer to the non-bonded interaction parameters and does not have any allocated memory
+	// This should not be deallocated since the original pointer will be deallocated later on by the LAMMPS
+	double **epsilon;
+	// _init is the initial value of hydrogen atoms properties which is multiplied by lambda at each step
+	double **epsilon_init;
+
+
+        int nmax;
+
+        // These pointers are allocated and deallocated through allocate_storage() and deallocate_storage() functions
+        // _org is for value of parameters before the update_lmp() with modified parameters act on them
+  	double *q_orig;
+ 	double **f_orig;
+  	double eng_vdwl_orig, eng_coul_orig;
+  	double pvirial_orig[6];
+  	double *peatom_orig, **pvatom_orig;
+ 	double energy_orig;
+ 	double kvirial_orig[6];
+	double *keatom_orig, **kvatom_orig;
+
+
+        template<int stage>
+	void compute_Hs();
+        void check_num_HWs();
+        void read_pH_structure_files();
+        void restore_epsilon();
+	void calculate_dq();
+	void calculate_df();
+	void calculate_dU();
+	void integrate_lambda();
+	void allocate_storage();
+	void deallocate_storage();
+        template < int direction>
+	void forward_reverse_copy(double& a, double& b);
+        template < int direction>
+	void forward_reverse_copy(double* a, double* b, int i);
+        template < int direction>
+	void forward_reverse_copy(double** a, double** b, int i, int j);
+	template <int direction>
+	void backup_restore_qfev();
+	void init_GFF();
+	void calculate_GFF();
+	void modify_epsilon_q(const double& scale);
+	void modify_water();
+	void update_lmp();
+        void compute_f_lambda_charge_interpolation();
+	double compute_epair();
+	void update_a_lambda();
+	void update_v_lambda();
+	void update_lambda();
+	};
+
+}    // namespace LAMMPS_NS
+
+
+#endif
+#endif
