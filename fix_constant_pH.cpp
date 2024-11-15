@@ -218,8 +218,8 @@ void FixConstantPH::init()
    if (pair_params.find(pstyle) == pair_params.end())
       error->all(FLERR,"The pair style {} is not currently supported in fix constant_pH",pstyle);
    
-    = new char[pair_params[pstyle].length()+1];
-   std::strcpy(,pair_params[pstyle].c_str());
+   pparam1 = new char[pair_params[pstyle].length()+1];
+   std::strcpy(pparam1,pair_params[pstyle].c_str());
    
 }
 
@@ -805,20 +805,24 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
       code with factor_lj = 0 or I can use the eng->coul
       I prefer the second one as it is tidier and I guess 
       it should be faster
-      */
+   */
 
-  double * energy_local = new double[n_lambdas];
-  double * energy = new double[n_lambdas];
 
-  for (int i = 0; i < n_lambdas; i++) {
+   int natoms = atom->natoms;
+   int n_lambdas;
+   double * energy_local = new double[n_lambdas];
+   double * energy = new double[n_lambdas];
+   double * n_lambda_atoms = new double[n_lambdas];
+
+   for (int i = 0; i < n_lambdas; i++) {
       for (int j = 0; j < n_lambda_atoms[i]; j++) {
-	  double delta_q = q_prot[j] - q_deprot[j];
+	  //double delta_q = q_prot[j] - q_deprot[j];
 	  // I need to figure out how to identify those atoms
       }
       for (int k = 0; k < n_lambdas; k++) {
 	  if (k == i) continue;
 	  for (int l = 0; l < n_lambda_atoms[k]; l++) {
-	      double q = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
+	      //double q = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
               // Double check if the q_prot and q_deprot are in the right place
 	      // how should I identify those atoms
 	  }
@@ -826,14 +830,17 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
       energy_local[i] = 0.0;
       if (force->pair) energy_local[i] += force->pair->eng_coul;
       // You need to add the kspace contribution too
-  }
+   }
 
-  MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
-  for (int i = 0; i < n_lambdas; i++) { 
+   MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
+   for (int i = 0; i < n_lambdas; i++) { 
       double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
       a_lambdas[i] = force_i / m_lambdas[i]; 
-  }
-  delete [] energy_local;     
+   }
+   
+   delete [] energy;
+   delete [] energy_local;
+   delete [] n_lambda_atoms;     
 }
 
 /* ---------------------------------------------------------------------- */
