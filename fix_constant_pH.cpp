@@ -233,10 +233,10 @@ void FixConstantPH::setup(int /*vflag*/)
     h = 4; //0; //10.0;
     k = 2.553; //0; //4.417; //6.267;
     a = 0.034041; //0.04764; //0.04208; //0.05130;
-    b = 0.005238; //-0.09706; //0.002957; //0.001411;
+    b = 0.005238; //0.002957; //0.001411;
     r = 16.458; //21.428;
     m = 0.1507; //0.1078;
-    d = 2.0; //0.0; //3.5; //5.0;
+    d = 2.0; //3.5; //5.0;
     // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
     m_lambda = 20;
     pair1 = nullptr;
@@ -833,7 +833,7 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
    MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
    for (int i = 0; i < n_lambdas; i++) { 
       double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
-      a_lambdas[i] = force_i / m_lambdas[i]; 
+      a_lambdas[i] = 4.184*0.0001*force_i / m_lambdas[i]; 
    }
    
    delete [] energy;
@@ -868,7 +868,7 @@ void FixConstantPH::update_a_lambda()
 void FixConstantPH::update_v_lambda()
 {
    double dt_lambda = update->dt;
-   this->v_lambda += 0.5*this->a_lambda*dt_lambda*this->nevery;
+   this->v_lambda += 0.5*this->a_lambda*dt_lambda;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -876,7 +876,7 @@ void FixConstantPH::update_v_lambda()
 void FixConstantPH::update_lambda()
 {
    double dt_lambda = update->dt;
-   this->lambda += this->v_lambda * dt_lambda*this->nevery;
+   this->lambda += this->v_lambda * dt_lambda;
 }
 
    
