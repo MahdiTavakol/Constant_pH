@@ -94,6 +94,11 @@ namespace LAMMPS_NS {
         bool print_Udwp_flag;
         FILE *Udwp_fp;
         void print_Udwp();
+        
+        // Parameters for thermostating the lambda variable
+        double etha_lambda;
+        double Q_lambda;
+        double T_lambda;
 
         //
         void compute_q_total();
