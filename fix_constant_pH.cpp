@@ -107,6 +107,9 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
   
   fixgpu = nullptr;
   
+  etha_lambda = 0.0;
+  Q_lambda = 1.0;
+  
   
   vector_flag = 1;
   size_vector = 8;
@@ -142,7 +145,7 @@ FixConstantPH::~FixConstantPH()
    memory->destroy(protonable);
 
 
-   if (lambdas) delete [] lambdas;
+   if (lambdas)   delete [] lambdas;
    if (v_lambdas) delete [] v_lambdas;
    if (a_lambdas) delete [] a_lambdas;
    if (m_lambdas) delete [] m_lambdas;
@@ -868,14 +871,16 @@ void FixConstantPH::update_a_lambda()
 void FixConstantPH::update_v_lambda()
 {
    double dt_lambda = update->dt;
-   this->v_lambda += 0.5*this->a_lambda*dt_lambda;
+   double kT_lambda = force->boltz * T_lambda;
+   this->v_lambda += 0.5*(this->a_lambda-this->etha_lambda*this->v_lambda)*dt_lambda;
+   this->etha_lambda += (this->v_lambda*this->v_lambda-kT_lambda)*dt_lambda/this->Q_lambda;
 }
 
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::update_lambda()
 {
-   double dt_lambda = update->dt;
+   double dt_lambda = update->dt;f
    this->lambda += this->v_lambda * dt_lambda;
 }
 
