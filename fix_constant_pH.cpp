@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.15----- */
+/* ---v0.02.21----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -73,7 +73,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
 
 
   qHs = 0.0;
-  qHWs = 0.278;
+  qHWs = 0.0; //0.278;
 
   GFF_flag = false;
   print_Udwp_flag = false;
@@ -414,7 +414,7 @@ void FixConstantPH::calculate_dq()
        q_total_2 += typePerProtMol[i] * protonable[i] * pH2qs[i];
    }
    
-   dq = std::abs(q_total_2 - q_total_1);
+   dq = (q_total_2 - q_total_1);
 }
 
 /* ----------------------------------------------------------------------
@@ -662,45 +662,38 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     int ntypes = atom->ntypes;
     double * q = atom->q;
 
-    // now, I am sure about the limits for these two loops
-    /*for (int i = 1; i < ntypes + 1; i++)
-	for (int j = i; j < ntypes + 1; j++)
-	{
-	    if ((protonable[i] == 1 && protonable[j] == 0) ||
-	        (protonable[i] == 0 || protonable[j] == 1))
-	    	epsilon[i][j] = epsilon_init[i][j] * std::sqrt(scale); // scale == 1 should be for the protonated state
-	    if (protonable[i] == 1 && protonable[j] == 1) 
-	        epsilon[i][j] = epsilon_init[i][j] * scale;
-	}*/
 
-
-    // update the forcefield parameters
-    //pair1->reinit();
-
-    double q_changes_local[3] = {0.0,0.0,0.0};
-    double q_changes[3] = {0.0,0.0,0.0};
+    double q_changes_local[4] = {0.0,0.0,0.0,0.0};
+    double q_changes[4] = {0.0,0.0,0.0,0.0};
 
 	
     // update the charges
     for (int i = 0; i < nlocal; i++)
     {
-	if (protonable[type[i]] == 1)
-        {
-            double q_init = q[i];
-            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
-	    q_changes_local[0]++;
-	    q_changes_local[2] += (q[i] - q_init);
-	}
-	if (type[i] == typeHW)
-	{
-	    double q_init = q[i];
-	    q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral
-	    q_changes_local[1]++;
-	    q_changes_local[2] += (q[i] - q_init);
-	}
-     }
-     MPI_Allreduce(&q_changes_local,&q_changes,3,MPI_INT,MPI_SUM,world);
-     //if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, q_total_change = {}",q_changes[0],q_changes[1],q_changes[2]);
+       if (protonable[type[i]] == 1)
+       {
+           double q_init = q[i];
+           q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+	   q_changes_local[0]++;
+	   q_changes_local[2] += (q[i] - q_init);
+       }
+       if (type[i] == typeHW)
+       {
+	   double q_init = q[i];
+	   q[i] = q_init + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral
+	   q_changes_local[1]++;
+	   q_changes_local[3] += (q[i] - q_init);
+       }
+    }
+
+    /* The purpose of this part this is just to debug the total charge.
+       So, in the final version of the code this part should be 
+       commented out!
+    */
+    /*MPI_Allreduce(&q_changes_local,&q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {}",q_changes[0],q_changes[1],q_changes[2],q_changes[3]);
+    */
+    compute_q_total();
 }
 
 /* ---------------------------------------------------------------------
@@ -880,7 +873,7 @@ void FixConstantPH::update_v_lambda()
 
 void FixConstantPH::update_lambda()
 {
-   double dt_lambda = update->dt;f
+   double dt_lambda = update->dt;
    this->lambda += this->v_lambda * dt_lambda;
 }
 
