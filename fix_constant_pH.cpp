@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.21----- */
+/* ---v0.02.15----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -46,8 +46,10 @@ using namespace MathConst;
 
 /* ---------------------------------------------------------------------- */
 
-FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
-  Fix(lmp, narg, arg), lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
+FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, arg), 
+       lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr), 
+       protonable(nullptr), typePerProtMol(nullptr), pH1qs(nullptr), pH2qs(nullptr), q_orig(nullptr), f_orig(nullptr),
+       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr)
 {
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
@@ -496,7 +498,7 @@ void FixConstantPH::compute_Hs()
 {
    if (stage == -1)
    {
-      if (nmax > atom->nmax)
+      if (nmax < atom->nmax)
       {
 	  nmax = atom->nmax;
           allocate_storage();
@@ -548,15 +550,18 @@ void FixConstantPH::allocate_storage()
 
 void FixConstantPH::deallocate_storage()
 {
-  memory->destroy(q_orig);
-  memory->destroy(f_orig);
-  memory->destroy(peatom_orig);
-  memory->destroy(pvatom_orig);
-  if (force->kspace)
-  {
-      memory->destroy(keatom_orig);
-      memory->destroy(kvatom_orig);
-  }
+  if (q_orig) memory->destroy(q_orig);
+  if (f_orig) memory->destroy(f_orig);
+  if (peatom_orig) memory->destroy(peatom_orig);
+  if (pvatom_orig) memory->destroy(pvatom_orig);
+  /* If kspace->force is true these two have been already allocated and 
+     here is no need to check it since the lammps destructor first destructs
+     the kspace so that "if (force->kspace)" in the destructor for 
+     ComputeFEEConstantPH leads to an error!
+  */
+  
+  if (keatom_orig) memory->destroy(keatom_orig);
+  if (kvatom_orig) memory->destroy(kvatom_orig);
 
   f_orig = nullptr;
   peatom_orig = keatom_orig = nullptr;
