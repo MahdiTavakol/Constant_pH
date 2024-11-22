@@ -39,12 +39,14 @@ class ComputeGFFConstantPH : public Compute {
   
   
  private:
-	// Sturcture files
+  // Sturcture files
   FILE *pHStructureFile;
 
-  double lambda, dlambda;
+  // dlambda for the calculation of dU/dlambda
+  double dlambda;
 
-	// Atom types and charges that change due to protonation
+
+  // Atom types and charges that change due to protonation
   int pHnTypes;
   double *pH1qs, *pH2qs;
   int * typePerProtMol;
