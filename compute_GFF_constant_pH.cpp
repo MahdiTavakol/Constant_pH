@@ -425,4 +425,3 @@ void ComputeGFFConstantPH::compute_vector()
    vector[2] = HC;
    vector[3] = dH_dLambda;
 }
-
