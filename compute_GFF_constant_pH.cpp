@@ -46,7 +46,7 @@ ComputeGFFConstantPH::ComputeGFFConstantPH(LAMMPS* lmp, int narg, char** arg) : 
    }
    lambda = utils::numeric(FLERR,arg[4],false,lmp);
    dlambda = utils::numeric(FLERR,arg[5],false,lmp);
-   if (dlambda <= 0) error->all(FLERR,"Illegal compute GFF constant pH dlambda value {}", dlambda);
+   if (dlambda < 0) error->all(FLERR,"Illegal compute GFF constant pH dlambda value {}", dlambda);
    typeHW = utils::inumeric(FLERR,arg[6],false,lmp);
    if (typeHW > atom->ntypes) error->all(FLERR,"Illegal compute GFF constant pH HW atom type {}", typeHW);
 
@@ -84,10 +84,15 @@ ComputeGFFConstantPH::~ComputeGFFConstantPH()
 }
 
 /* ---------------------------------------------------------------------------- */
-void ComputeGFFConstantPH::setup()
+void ComputeGFFConstantPH::init()
 {
    // Reading the structure of protonable states before and after protonation.
    read_pH_structure_files();
+}
+
+/* ---------------------------------------------------------------------------- */
+void ComputeGFFConstantPH::setup()
+{
    // Checking if we have enough hydronium ions to neutralize the system
    check_num_HWs();
 }
@@ -180,7 +185,7 @@ void ComputeGFFConstantPH::calculate_dq()
        q_total_2 += typePerProtMol[i] * protonable[i] * pH2qs[i];
    }
    
-   dq = std::abs(q_total_2 - q_total_1);
+   dq = -(q_total_2 - q_total_1);
 }
 
 /* ----------------------------------------------------------------------
@@ -203,7 +208,7 @@ void ComputeGFFConstantPH::check_num_HWs()
 
    MPI_Allreduce(&num_local,&num,1,MPI_INT,MPI_SUM,world);
    num_HWs = num;
-
+   error->warning(FLERR,"The num_HWs = {}",num_HWs);
 }
 
 /* ----------------------------------------------------------------------- */
@@ -211,9 +216,9 @@ void ComputeGFFConstantPH::check_num_HWs()
 void ComputeGFFConstantPH::compute_Hs()
 {
   if (nmax > atom->nmax) {
-	  nmax = atom->nmax;
+     nmax = atom->nmax;
+     deallocate_storage();
      allocate_storage();
-	  deallocate_storage();
   }
   HC = compute_epair();
   backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
@@ -359,35 +364,35 @@ void ComputeGFFConstantPH::modify_lambda(const double& scale)
     double * q = atom->q;
 
 
-    double q_changes_local[3] = {0.0,0.0,0.0};
-    double q_changes[3] = {0.0,0.0,0.0};
+    double q_changes_local[4] = {0.0,0.0,0.0,0.0};
+    double q_changes[4] = {0.0,0.0,0.0,0.0};
 
 	
     // update the charges
     for (int i = 0; i < nlocal; i++)
     {
-	     if (protonable[type[i]] == 1)
-        {
-            double q_init = q[i];
-            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
-	         q_changes_local[0]++;
-	         q_changes_local[2] += (q[i] - q_init);
-	     }
-	     if (type[i] == typeHW)
-	     {
-	         double q_init = q[i];
-	         q[i] = qHWs + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral
-	         q_changes_local[1]++;
-	         q_changes_local[2] += (q[i] - q_init);
-	     }
+       if (protonable[type[i]] == 1)
+       {
+           double q_init = q[i];
+           q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+	   q_changes_local[0]++;
+	   q_changes_local[2] += (q[i] - q_init);
+       }
+       if (type[i] == typeHW)
+       {
+	   double q_init = q[i];
+	   q[i] = q_init + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral
+	   q_changes_local[1]++;
+	   q_changes_local[3] += (q[i] - q_init);
+       }
     }
 
     /* The purpose of this part this is just to debug the total charge.
        So, in the final version of the code this part should be 
        commented out!
     */
-    MPI_Allreduce(&q_changes_local,&q_changes,3,MPI_INT,MPI_SUM,world);
-    if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, q_total_change = {}",q_changes[0],q_changes[1],q_changes[2]);
+    MPI_Allreduce(&q_changes_local,&q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {}",q_changes[0],q_changes[1],q_changes[2],q_changes[3]);
     compute_q_total();
 }
 
@@ -409,7 +414,7 @@ void ComputeGFFConstantPH::update_lmp() {
     }
 
     // accumulate force/energy/virial from /gpu pair styles
-    if (fixgpu) fixgpu->post_force(vflag);
+    //if (fixgpu) fixgpu->post_force(vflag);
 }
 
 /* --------------------------------------------------------------------- */
