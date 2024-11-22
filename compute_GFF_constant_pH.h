@@ -95,7 +95,6 @@ class ComputeGFFConstantPH : public Compute {
 
 
   double compute_Hs();
-  template <int parameter, int direction>   
   void modify_q();
   void update_lmp();
   void compute_q_total();
