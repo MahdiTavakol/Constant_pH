@@ -12,7 +12,7 @@
 ------------------------------------------------------------------------- */
 
 
-#include "compute_GFF_constant_pH"
+#include "compute_GFF_constant_pH.h"
 
 #include "atom.h"
 #include "comm.h"
@@ -30,24 +30,24 @@
 #include "update.h"
 #include "variable.h"
 
+using namespace LAMMPS_NS;
+
 /* ---------------------------------------------------------------------------- */
 
 ComputeGFFConstantPH::ComputeGFFConstantPH(LAMMPS* lmp, int narg, char** arg) : Compute(lmp, narg, arg), 
        protonable(nullptr), typePerProtMol(nullptr), pH1qs(nullptr), pH2qs(nullptr)
 {
-   if (narg < 7) error->all(FLERR, "Illegal number of arguments in compute GFF constant pH");
-   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
-   if (nevery < 0) error->all(FLERR,"Illegal compute GFF constant pH every value {}", nevery);
+   if (narg < 6) error->all(FLERR, "Illegal number of arguments in compute GFF constant pH");
    // Reading the file that contains the charges before and after protonation/deprotonation
    if (comm->me == 0) {
-      pHStructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
+      pHStructureFile = fopen(arg[3],"r"); // The command reads the file the type and charge of each atom before and after protonation
       if (pHStructureFile == nullptr)
          error->all(FLERR,"Unable to open the file");
    }
-   lambda = utils::numeric(FLERR,arg[5],false,lmp);
-   dlambda = utils::numeric(FLERR,arg[6],false,lmp);
+   lambda = utils::numeric(FLERR,arg[4],false,lmp);
+   dlambda = utils::numeric(FLERR,arg[5],false,lmp);
    if (dlambda <= 0) error->all(FLERR,"Illegal compute GFF constant pH dlambda value {}", dlambda);
-   typeHW = utils::inumeric(FLERR,arg[7],false,lmp);
+   typeHW = utils::inumeric(FLERR,arg[6],false,lmp);
    if (typeHW > atom->ntypes) error->all(FLERR,"Illegal compute GFF constant pH HW atom type {}", typeHW);
 
    peflag = 1;
@@ -88,6 +88,20 @@ void ComputeGFFConstantPH::setup()
 {
    // Reading the structure of protonable states before and after protonation.
    read_pH_structure_files();
+   // Checking if we have enough hydronium ions to neutralize the system
+   check_num_HWs();
+}
+
+/* --------------------------------------------------------------------- */
+void ComputeGFFConstantPH::compute_vector()
+{
+   // Calculating the HA, HB, HC and dH_dLambda
+   compute_Hs();
+   
+   vector[0] = HA;
+   vector[1] = HB;
+   vector[2] = HC;
+   vector[3] = dH_dLambda;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -169,6 +183,29 @@ void ComputeGFFConstantPH::calculate_dq()
    dq = std::abs(q_total_2 - q_total_1);
 }
 
+/* ----------------------------------------------------------------------
+   Checking if we have enough of HWs for neutralizing the system total charge
+   ---------------------------------------------------------------------- */
+
+void ComputeGFFConstantPH::check_num_HWs()
+{
+   double tol = 1e-5;
+   int * type = atom->type;
+   int nlocal = atom->nlocal;
+   int num_local, num;
+   num = 0;
+   num_local = 0;
+   for (int i = 0; i < nlocal; i++)
+   {
+      if (type[i] == typeHW)
+        num_local++;
+   }
+
+   MPI_Allreduce(&num_local,&num,1,MPI_INT,MPI_SUM,world);
+   num_HWs = num;
+
+}
+
 /* ----------------------------------------------------------------------- */
 
 void ComputeGFFConstantPH::compute_Hs()
@@ -180,11 +217,11 @@ void ComputeGFFConstantPH::compute_Hs()
   }
   HC = compute_epair();
   backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
-  modify_q(lambda-dlambda); //should define a change_parameters(const int);
+  modify_lambda(lambda-dlambda); //should define a change_parameters(const int);
   update_lmp(); // update the lammps force and virial values
   HA = compute_epair(); 
   backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
-  modify_q(lambda+dlambda); //should define a change_parameters(const double);
+  modify_lambda(lambda+dlambda); //should define a change_parameters(const double);
   update_lmp();
   HB = compute_epair();           // HB is for the protonated state with lambda==1 
   backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
@@ -196,7 +233,7 @@ void ComputeGFFConstantPH::compute_Hs()
    taken from src/FEP/compute_fep.cpp
 ------------------------------------------------------------------------- */
 
-void ComputeGFFConstantPH:allocate_storage()
+void ComputeGFFConstantPH::allocate_storage()
 {
   /* It should be nmax since in the case that 
      the newton flag is on the force in the 
@@ -239,20 +276,20 @@ void ComputeGFFConstantPH::deallocate_storage()
    ---------------------------------------------------------------------- */
 
 template  <int direction>
-void ComputeThermoInteg::forward_reverse_copy(double& a, double& b)
+void ComputeGFFConstantPH::forward_reverse_copy(double& a, double& b)
 {
     if (direction == 1) a = b;
     if (direction == -1) b = a;
 }
 
 template  <int direction>
-void ComputeThermoInteg::forward_reverse_copy(double* a, double* b, int m)
+void ComputeGFFConstantPH::forward_reverse_copy(double* a, double* b, int m)
 {
     for (int i = 0; i < m; i++) forward_reverse_copy<direction>(a[i],b[i]);
 }
 
 template  <int direction>
-void ComputeThermoInteg::forward_reverse_copy(double** a, double** b, int m, int n)
+void ComputeGFFConstantPH::forward_reverse_copy(double** a, double** b, int m, int n)
 {
     for (int i = 0; i < m; i++) forward_reverse_copy<direction>(a[i],b[i],n);
 }
@@ -313,7 +350,7 @@ void ComputeGFFConstantPH::backup_restore_qfev()
 
    -------------------------------------------------------------- */
    
-void ComputeGFFConstantPH::modify_q(const double& scale)
+void ComputeGFFConstantPH::modify_lambda(const double& scale)
 {
     int nlocal = atom->nlocal;
     int * mask = atom->mask;
@@ -415,13 +452,4 @@ double ComputeGFFConstantPH::compute_epair()
    MPI_Allreduce(&energy_local,&energy,1,MPI_DOUBLE,MPI_SUM,world);
    energy /= static_cast<double> (natoms); // To convert to kcal/mol the total energy must be devided by the number of atoms
    return energy;
-}
-
-/* --------------------------------------------------------------------- */
-void ComputeGFFConstantPH::compute_vector()
-{
-   vector[0] = HA;
-   vector[1] = HB;
-   vector[2] = HC;
-   vector[3] = dH_dLambda;
 }
