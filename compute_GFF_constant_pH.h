@@ -13,7 +13,7 @@
 
 #ifdef COMPUTE_CLASS
 // clang-format off
-ComputeStyle(compute_GFF_constant_pH,ComputeGFFConstantPH);
+ComputeStyle(constant_pH/GFF,ComputeGFFConstantPH);
 // clang-format on
 #else
 
@@ -59,12 +59,14 @@ class ComputeGFFConstantPH : public Compute {
 
   // The protonium hydrogen atoms
   int typeHW;
+  int num_HWs;
+  double qHWs;
 
   class Fix *fixgpu;
 
   // HA ==> H(lambda-dlambda), HB ==> H(lambda+dlambda), HC ==> H(lambda), dH_dLambda ==> (HB-HA)/(2*dlambda)
   double HA, HB, HC, dH_dLambda;
-
+  
   // _org is for value of parameters before the update_lmp() with modified parameters act on them
   double *q_orig;
   double **f_orig;
@@ -80,6 +82,9 @@ class ComputeGFFConstantPH : public Compute {
 
   // Energy of each atom computed for states A and B
   double *energy_peratom;
+  
+  
+  
 
   void allocate_storage();
   void deallocate_storage();
@@ -92,14 +97,24 @@ class ComputeGFFConstantPH : public Compute {
   static void forward_reverse_copy(double** ,double** , int , int );
   template <int direction>
   void backup_restore_qfev();
-
-
-  double compute_Hs();
-  template <int parameter, int direction>   
-  void modify_q();
+  
+  
+  // Reading the charges for the deprotonated and protonated states
+  void read_pH_structure_files();
+  // Compute the HA, HB, HC and dH_dLambda values
+  void compute_Hs();
+  // Modifying the lambda value
+  void modify_lambda(const double& scale);
+  // Recalculating the energy values
   void update_lmp();
-  void compute_q_total();
+  // Calculating the total pair energy of the system
   double compute_epair();
+  // The change in the q as a result of protonation
+  void calculate_dq();
+  // Checking if we have enough HW atoms to neutralize the system
+  void check_num_HWs();
+  // Debugging the total charge of the system
+  void compute_q_total();
 };
 
 }    // namespace LAMMPS_NS
