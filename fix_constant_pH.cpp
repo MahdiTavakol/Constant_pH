@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.11----- */
+/* ---v0.02.15----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -103,16 +103,16 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
     }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
-  }
+   }
   
-  fixgpu = nullptr;
+   fixgpu = nullptr;
   
-  etha_lambda = 0.0;
-  Q_lambda = 1.0;
+   etha_lambda = 0.0;
+   Q_lambda = 1.0;
   
   
-  vector_flag = 1;
-  size_vector = 8;
+   vector_flag = 1;
+   size_vector = 8;
 
 }
 
@@ -162,11 +162,11 @@ FixConstantPH::~FixConstantPH()
 
 int FixConstantPH::setmask()
 {
-  int mask = 0;
-  mask |= INITIAL_INTEGRATE; // the 1st half of the velocity verlet algorithm --> update half step v_lambda and update lambda
-  mask |= POST_FORCE; // calculate the lambda 
-  mask |= FINAL_INTEGRATE; // the 2nd half of the velocity verlet algorithm --> update t
-  return mask;	
+   int mask = 0;
+   mask |= INITIAL_INTEGRATE; // the 1st half of the velocity verlet algorithm --> update half step v_lambda and update lambda
+   mask |= POST_FORCE; // calculate the lambda 
+   mask |= FINAL_INTEGRATE; // the 2nd half of the velocity verlet algorithm --> update t
+   return mask;	
 }
 
 /* ----------------------------------------------------------------------
