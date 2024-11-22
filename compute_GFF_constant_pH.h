@@ -60,17 +60,9 @@ class ComputeGFFConstantPH : public Compute {
   // The protonium hydrogen atoms
   int typeHW;
 
-  // Pair style parameters
-  bool per_atom_epsilon;
-  char * pstyle;
-  Pair * pair;
-  char ** pparams;
-  int  pdim;
-
-
   class Fix *fixgpu;
 
-  // HA ==> -dlambda, HB ==> dlambda, HC ==> current, dH_dLambda ==> (HB-HA)/(2*dlambda)
+  // HA ==> H(lambda-dlambda), HB ==> H(lambda+dlambda), HC ==> H(lambda), dH_dLambda ==> (HB-HA)/(2*dlambda)
   double HA, HB, HC, dH_dLambda;
 
   // _org is for value of parameters before the update_lmp() with modified parameters act on them
@@ -89,8 +81,6 @@ class ComputeGFFConstantPH : public Compute {
   // Energy of each atom computed for states A and B
   double *energy_peratom;
 
-
-
   void allocate_storage();
   void deallocate_storage();
 
@@ -105,13 +95,11 @@ class ComputeGFFConstantPH : public Compute {
 
 
   double compute_Hs();
-  template <int parameter, int mode, int direction>   
+  template <int parameter, int direction>   
   void modify_q();
   void update_lmp();
-  void set_delta_qC();
   void compute_q_total();
   double compute_epair();
-  double compute_epair_atom();
 };
 
 }    // namespace LAMMPS_NS
