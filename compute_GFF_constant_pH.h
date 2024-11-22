@@ -45,6 +45,9 @@ class ComputeGFFConstantPH : public Compute {
   // dlambda for the calculation of dU/dlambda
   double dlambda;
 
+  // File for writing the GFF output
+  FILE *GFF_write_file;
+
 
   // Atom types and charges that change due to protonation
   int pHnTypes;
@@ -108,8 +111,7 @@ class ComputeGFFConstantPH : public Compute {
   template <int stage>  
   double compute_Hs();
   template <int parameter, int mode, int direction>   
-  void modify_epsilon_q();
-  void restore_epsilon();
+  void modify_q();
   void update_lmp();
   void set_delta_qC();
   void compute_q_total();
