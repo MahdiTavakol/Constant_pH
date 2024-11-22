@@ -29,6 +29,57 @@ class ComputeGFFConstantPH : public Compute {
  public:
   ComputeGFFConstantPH(class LAMMPS *, int, char **);
   ~ComputeGFFConstantPH() override;
+  void init() override;
+  void setup() override;
+  void compute_vector() override;
+  void compute_peratom() override {}; // I just wanted LAMMPS to consider this as peratom compute so the peratom energies be tallied in this timestep.
+  
+  
+  
+ private:
+  // Sturcture files
+  FILE *pHStructureFile;
+
+  // dlambda for the calculation of dU/dlambda
+  double lambda, dlambda;
+
+
+
+  // Atom types and charges that change due to protonation
+  int pHnTypes;
+  double *pH1qs, *pH2qs;
+  int * typePerProtMol;
+  int * protonable;/* -*- c++ -*- ----------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+
+#ifdef COMPUTE_CLASS
+// clang-format off
+ComputeStyle(constant_pH/GFF,ComputeGFFConstantPH);
+// clang-format on
+#else
+
+#ifndef COMPUTE_GFF_CONSTANT_PH_H
+#define COMPUTE_GFF_CONSTANT_PH_H
+
+#include "compute.h"
+#include "pair.h"
+
+namespace LAMMPS_NS {
+
+class ComputeGFFConstantPH : public Compute {
+ public:
+  ComputeGFFConstantPH(class LAMMPS *, int, char **);
+  ~ComputeGFFConstantPH() override;
   void setup() override;
   void compute_vector() override;
   void compute_peratom() override {}; // I just wanted LAMMPS to consider this as peratom compute so the peratom energies be tallied in this timestep.
@@ -61,6 +112,18 @@ class ComputeGFFConstantPH : public Compute {
 
   class Fix *fixgpu;
 
+
+
+  // Charge difference between structure 1 and structure 2
+  double dq;
+
+
+  // The protonium hydrogen atoms
+  int typeHW;
+  int num_HWs;
+
+  class Fix *fixgpu;
+
   // HA ==> H(lambda-dlambda), HB ==> H(lambda+dlambda), HC ==> H(lambda), dH_dLambda ==> (HB-HA)/(2*dlambda)
   double HA, HB, HC, dH_dLambda;
   
@@ -85,6 +148,69 @@ class ComputeGFFConstantPH : public Compute {
 
   void allocate_storage();
   void deallocate_storage();
+/* -*- c++ -*- ----------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+
+#ifdef COMPUTE_CLASS
+// clang-format off
+ComputeStyle(constant_pH/GFF,ComputeGFFConstantPH);
+// clang-format on
+#else
+
+#ifndef COMPUTE_GFF_CONSTANT_PH_H
+#define COMPUTE_GFF_CONSTANT_PH_H
+
+#include "compute.h"
+#include "pair.h"
+
+namespace LAMMPS_NS {
+
+class ComputeGFFConstantPH : public Compute {
+ public:
+  ComputeGFFConstantPH(class LAMMPS *, int, char **);
+  ~ComputeGFFConstantPH() override;
+  void setup() override;
+  void compute_vector() override;
+  void compute_peratom() override {}; // I just wanted LAMMPS to consider this as peratom compute so the peratom energies be tallied in this timestep.
+  
+  
+  
+ private:
+  // Sturcture files
+  FILE *pHStructureFile;
+
+  // dlambda for the calculation of dU/dlambda
+  double lambda, dlambda;
+
+
+
+  // Atom types and charges that change due to protonation
+  int pHnTypes;
+  double *pH1qs, *pH2qs;
+  int * typePerProtMol;
+  int * protonable;
+
+  // Charge difference between structure 1 and structure 2
+  double dq;
+
+
+  // The protonium hydrogen atoms
+  int typeHW;
+  int num_HWs;
+  double qHWs;
+
+  class Fix *fixgpu;
+
 
   template  <int direction>
   static void forward_reverse_copy(double &,double &);
