@@ -95,6 +95,8 @@ void ComputeGFFConstantPH::setup()
 {
    // Checking if we have enough hydronium ions to neutralize the system
    check_num_HWs();
+   // Calculating the dq
+   calculate_dq();
 }
 
 /* --------------------------------------------------------------------- */
@@ -185,7 +187,7 @@ void ComputeGFFConstantPH::calculate_dq()
        q_total_2 += typePerProtMol[i] * protonable[i] * pH2qs[i];
    }
    
-   dq = -(q_total_2 - q_total_1);
+   dq = (q_total_2 - q_total_1);
 }
 
 /* ----------------------------------------------------------------------
@@ -391,8 +393,9 @@ void ComputeGFFConstantPH::modify_lambda(const double& scale)
        So, in the final version of the code this part should be 
        commented out!
     */
-    MPI_Allreduce(&q_changes_local,&q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    /*MPI_Allreduce(&q_changes_local,&q_changes,4,MPI_DOUBLE,MPI_SUM,world);
     if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {}",q_changes[0],q_changes[1],q_changes[2],q_changes[3]);
+    */
     compute_q_total();
 }
 
