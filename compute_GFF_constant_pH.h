@@ -43,10 +43,8 @@ class ComputeGFFConstantPH : public Compute {
   FILE *pHStructureFile;
 
   // dlambda for the calculation of dU/dlambda
-  double dlambda;
+  double lambda, dlambda;
 
-  // File for writing the GFF output
-  FILE *GFF_write_file;
 
 
   // Atom types and charges that change due to protonation
@@ -58,8 +56,9 @@ class ComputeGFFConstantPH : public Compute {
   // Charge difference between structure 1 and structure 2
   double dq;
 
-  double  delta_qC;
-  int typeC;
+
+  // The protonium hydrogen atoms
+  int typeHW;
 
   // Pair style parameters
   bool per_atom_epsilon;
@@ -71,11 +70,8 @@ class ComputeGFFConstantPH : public Compute {
 
   class Fix *fixgpu;
 
-  // This is just a pointer to the non-bonded interaction parameters and does not have any allocated memory
-  // This should not be deallocated since the original pointer will be deallocated later on by the LAMMPS
-  double **epsilons;
-  // _init is the initial value of selected atom properties which is multiplied by lambda at each step
-  double **epsilon_inits;
+  // HA ==> -dlambda, HB ==> dlambda, HC ==> current, dH_dLambda ==> (HB-HA)/(2*dlambda)
+  double HA, HB, HC, dH_dLambda;
 
   // _org is for value of parameters before the update_lmp() with modified parameters act on them
   double *q_orig;
@@ -108,7 +104,6 @@ class ComputeGFFConstantPH : public Compute {
   void backup_restore_qfev();
 
 
-  template <int stage>  
   double compute_Hs();
   template <int parameter, int mode, int direction>   
   void modify_q();
