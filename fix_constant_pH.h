@@ -97,6 +97,7 @@ namespace LAMMPS_NS {
         double etha_lambda;
         double Q_lambda;
         double T_lambda;
+        double a_etha_v_ratio_lambda;
 
         // The q_total used to calculate the HW charges
         double q_total;
@@ -135,6 +136,8 @@ namespace LAMMPS_NS {
 	void calculate_dq();
 	void calculate_df();
 	void calculate_dU();
+	void calculate_T_lambda();
+	void initialize_v_lambda(const double _T_lambda);
 	void integrate_lambda();
 	void allocate_storage();
 	void deallocate_storage();
