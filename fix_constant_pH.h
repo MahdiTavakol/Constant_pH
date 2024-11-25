@@ -51,6 +51,7 @@ namespace LAMMPS_NS {
 
         // Charge difference between structure 1 and structure 2
         double dq;
+        
 
 	// Input variables for constant values
 	int typeHW;
@@ -100,8 +101,10 @@ namespace LAMMPS_NS {
         double Q_lambda;
         double T_lambda;
 
-        //
+        // The q_total used to calculate the HW charges
+        double q_total;
         void compute_q_total();
+        void check_q_total();
 
 
 	class Fix *fixgpu;
