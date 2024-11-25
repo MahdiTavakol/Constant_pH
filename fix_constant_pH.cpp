@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.15----- */
+/* ---v0.02.24----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -279,11 +279,9 @@ void FixConstantPH::setup(int /*vflag*/)
     // Reading the structure of protonable states before and after protonation.
     read_pH_structure_files();
 
-    // Calculating the change in the charge due to the protonation
-    calculate_dq();
 
     // Checking if we have enough hydronium ions to neutralize the system
-    check_num_HWs();
+    calculate_num_prot_num_HWs();
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
@@ -314,8 +312,8 @@ void FixConstantPH::post_force(int vflag)
       calculate_df();
       calculate_dU();
       update_a_lambda();
-      compute_q_total();
       compute_Hs<1>();
+      compute_q_total();
    }
    /* The force on hydrogens must be updated at every step otherwise at 
       steps at this fix is not active the pH would be very low and there
@@ -402,45 +400,33 @@ void FixConstantPH::read_pH_structure_files()
    
 }
 
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::calculate_dq()
-{
-   double q_total_1 = 0.0;
-   double q_total_2 = 0.0;
-
-   int ntypes = atom->ntypes;
-
-   for (int i = 1; i < ntypes+1; i++)
-   {
-       q_total_1 += typePerProtMol[i] * protonable[i] * pH1qs[i]; // if it is not protonable the protonable[i] == 0
-       q_total_2 += typePerProtMol[i] * protonable[i] * pH2qs[i];
-   }
-   
-   dq = (q_total_2 - q_total_1);
-}
 
 /* ----------------------------------------------------------------------
-   Checking if we have enough of HWs for neutralizing the system total charge
+   Calculating the number of protonable and HW atoms
    ---------------------------------------------------------------------- */
 
-void FixConstantPH::check_num_HWs()
+void FixConstantPH::calculate_num_prot_num_HWs()
 {
    double tol = 1e-5;
    int * type = atom->type;
    int nlocal = atom->nlocal;
-   int num_local, num;
-   num = 0;
-   num_local = 0;
+   int * num_local = new int[2]{0,0};
+   int * num_total = new int[2]{0,0};
+   
    for (int i = 0; i < nlocal; i++)
    {
       if (type[i] == typeHW)
-        num_local++;
+        num_local[0]++;
+      if (protonable[type[i]])
+        num_local[1]++;
    }
 
-   MPI_Allreduce(&num_local,&num,1,MPI_INT,MPI_SUM,world);
-   num_HWs = num;
-
+   MPI_Allreduce(num_local,num_total,2,MPI_INT,MPI_SUM,world);
+   num_HWs = num_total[0];
+   num_prots = num_total[1];
+   
+   delete [] num_local;
+   delete [] num_total;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -669,10 +655,9 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     double * q = atom->q;
 
 
-    double q_changes_local[4] = {0.0,0.0,0.0,0.0};
-    double q_changes[4] = {0.0,0.0,0.0,0.0};
+    double * q_changes_local = new double[4]{0.0,0.0,0.0,0.0};
+    double * q_changes = new double[4]{0.0,0.0,0.0,0.0};
 
-	
     // update the charges
     for (int i = 0; i < nlocal; i++)
     {
@@ -681,13 +666,20 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
            double q_init = q_orig[i];
            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
 	   q_changes_local[0]++;
-	   q_changes_local[2] += (q[i] - q_init);
+	   q_changes_local[1] += (q[i] - q_init);
        }
+    }
+    
+    MPI_Allreduce(q_changes_local,q_changes,2,MPI_DOUBLE,MPI_SUM,world);
+    double HW_q_change = -q_changes[1]/static_cast<double>(num_HWs);
+    
+    for (int i = 0; i < nlocal; i++)
+    {
        if (type[i] == typeHW)
        {
 	   double q_init = q_orig[i];
-	   q[i] = q_init + (-scale * dq - q_total)/ static_cast<double> (num_HWs); //The total charge should be neutral
-	   q_changes_local[1]++;
+	   q[i] = q_init + HW_q_change; //The total charge should be neutral
+	   q_changes_local[2]++;
 	   q_changes_local[3] += (q[i] - q_init);
        }
     }
@@ -696,12 +688,16 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
        So, in the final version of the code this part should be 
        commented out!
     */
-    if (update->ntimestep % nevery == 0) {
-    	MPI_Allreduce(&q_changes_local,&q_changes,4,MPI_DOUBLE,MPI_SUM,world);
-    	//if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {} from {}",q_changes[0],q_changes[1],q_changes[2],q_changes[3],comm->me);
-    }
+    /*if (update->ntimestep % nevery == 0) {
+    	MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    	if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {}",q_changes[0],q_changes[2],q_changes[1],q_changes[3]);
+    }*/
+    
     
     //compute_q_total();
+    
+    delete [] q_changes_local;
+    delete [] q_changes;
 }
 
 /* ---------------------------------------------------------------------
