@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.24----- */
+/* ---v0.02.15----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -110,11 +110,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
    fixgpu = nullptr;
   
    etha_lambda = 0.0;
-   Q_lambda = 1.0;
+   Q_lambda = 100.0;
   
   
    vector_flag = 1;
-   size_vector = 8;
+   size_vector = 10;
 
 }
 
@@ -226,6 +226,8 @@ void FixConstantPH::init()
    pparam1 = new char[pair_params[pstyle].length()+1];
    std::strcpy(pparam1,pair_params[pstyle].c_str());
    
+   
+   
 }
 
 /* ---------------------------------------------------------------------- */
@@ -285,6 +287,9 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
+
+    // This would not work in the initialize section as the m_lambda has not been set yet!
+    initialize_v_lambda(310.00);
 
     nmax = atom->nmax;
     allocate_storage();
@@ -868,9 +873,10 @@ void FixConstantPH::update_a_lambda()
 void FixConstantPH::update_v_lambda()
 {
    double dt_lambda = update->dt;
-   double kT_lambda = force->boltz * T_lambda;
+   double kT_lambda = force->boltz * 310.0;
    this->v_lambda += 0.5*(this->a_lambda-this->etha_lambda*this->v_lambda)*dt_lambda;
-   this->etha_lambda += (this->v_lambda*this->v_lambda-kT_lambda)*dt_lambda/this->Q_lambda;
+   this->etha_lambda += ((1e7/4184.0)*this->m_lambda*this->v_lambda*this->v_lambda-kT_lambda)*dt_lambda/this->Q_lambda;
+   a_etha_v_ratio_lambda = (this->etha_lambda * this->v_lambda) /this->a_lambda ;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -879,6 +885,20 @@ void FixConstantPH::update_lambda()
 {
    double dt_lambda = update->dt;
    this->lambda += this->v_lambda * dt_lambda;
+}
+
+/* --------------------------------------------------------------------- */
+
+void FixConstantPH::initialize_v_lambda(const double _T_lambda)
+{
+    v_lambda = sqrt(0.0019872041*4184.0 * _T_lambda / (10.0 * m_lambda))/1000.0;
+}
+
+/* --------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_T_lambda()
+{
+    T_lambda = m_lambda * v_lambda * v_lambda*1e7 / (4184*0.0019872041);
 }
 
    
@@ -950,6 +970,11 @@ double FixConstantPH::compute_vector(int i)
         return v_lambda;
       case 7:
         return a_lambda;
+      case 8:
+        calculate_T_lambda();
+        return T_lambda;
+      case 9:
+        return a_etha_v_ratio_lambda;
    }
    return 0.0;
 }
