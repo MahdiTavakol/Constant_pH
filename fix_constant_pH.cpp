@@ -315,11 +315,12 @@ void FixConstantPH::post_force(int vflag)
       calculate_dU();
       update_a_lambda();
       compute_q_total();
+      compute_Hs<1>();
    }
    /* The force on hydrogens must be updated at every step otherwise at 
       steps at this fix is not active the pH would be very low and there
       will be a jump in pH in nevery steps                               */
-   compute_Hs<1>();
+   //compute_Hs<1>();
 }
 
 /* ----------------------------------------------------------------------
@@ -677,15 +678,15 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     {
        if (protonable[type[i]] == 1)
        {
-           double q_init = q[i];
+           double q_init = q_orig[i];
            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
 	   q_changes_local[0]++;
 	   q_changes_local[2] += (q[i] - q_init);
        }
        if (type[i] == typeHW)
        {
-	   double q_init = q[i];
-	   q[i] = q_init + (-scale) * dq / static_cast<double> (num_HWs); //The total charge should be neutral
+	   double q_init = q_orig[i];
+	   q[i] = q_init + (-scale * dq - q_total)/ static_cast<double> (num_HWs); //The total charge should be neutral
 	   q_changes_local[1]++;
 	   q_changes_local[3] += (q[i] - q_init);
        }
@@ -695,10 +696,12 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
        So, in the final version of the code this part should be 
        commented out!
     */
-    /*MPI_Allreduce(&q_changes_local,&q_changes,4,MPI_DOUBLE,MPI_SUM,world);
-    if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {}",q_changes[0],q_changes[1],q_changes[2],q_changes[3]);
-    */
-    compute_q_total();
+    if (update->ntimestep % nevery == 0) {
+    	MPI_Allreduce(&q_changes_local,&q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    	//if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {} from {}",q_changes[0],q_changes[1],q_changes[2],q_changes[3],comm->me);
+    }
+    
+    //compute_q_total();
 }
 
 /* ---------------------------------------------------------------------
@@ -890,8 +893,7 @@ void FixConstantPH::compute_q_total()
    double * q = atom->q;
    double nlocal = atom->nlocal;
    double q_local = 0.0;
-   double q_total;
-   double tolerance = 0.001;
+   double tolerance = 0.000001; //0.001;
 
    for (int i = 0; i <nlocal; i++)
        q_local += q[i];
@@ -899,7 +901,7 @@ void FixConstantPH::compute_q_total()
     MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
 
     if ((q_total >= tolerance || q_total <= -tolerance) && comm->me == 0)
-    	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {}",q_total);
+    	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {} from {}",q_total,comm->me);
 }
 
 /* --------------------------------------------------------------------- */
