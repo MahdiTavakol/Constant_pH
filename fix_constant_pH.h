@@ -49,9 +49,6 @@ namespace LAMMPS_NS {
         int * typePerProtMol;
         int * protonable;
 
-        // Charge difference between structure 1 and structure 2
-        double dq;
-        
 
 	// Input variables for constant values
 	int typeHW;
@@ -79,7 +76,7 @@ namespace LAMMPS_NS {
 
 	// Protonation and hydronium group parameters
 	double qHs, qHWs;
-	int num_HWs;
+	int num_HWs, num_prots;
 
 	// The smoothing function 
 	double f, df;
@@ -132,7 +129,7 @@ namespace LAMMPS_NS {
 
         template<int stage>
 	void compute_Hs();
-        void check_num_HWs();
+        void calculate_num_prot_num_HWs();
         void read_pH_structure_files();
         void restore_epsilon();
 	void calculate_dq();
