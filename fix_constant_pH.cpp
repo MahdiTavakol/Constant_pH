@@ -165,9 +165,7 @@ FixConstantPH::~FixConstantPH()
 int FixConstantPH::setmask()
 {
    int mask = 0;
-   mask |= INITIAL_INTEGRATE; // the 1st half of the velocity verlet algorithm --> update half step v_lambda and update lambda
-   mask |= POST_FORCE; // calculate the lambda 
-   mask |= FINAL_INTEGRATE; // the 2nd half of the velocity verlet algorithm --> update t
+   mask |= INITIAL_INTEGRATE; // Calculates the a_lambda
    return mask;	
 }
 
@@ -301,39 +299,12 @@ void FixConstantPH::setup(int /*vflag*/)
 
 void FixConstantPH::initial_integrate(int /*vflag*/)
 {
-   if (update->ntimestep % nevery == 0)
-   {
-      update_v_lambda();
-      update_lambda();
-   }
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::post_force(int vflag)
-{
-   if (update->ntimestep % nevery == 0) {
-      compute_Hs<-1>();
-      calculate_df();
-      calculate_dU();
-      update_a_lambda();
-      compute_Hs<1>();
-      compute_q_total();
-   }
-   /* The force on hydrogens must be updated at every step otherwise at 
-      steps at this fix is not active the pH would be very low and there
-      will be a jump in pH in nevery steps                               */
-   //compute_Hs<1>();
-}
-
-/* ----------------------------------------------------------------------
-   The 2nd half of the velocity verlet algorithm for the lambda parameter
-   ---------------------------------------------------------------------- */
-
-void FixConstantPH::post_integrate()
-{
-   if (update->ntimestep % nevery == 0)
-       update_v_lambda();
+   compute_Hs<-1>();
+   calculate_df();
+   calculate_dU();
+   update_a_lambda();
+   compute_Hs<1>();
+   compute_q_total();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -866,25 +837,6 @@ void FixConstantPH::update_a_lambda()
 
    double  H_lambda = (1-lambda)*HA + lambda*HB - f*kT*log(10*(pK-pH)) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::update_v_lambda()
-{
-   double dt_lambda = update->dt;
-   double kT_lambda = force->boltz * 310.0;
-   this->v_lambda += 0.5*(this->a_lambda-this->etha_lambda*this->v_lambda)*dt_lambda;
-   this->etha_lambda += ((1e7/4184.0)*this->m_lambda*this->v_lambda*this->v_lambda-kT_lambda)*dt_lambda/this->Q_lambda;
-   a_etha_v_ratio_lambda = (this->etha_lambda * this->v_lambda) /this->a_lambda ;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::update_lambda()
-{
-   double dt_lambda = update->dt;
-   this->lambda += this->v_lambda * dt_lambda;
 }
 
 /* --------------------------------------------------------------------- */
