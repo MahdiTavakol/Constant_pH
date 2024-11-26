@@ -16,7 +16,13 @@
    Contributing authors: Mark Stevens (SNL), Aidan Thompson (SNL)
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   Constant pH support added by: Mahdi Tavakol (Oxford)
+------------------------------------------------------------------------- */
+
+#include "fix_constant_pH.h"
 #include "fix_nh_constant_pH.h"
+
 
 #include "atom.h"
 #include "comm.h"
@@ -52,10 +58,8 @@ enum{ISO,ANISO,TRICLINIC};
    NVT,NPH,NPT integrators for improved Nose-Hoover equations of motion
  ---------------------------------------------------------------------- */
 
-FixNH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
-    Fix(lmp, narg, arg), id_dilate(nullptr), irregular(nullptr), step_respa(nullptr), id_temp(nullptr),
-    id_press(nullptr), eta(nullptr), eta_dot(nullptr), eta_dotdot(nullptr), eta_mass(nullptr),
-    etap(nullptr), etap_dot(nullptr), etap_dotdot(nullptr), etap_mass(nullptr), fix_constant_pH_id(nullptr),
+FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
+    FixNH(lmp, narg, arg), fix_constant_pH_id(nullptr),
     x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg < 4) utils::missing_cmd_args(FLERR, std::string("fix ") + style, error);
@@ -364,7 +368,7 @@ FixNH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
 
     } else if (strcmp(arg[iarg],"fix_constant_pH_id") == 0) {
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
-       iarg += 2
+       iarg += 2;
 
     } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
   }
@@ -600,7 +604,7 @@ FixNHConstantPH::~FixNHConstantPH()
 void FixNHConstantPH::init()
 {
   FixNH::init();
-  fix_constant_pH = modify->get_fix_by_id(fix_constant_pH_id);
+  fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
   fix_constant_pH->return_nparams(n_lambdas);
    
   x_lambdas = new double[n_lambdas];
@@ -629,7 +633,7 @@ void FixNHConstantPH::nve_v()
 void FixNHConstantPH::nve_x()
 {
   FixNH::nve_x();
-  fix_constant_pH->return_params(&m_lambda,&x_lambda,&v_lambda,&a_lambda);
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
   for (int i = 0; i < n_lambdas; i++)
      x_lambdas[i] += dtv * v_lambdas[i];
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
@@ -642,7 +646,7 @@ void FixNHConstantPH::nve_x()
 void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
-  fix_constant_pH->return_params(&m_lambda,&x_lambda,&v_lambda,&a_lambda);
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
   if (which == NOBIAS) {
      for (int i = 0; i < n_lambdas; i++)
@@ -651,17 +655,17 @@ void FixNHConstantPH::nh_v_temp()
      // This needs to be implemented
      error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
   }
-  fix_constant_pH->reset_params(&m_lambda,&x_lambda,&v_lambda,&a_lambda);
+  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
 /* ----------------------------------------------------------------------
    memory usage of Irregular
 ------------------------------------------------------------------------- */
 
-double FixNH::memory_usage()
+double FixNHConstantPH::memory_usage()
 {
   double bytes = 0.0;
-  bytes += 4*n_lambdas*sizoef(double); // x_lambdas, v_lambdas, a_lambdas and m_lambdas
+  bytes += 4.0*n_lambdas*sizeof(double); // x_lambdas, v_lambdas, a_lambdas and m_lambdas
   if (irregular) bytes += irregular->memory_usage();
   return bytes;
 }
