@@ -22,6 +22,8 @@ ComputeStyle(temp/constant_pH,ComputeTempConstantPH);
 
 #include "compute.h"
 #include "compute_temp.h"
+#include "fix_constant_pH.h"
+
 
 namespace LAMMPS_NS {
 
@@ -30,7 +32,6 @@ class ComputeTempConstantPH : public ComputeTemp {
   ComputeTempConstantPH(class LAMMPS *, int, char **);
   ~ComputeTempConstantPH() override;
   void setup() override;
-  void dof_compute() override;
   double compute_scalar() override;
   // May be I need to implement compute_vector() to be used in the barostat section of the fix_nh.cpp
 
@@ -41,7 +42,7 @@ class ComputeTempConstantPH : public ComputeTemp {
 
 
   // lambda variables from the fix constant pH  
-  Fix *fix_constant_pH;
+  FixConstantPH *fix_constant_pH;
   char *fix_constant_pH_id;
   double *x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
   int n_lambdas;
