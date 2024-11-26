@@ -38,7 +38,7 @@ namespace LAMMPS_NS {
 	double memory_usage() override;
 
         // Functions for accessing or reseting the lambda dynamics parameters
-        void return_nparams(int& _n_params);
+        void return_nparams(int& _n_params) const;
         void return_params(double* const _x_lambdas, double* const _v_lambdas, 
                            double* const _a_lambdas, double* const _m_lambdas) const;
         void reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
@@ -71,9 +71,11 @@ namespace LAMMPS_NS {
 
 	// Lambda dynamics
 	double lambda, v_lambda, a_lambda, m_lambda;
+	int n_params;
 
         // Lambda arrays
         double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas;
+        int n_lambdas;
 
         // The protonable groups
         int *protonable_molecule_ids;
