@@ -23,7 +23,6 @@ class FixNHConstantPH : public FixNH {
  public:
   FixNHConstantPH(class LAMMPS *, int, char **);
   ~FixNHConstantPH() override;
-  void init() override;
   void setup(int) override;
   double memory_usage() override;
 
