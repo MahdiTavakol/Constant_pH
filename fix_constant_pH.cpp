@@ -367,7 +367,26 @@ void FixConstantPH::return_params(double* const _x_lambdas, double* const _v_lam
 {
     for (int i = 0; i < n_lambdas; i++) {
 	_x_lambdas[i] = lambdas[i];
+	_v_lambdas[i] = v_lambdas[i];
+	_a_lambdas[i] = a_lambdas[i];
+	_m_lambdas[i] = m_lambdas[i];
     }
+}
+
+/* ---------------------------------------------------------------------
+    sets the values of the x_lambdas, v_lambdas, ... possibly by the intergrating
+    fix styles
+    --------------------------------------------------------------------- */
+
+void FixConstantPH::reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
+                          const double* const _a_lambdas, const double* const _m_lambdas)
+{
+    for (int i = 0; i < n_lambdas; i++) {
+	lambdas[i] = _x_lambdas[i];
+	v_lambdas[i] = _v_lambdas[i];
+	a_lambdas[i] = _a_lambdas[i];
+	m_lambdas[i] = _m_lambdas[i];
+    } 
 }
 
 /* ---------------------------------------------------------------------- */
