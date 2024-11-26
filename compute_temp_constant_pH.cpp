@@ -117,11 +117,13 @@ double ComputeTempConstantPH::compute_scalar()
         t += (v[i][0] * v[i][0] + v[i][1] * v[i][1] + v[i][2] * v[i][2]) * mass[type[i]];
   }
 
-  
-  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas,_n_lambdas); // The return_parameters section should be implemented in the fix_constant_pH.cpp code
 
+  fix_constant_pH->return_nparame(_n_lambdas);
   if (n_lambdas != _n_lambdas)
      error->all(FLERR,"The n_lambdas parameter in the compute temperature constant pH is not the same as the n_lambdas in the fix constant pH: {},{}",n_lambdas,_n_lambdas);
+
+  
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas); // The return_parameters section should be implemented in the fix_constant_pH.cpp code
 
   for (int i = 0; i < n_lambdas; i++)
      t += v_lambdas[i]*v_lambdas[i] * m_lambdas[i];
