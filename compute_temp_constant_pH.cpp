@@ -54,7 +54,7 @@ void ComputeTempConstantPH::setup()
   if (dynamic_user || group->dynamic[igroup]) dynamic = 1;
   dof_compute();
 
-  fix_constant_pH_id = modify->get_fix_by_id(fix_constant_pH_id);
+  fix_constant_pH = modify->get_fix_by_id(fix_constant_pH_id);
 }
 
 
