@@ -35,7 +35,7 @@ class ComputeTempConstantPH : public ComputeTemp {
  protected:
   double tfactor;
 
-  virtual void dof_compute();
+  void dof_compute() override;
 
 
   // lambda variables from the fix constant pH  
