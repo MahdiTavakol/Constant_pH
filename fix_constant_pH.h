@@ -37,6 +37,13 @@ namespace LAMMPS_NS {
         double compute_vector(int) override;
 	double memory_usage() override;
 
+        // Functions for accessing or reseting the lambda dynamics parameters
+        void return_nparams(int& _n_params);
+        void return_params(double* const _x_lambdas, double* const _v_lambdas, 
+                           double* const _a_lambdas, double* const _m_lambdas) const;
+        void reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
+                          const double* const _a_lambdas, const double* const _m_lambdas);
+
      private:
 	// Sturcture files
         FILE *pHStructureFile;
