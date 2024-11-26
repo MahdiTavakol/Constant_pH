@@ -26,11 +26,15 @@ class FixNHConstantPH : public FixNH {
   double memory_usage() override;
 
  protected:
-  double lambda, v_lambda, t_lambda;
 
   void nve_x() override;
   void nve_v() override;
   void nh_v_temp() override;
+
+  // lambda variables from the fix constant pH  
+  Fix *fix_constant_pH;
+  char *fix_constant_pH_id;
+  double v_lambda, m_lambda, a_lambda, T_lambda;
 
 };
 
