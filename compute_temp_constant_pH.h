@@ -41,7 +41,8 @@ class ComputeTempConstantPH : public ComputeTemp {
   // lambda variables from the fix constant pH  
   Fix *fix_constant_pH;
   char *fix_constant_pH_id;
-  double v_lambda, m_lambda;
+  double *x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
+  int n_lambdas;
 
 };
 
