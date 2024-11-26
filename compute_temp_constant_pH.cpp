@@ -24,7 +24,7 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-ComputeTempConstantPH::ComputeTempConstantPH(LAMMPS *lmp, int narg, char **arg) : Compute(lmp, narg, arg)
+ComputeTempConstantPH::ComputeTempConstantPH(LAMMPS *lmp, int narg, char **arg) : Compute(lmp, narg, arg), fix_constant_pH_id(nullptr)
 {
   if (narg != 4) error->all(FLERR, "Illegal compute temp command");
   fix_constant_pH_id = utils::strdup(arg[3]);
@@ -43,6 +43,7 @@ ComputeTempConstantPH::ComputeTempConstantPH(LAMMPS *lmp, int narg, char **arg) 
 ComputeTempConstantPH::~ComputeTempConstantPH()
 {
   if (!copymode) delete[] vector;
+  if (fix_constant_pH_id) delete[] fix_constant_pH_id;
 }
 
 /* ---------------------------------------------------------------------- */
