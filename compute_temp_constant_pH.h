@@ -17,8 +17,8 @@ ComputeStyle(temp/constant_pH,ComputeTempConstantPH);
 // clang-format on
 #else
 
-#ifndef LMP_COMPUTE_TEMP_H
-#define LMP_COMPUTE_TEMP_H
+#ifndef LMP_COMPUTE_TEMP_CONSTANT_PH_H
+#define LMP_COMPUTE_TEMP_CONSTANT_PH_H
 
 #include "compute.h"
 #include "compute_temp.h"
