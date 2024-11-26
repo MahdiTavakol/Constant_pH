@@ -155,8 +155,6 @@ namespace LAMMPS_NS {
         void compute_f_lambda_charge_interpolation();
 	double compute_epair();
 	void update_a_lambda();
-	void update_v_lambda();
-	void update_lambda();
 	};
 
 }    // namespace LAMMPS_NS
