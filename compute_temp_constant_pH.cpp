@@ -96,9 +96,9 @@ double ComputeTempConstantPH::compute_scalar()
         t += (v[i][0] * v[i][0] + v[i][1] * v[i][1] + v[i][2] * v[i][2]) * mass[type[i]];
   }
 
+  fix_constant_pH->return_params(&m_lambda,&v_lambda); // The return_parameters section should be implemented in the fix_constant_pH.cpp code
   
-  
-  t += v_lambda * m_lambda; // I need to define a method to access the v_lambda and m_lambda from the fix_constant_pH.h
+  t += v_lambda*v_lambda * m_lambda; // I need to define a method to access the v_lambda and m_lambda from the fix_constant_pH.h
 
   MPI_Allreduce(&t, &scalar, 1, MPI_DOUBLE, MPI_SUM, world);
   if (dynamic) dof_compute();
