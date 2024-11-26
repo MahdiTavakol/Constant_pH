@@ -29,8 +29,6 @@ class ComputeTempConstantPH : public ComputeTemp {
  public:
   ComputeTempConstantPH(class LAMMPS *, int, char **);
   ~ComputeTempConstantPH() override;
-  void init() override {}
-  void setup() override;
   double compute_scalar() override;
   void compute_vector() override;
 
