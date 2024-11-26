@@ -34,8 +34,6 @@ namespace LAMMPS_NS {
 	void init() override;
 	void setup(int) override;
 	void initial_integrate(int) override;
-	void post_force(int) override;
-	void post_integrate() override;
         double compute_vector(int) override;
 	double memory_usage() override;
 
