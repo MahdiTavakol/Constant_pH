@@ -289,12 +289,23 @@ void FixConstantPH::setup(int /*vflag*/)
     // This would not work in the initialize section as the m_lambda has not been set yet!
     initialize_v_lambda(310.00);
 
+
+
+    n_lambdas = 1; // Just for now
+    x_lambdas = new double[n_lambdas];
+    v_lambdas = new double[n_lambdas];
+    a_lambdas = new double[n_lambdas];
+    m_lambdas = new double[n_lambdas];
+
+	
     nmax = atom->nmax;
     allocate_storage();
+
 }
 
 /* ----------------------------------------------------------------------
-   1st half of the velocity verlet algorithm for the lambda
+   This part calculates the acceleration of the lambdas parameter
+   which is obtained from the force acting on it
    ---------------------------------------------------------------------- */
 
 void FixConstantPH::initial_integrate(int /*vflag*/)
@@ -306,6 +317,42 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
    compute_Hs<1>();
    compute_q_total();
 }
+
+/* ----------------------------------------------------------------------- */
+
+template <int stage>
+void FixConstantPH::compute_Hs()
+{
+   if (stage == -1)
+   {
+      if (nmax < atom->nmax)
+      {
+	  nmax = atom->nmax;
+          allocate_storage();
+	  deallocate_storage();
+      }
+      backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
+      modify_epsilon_q(0.0); //should define a change_parameters(const int);
+      update_lmp(); // update the lammps force and virial values
+      HA = compute_epair(); 
+      backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
+      modify_epsilon_q(1.0); //should define a change_parameters(const double);
+      update_lmp();
+      HB = compute_epair();           // HB is for the protonated state with lambda==1 
+      backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
+   }
+   if (stage == 1)
+   {
+      modify_epsilon_q(lambda); //should define a change_parameters(const double);
+      //update_lmp(); This update_lmp() might not work here since I am not sure about the correct values for the eflag and vflag variables... Anyway, the epsilon and charge values have been updated according to the pH value and lammps will do the rest
+   }
+}
+
+/* ----------------------------------------------------------------------
+   returns the number of the lambda parameters
+  ----------------------------------------------------------------------- */
+
+void FixConstantPH::return_nparams(
 
 /* ---------------------------------------------------------------------- */
 
@@ -452,37 +499,6 @@ void FixConstantPH::print_Udwp()
     }
     fclose(Udwp_fp);
     lambda = lambda_backup;
-}
-
-/* ----------------------------------------------------------------------- */
-
-template <int stage>
-void FixConstantPH::compute_Hs()
-{
-   if (stage == -1)
-   {
-      if (nmax < atom->nmax)
-      {
-	  nmax = atom->nmax;
-          allocate_storage();
-	  deallocate_storage();
-      }
-      backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
-      modify_epsilon_q(0.0); //should define a change_parameters(const int);
-      update_lmp(); // update the lammps force and virial values
-      HA = compute_epair(); 
-      backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
-      modify_epsilon_q(1.0); //should define a change_parameters(const double);
-      update_lmp();
-      HB = compute_epair();           // HB is for the protonated state with lambda==1 
-      backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
-      restore_epsilon();
-   }
-   if (stage == 1)
-   {
-      modify_epsilon_q(lambda); //should define a change_parameters(const double);
-      //update_lmp(); This update_lmp() might not work here since I am not sure about the correct values for the eflag and vflag variables... Anyway, the epsilon and charge values have been updated according to the pH value and lammps will do the rest
-   }
 }
 
 /* ----------------------------------------------------------------------
@@ -676,19 +692,6 @@ void FixConstantPH::modify_epsilon_q(const double& scale)
     delete [] q_changes;
 }
 
-/* ---------------------------------------------------------------------
-   Restore the epsilon values 
-   --------------------------------------------------------------------- */
-
-void FixConstantPH::restore_epsilon()
-{
-    int ntypes = atom->ntypes;
-    
-    // Right now, I am sure about the limits of these two loops
-    for (int i = 0; i < ntypes + 1; i++)
-        for (int j = i; j < ntypes + 1; j++)
-             epsilon[i][j] = epsilon_init[i][j];
-}
 
 /* ----------------------------------------------------------------------
    modify force and kspace in lammps according
@@ -783,7 +786,6 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 
 
    int natoms = atom->natoms;
-   int n_lambdas;
    double * energy_local = new double[n_lambdas];
    double * energy = new double[n_lambdas];
    double * n_lambda_atoms = new double[n_lambdas];
