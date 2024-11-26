@@ -55,7 +55,8 @@ enum{ISO,ANISO,TRICLINIC};
 FixNH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
     Fix(lmp, narg, arg), id_dilate(nullptr), irregular(nullptr), step_respa(nullptr), id_temp(nullptr),
     id_press(nullptr), eta(nullptr), eta_dot(nullptr), eta_dotdot(nullptr), eta_mass(nullptr),
-    etap(nullptr), etap_dot(nullptr), etap_dotdot(nullptr), etap_mass(nullptr), fix_constant_pH_id(nullptr)
+    etap(nullptr), etap_dot(nullptr), etap_dotdot(nullptr), etap_mass(nullptr), fix_constant_pH_id(nullptr),
+    x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg < 4) utils::missing_cmd_args(FLERR, std::string("fix ") + style, error);
 
