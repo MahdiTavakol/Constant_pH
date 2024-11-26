@@ -292,7 +292,7 @@ void FixConstantPH::setup(int /*vflag*/)
 
 
     n_lambdas = 1; // Just for now
-    x_lambdas = new double[n_lambdas];
+    lambdas   = new double[n_lambdas];
     v_lambdas = new double[n_lambdas];
     a_lambdas = new double[n_lambdas];
     m_lambdas = new double[n_lambdas];
@@ -352,9 +352,9 @@ void FixConstantPH::compute_Hs()
    returns the number of the lambda parameters
   ----------------------------------------------------------------------- */
 
-void FixConstantPH::return_nparams(int& n_params) const
+void FixConstantPH::return_nparams(int& _n_params) const
 {
-    return n_lambdas;
+    _n_params = this->n_params;
 }
 
 /* ----------------------------------------------------------------------
