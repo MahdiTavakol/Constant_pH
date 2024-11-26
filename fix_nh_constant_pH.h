@@ -15,6 +15,7 @@
 #define LMP_FIX_NH_CONSTANT_PH_H
 
 #include "fix.h"    // IWYU pragma: export
+#include "fix_constant_pH.h"
 #include "fix_nh.h"
 
 namespace LAMMPS_NS {
@@ -23,6 +24,7 @@ class FixNHConstantPH : public FixNH {
  public:
   FixNHConstantPH(class LAMMPS *, int, char **);
   ~FixNHConstantPH() override;
+  void init() override;
   double memory_usage() override;
 
  protected:
@@ -32,7 +34,7 @@ class FixNHConstantPH : public FixNH {
   void nh_v_temp() override;
 
   // lambda variables from the fix constant pH  
-  Fix *fix_constant_pH;
+  FixConstantPH *fix_constant_pH;
   char *fix_constant_pH_id;
   double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
   int n_lambdas;
