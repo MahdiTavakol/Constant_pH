@@ -16,16 +16,18 @@
 #include "atom.h"
 #include "domain.h"
 #include "error.h"
+#include "fix.h"
 #include "force.h"
 #include "group.h"
 #include "update.h"
+#include "modify.h"
 
 using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-ComputeTempConstantPH::ComputeTempConstantPH(LAMMPS *lmp, int narg, char **arg) : Compute(lmp, narg, arg), 
-fix_constant_pH_id(nullptr), x_lambdas(nullptr), v_lamdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
+ComputeTempConstantPH::ComputeTempConstantPH(LAMMPS *lmp, int narg, char **arg) : ComputeTemp(lmp, narg, arg), 
+fix_constant_pH_id(nullptr), x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg != 4) error->all(FLERR, "Illegal compute temp constant pH command");
   fix_constant_pH_id = utils::strdup(arg[3]);
@@ -34,7 +36,7 @@ fix_constant_pH_id(nullptr), x_lambdas(nullptr), v_lamdas(nullptr), a_lambdas(nu
   int iarg = 4;
   while (iarg < narg) {
      if (!strcmp(arg[iarg], "n_lambdas")) {
-        n_lambdas = utils::numeric(FLERR,arg[iarg+1],flase,lmp);
+        n_lambdas = utils::numeric(FLERR,arg[iarg+1],false,lmp);
         iarg += 2;
      } else error->all(FLERR,"Illegal compute temp constant pH command");
   }
@@ -68,7 +70,7 @@ void ComputeTempConstantPH::setup()
   if (dynamic_user || group->dynamic[igroup]) dynamic = 1;
   dof_compute();
 
-  fix_constant_pH = modify->get_fix_by_id(fix_constant_pH_id);
+  fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
 
   x_lambdas = new double[n_lambdas];
   v_lambdas = new double[n_lambdas];
@@ -118,7 +120,7 @@ double ComputeTempConstantPH::compute_scalar()
   }
 
 
-  fix_constant_pH->return_nparame(_n_lambdas);
+  fix_constant_pH->return_nparams(_n_lambdas);
   if (n_lambdas != _n_lambdas)
      error->all(FLERR,"The n_lambdas parameter in the compute temperature constant pH is not the same as the n_lambdas in the fix constant pH: {},{}",n_lambdas,_n_lambdas);
 
