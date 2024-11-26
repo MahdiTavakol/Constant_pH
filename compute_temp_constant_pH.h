@@ -29,6 +29,8 @@ class ComputeTempConstantPH : public ComputeTemp {
  public:
   ComputeTempConstantPH(class LAMMPS *, int, char **);
   ~ComputeTempConstantPH() override;
+  void setup() override;
+  void dof_compute() override;
   double compute_scalar() override;
   // May be I need to implement compute_vector() to be used in the barostat section of the fix_nh.cpp
 
