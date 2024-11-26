@@ -31,7 +31,6 @@ class FixNHConstantPH : public FixNH {
   void nve_x() override;
   void nve_v() override;
   void nh_v_temp() override;
-  virtual int size_restart_global();
 
 };
 
