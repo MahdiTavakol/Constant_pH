@@ -589,14 +589,24 @@ FixNHConstantPH::~FixNHConstantPH()
 {
   FixNH::~FixNH();
   if (fix_constant_pH_id) delete [] fix_constant_pH_id;
+  if (x_lambdas) delete [] x_lambdas;
+  if (v_lambdas) delete [] v_lambdas;
+  if (a_lambdas) delete [] a_lambdas;
+  if (m_lambdas) delete [] m_lambdas; 
 }
 
 /* ---------------------------------------------------------------------- */
 
 void FixNHConstantPH::init()
 {
-   FixNH::init();
-   fix_constant_pH = modify->get_fix_by_id(fix_constant_pH_id);
+  FixNH::init();
+  fix_constant_pH = modify->get_fix_by_id(fix_constant_pH_id);
+  fix_constant_pH->return_nparams(n_lambdas);
+   
+  x_lambdas = new double[n_lambdas];
+  v_lambdas = new double[n_lambdas];
+  a_lambdas = new double[n_lambdas];
+  m_lambdas = new double[n_lambdas];
 }
 
 /* ----------------------------------------------------------------------
@@ -606,9 +616,10 @@ void FixNHConstantPH::init()
 void FixNHConstantPH::nve_v()
 {
   FixNH::nve_v();
-  fix_constant_pH->return_params(&m_lambda,&x_lambda,&v_lambda,&a_lambda);
-  v_lambda += dtf * m_lambda;
-  fix_constant_pH->reset_params(&m_lambda,&x_lambda,&v_lambda,&a_lambda);
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  for (int i = 0; i < n_lambdas; i++)
+     v_lambdas[i] += dtf * m_lambdas[i];
+  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
 /* ----------------------------------------------------------------------
@@ -619,8 +630,9 @@ void FixNHConstantPH::nve_x()
 {
   FixNH::nve_x();
   fix_constant_pH->return_params(&m_lambda,&x_lambda,&v_lambda,&a_lambda);
-  x_lambda += dtv * v_lambda;
-  fix_constant_pH->reset_params(&m_lambda,&x_lambda,&v_lambda,&a_lambda);
+  for (int i = 0; i < n_lambdas; i++)
+     x_lambdas[i] += dtv * v_lambdas[i];
+  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
 /* ----------------------------------------------------------------------
@@ -633,7 +645,8 @@ void FixNHConstantPH::nh_v_temp()
   fix_constant_pH->return_params(&m_lambda,&x_lambda,&v_lambda,&a_lambda);
 
   if (which == NOBIAS) {
-     v_lambda *= factor_eta;
+     for (int i = 0; i < n_lambdas; i++)
+        v_lambdas[i] *= factor_eta;
   } else if (which == BIAS) {
      // This needs to be implemented
      error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
@@ -648,6 +661,7 @@ void FixNHConstantPH::nh_v_temp()
 double FixNH::memory_usage()
 {
   double bytes = 0.0;
+  bytes += 4*n_lambdas*sizoef(double); // x_lambdas, v_lambdas, a_lambdas and m_lambdas
   if (irregular) bytes += irregular->memory_usage();
   return bytes;
 }
