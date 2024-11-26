@@ -34,10 +34,15 @@ class ComputeTempConstantPH : public ComputeTemp {
 
  protected:
   double tfactor;
-  Fix *fix_constant_pH;
-  char *fix_constant_pH_id;
 
   virtual void dof_compute();
+
+
+  // lambda variables from the fix constant pH  
+  Fix *fix_constant_pH;
+  char *fix_constant_pH_id;
+  double v_lambda, m_lambda;
+
 };
 
 }    // namespace LAMMPS_NS
