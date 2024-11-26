@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.03.01----- */
+/* ---v0.03.02----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -352,7 +352,23 @@ void FixConstantPH::compute_Hs()
    returns the number of the lambda parameters
   ----------------------------------------------------------------------- */
 
-void FixConstantPH::return_nparams(
+void FixConstantPH::return_nparams(int& n_params) const
+{
+    return n_lambdas;
+}
+
+/* ----------------------------------------------------------------------
+   returns the x_lambdas, v_lambdas, ....
+   The memories for these should be allocated before hands
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::return_params(double* const _x_lambdas, double* const _v_lambdas, 
+                           double* const _a_lambdas, double* const _m_lambdas) const 
+{
+    for (int i = 0; i < n_lambdas; i++) {
+	_x_lambdas[i] = lambdas[i];
+    }
+}
 
 /* ---------------------------------------------------------------------- */
 
