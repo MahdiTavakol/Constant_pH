@@ -297,6 +297,11 @@ void FixConstantPH::setup(int /*vflag*/)
     a_lambdas = new double[n_lambdas];
     m_lambdas = new double[n_lambdas];
 
+    lambdas[0] = 0.0;
+    v_lambdas[0] = 0.0;
+    a_lambdas[0] = 0.0;
+    m_lambdas[0] = 20.0;
+
 	
     nmax = atom->nmax;
     allocate_storage();
