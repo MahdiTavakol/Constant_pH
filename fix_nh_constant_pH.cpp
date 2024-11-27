@@ -59,7 +59,7 @@ enum{ISO,ANISO,TRICLINIC};
  ---------------------------------------------------------------------- */
 
 FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
-    FixNH(lmp, narg, arg), fix_constant_pH_id(nullptr),
+    FixNH(lmp, narg-2, arg), fix_constant_pH_id(nullptr),
     x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg < 4) utils::missing_cmd_args(FLERR, std::string("fix ") + style, error);
@@ -620,9 +620,10 @@ void FixNHConstantPH::init()
 void FixNHConstantPH::nve_v()
 {
   FixNH::nve_v();
+  fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
   for (int i = 0; i < n_lambdas; i++)
-     v_lambdas[i] += dtf * m_lambdas[i];
+     v_lambdas[i] += dtf * a_lambdas[i];
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
@@ -633,9 +634,11 @@ void FixNHConstantPH::nve_v()
 void FixNHConstantPH::nve_x()
 {
   FixNH::nve_x();
+  fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
   for (int i = 0; i < n_lambdas; i++)
      x_lambdas[i] += dtv * v_lambdas[i];
+
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
@@ -646,15 +649,22 @@ void FixNHConstantPH::nve_x()
 void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
+  fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
   if (which == NOBIAS) {
-     for (int i = 0; i < n_lambdas; i++)
-        v_lambdas[i] *= factor_eta;
+     for (int i = 0; i < n_lambdas; i++) {
+        v_lambdas[i] *= 0.01*factor_eta;
+        if (x_lambdas[i] < 0.0)
+           v_lambdas[i] = std::abs(v_lambdas[i]);
+        else if (x_lambdas[i] > 1.0)
+           v_lambdas[i] = -std::abs(v_lambdas[i]);
+     }
   } else if (which == BIAS) {
      // This needs to be implemented
      error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
   }
+  
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
