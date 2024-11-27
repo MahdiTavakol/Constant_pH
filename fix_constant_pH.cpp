@@ -359,7 +359,7 @@ void FixConstantPH::compute_Hs()
 
 void FixConstantPH::return_nparams(int& _n_params) const
 {
-    _n_params = this->n_params;
+    _n_params = this->n_lambdas;
 }
 
 /* ----------------------------------------------------------------------
@@ -884,7 +884,7 @@ void FixConstantPH::update_a_lambda()
    //f = 1.0;
    double  f_lambda = -(HB-HA - df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda);
 
-   this->a_lambda = 4.184*0.0001*f_lambda / m_lambda;
+   this->a_lambda = f_lambda /m_lambda; // 4.184*0.0001*f_lambda / m_lambda;
    /*#ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif*/
@@ -1009,3 +1009,4 @@ double FixConstantPH::memory_usage()
                  pvatom_orig_bytes + keatom_orig_bytes + kvatom_orig_bytes;
   return bytes;
 }
+

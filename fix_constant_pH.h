@@ -71,7 +71,6 @@ namespace LAMMPS_NS {
 
 	// Lambda dynamics
 	double lambda, v_lambda, a_lambda, m_lambda;
-	int n_params;
 
         // Lambda arrays
         double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas;
