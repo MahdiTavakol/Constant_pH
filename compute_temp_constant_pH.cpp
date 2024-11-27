@@ -119,18 +119,17 @@ double ComputeTempConstantPH::compute_scalar()
         t += (v[i][0] * v[i][0] + v[i][1] * v[i][1] + v[i][2] * v[i][2]) * mass[type[i]];
   }
 
+  MPI_Allreduce(&t, &scalar, 1, MPI_DOUBLE, MPI_SUM, world);
 
   fix_constant_pH->return_nparams(_n_lambdas);
   if (n_lambdas != _n_lambdas)
      error->all(FLERR,"The n_lambdas parameter in the compute temperature constant pH is not the same as the n_lambdas in the fix constant pH: {},{}",n_lambdas,_n_lambdas);
-
-  
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas); // The return_parameters section should be implemented in the fix_constant_pH.cpp code
 
   for (int i = 0; i < n_lambdas; i++)
-     t += v_lambdas[i]*v_lambdas[i] * m_lambdas[i];
+     scalar += v_lambdas[i]*v_lambdas[i] * m_lambdas[i];
 
-  MPI_Allreduce(&t, &scalar, 1, MPI_DOUBLE, MPI_SUM, world);
+   
   if (dynamic) dof_compute();
   if (dof < 0.0 && natoms_temp > 0.0)
     error->all(FLERR, "Temperature compute degrees of freedom < 0");
