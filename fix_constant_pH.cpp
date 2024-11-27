@@ -844,18 +844,20 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 
    for (int i = 0; i < n_lambdas; i++) {
       for (int j = 0; j < n_lambda_atoms[i]; j++) {
-	  //double delta_q = q_prot[j] - q_deprot[j];
+	  q[j] = q_prot[j] - q_deprot[j];
 	  // I need to figure out how to identify those atoms
       }
       for (int k = 0; k < n_lambdas; k++) {
 	  if (k == i) continue;
 	  for (int l = 0; l < n_lambda_atoms[k]; l++) {
-	      //double q = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
+	      q[l] = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
               // Double check if the q_prot and q_deprot are in the right place
 	      // how should I identify those atoms
 	  }
       }
       energy_local[i] = 0.0;
+
+      update_lmp();
       if (force->pair) energy_local[i] += force->pair->eng_coul;
       // You need to add the kspace contribution too
    }
