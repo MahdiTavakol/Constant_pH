@@ -654,7 +654,7 @@ void FixNHConstantPH::nh_v_temp()
 
   if (which == NOBIAS) {
      for (int i = 0; i < n_lambdas; i++) {
-        v_lambdas[i] *= 0.01*factor_eta;
+        v_lambdas[i] *= factor_eta;
         if (x_lambdas[i] < 0.0)
            v_lambdas[i] = std::abs(v_lambdas[i]);
         else if (x_lambdas[i] > 1.0)
