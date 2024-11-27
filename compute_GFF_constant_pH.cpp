@@ -263,15 +263,12 @@ void ComputeGFFConstantPH::allocate_storage()
 
 void ComputeGFFConstantPH::deallocate_storage()
 {
-  memory->destroy(q_orig);
-  memory->destroy(f_orig);
-  memory->destroy(peatom_orig);
-  memory->destroy(pvatom_orig);
-  if (force->kspace)
-  {
-      memory->destroy(keatom_orig);
-      memory->destroy(kvatom_orig);
-  }
+  if (q_orig) memory->destroy(q_orig);
+  if (f_orig) memory->destroy(f_orig);
+  if (peatom_orig) memory->destroy(peatom_orig);
+  if (pvatom_orig) memory->destroy(pvatom_orig);
+  if (keatom_orig) memory->destroy(keatom_orig);
+  if (kvatom_orig) memory->destroy(kvatom_orig);
 
   f_orig = nullptr;
   peatom_orig = keatom_orig = nullptr;
