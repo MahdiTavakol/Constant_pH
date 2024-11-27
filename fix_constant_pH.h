@@ -158,7 +158,7 @@ namespace LAMMPS_NS {
 	void backup_restore_qfev();
 	void init_GFF();
 	void calculate_GFF();
-	void modify_epsilon_q(const double& scale);
+	void modify_q(const double& scale);
 	void modify_water();
 	void update_lmp();
         void compute_f_lambda_charge_interpolation();
