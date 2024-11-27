@@ -30,6 +30,7 @@ class ComputeGFFConstantPH : public Compute {
   ComputeGFFConstantPH(class LAMMPS *, int, char **);
   ~ComputeGFFConstantPH() override;
   void setup() override;
+  void init() override;
   void compute_vector() override;
   void compute_peratom() override {}; // I just wanted LAMMPS to consider this as peratom compute so the peratom energies be tallied in this timestep.
   
