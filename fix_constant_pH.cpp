@@ -376,6 +376,12 @@ void FixConstantPH::return_params(double* const _x_lambdas, double* const _v_lam
 	_a_lambdas[i] = a_lambdas[i];
 	_m_lambdas[i] = m_lambdas[i];
     }
+
+    // just for now
+    _x_lambdas[0] = lambda;
+    _v_lambdas[0] = v_lambda;
+    _a_lambdas[0] = a_lambda;
+    _m_lambdas[0] = m_lambda;
 }
 
 /* ---------------------------------------------------------------------
@@ -391,7 +397,13 @@ void FixConstantPH::reset_params(const double* const _x_lambdas, const double* c
 	v_lambdas[i] = _v_lambdas[i];
 	a_lambdas[i] = _a_lambdas[i];
 	m_lambdas[i] = _m_lambdas[i];
-    } 
+    }
+
+    // just for now
+    lambda = _x_lambdas[0];
+    v_lambda = _v_lambdas[0];
+    a_lambda = _a_lambdas[0];
+    m_lambda = _m_lambdas[0];
 }
 
 /* ---------------------------------------------------------------------- */
@@ -879,6 +891,7 @@ void FixConstantPH::update_a_lambda()
 
    double  H_lambda = (1-lambda)*HA + lambda*HB - f*kT*log(10*(pK-pH)) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
+	
 }
 
 /* --------------------------------------------------------------------- */
