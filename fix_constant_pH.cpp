@@ -332,18 +332,18 @@ void FixConstantPH::compute_Hs()
 	  deallocate_storage();
       }
       backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
-      modify_epsilon_q(0.0); //should define a change_parameters(const int);
+      modify_q(0.0); //should define a change_parameters(const int);
       update_lmp(); // update the lammps force and virial values
       HA = compute_epair(); 
       backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
-      modify_epsilon_q(1.0); //should define a change_parameters(const double);
+      modify_q(1.0); //should define a change_parameters(const double);
       update_lmp();
       HB = compute_epair();           // HB is for the protonated state with lambda==1 
       backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
    }
    if (stage == 1)
    {
-      modify_epsilon_q(lambda); //should define a change_parameters(const double);
+      modify_q(lambda); //should define a change_parameters(const double);
       //update_lmp(); This update_lmp() might not work here since I am not sure about the correct values for the eflag and vflag variables... Anyway, the epsilon and charge values have been updated according to the pH value and lammps will do the rest
    }
 }
@@ -673,7 +673,7 @@ void FixConstantPH::backup_restore_qfev()
 
    -------------------------------------------------------------- */
    
-void FixConstantPH::modify_epsilon_q(const double& scale)
+void FixConstantPH::modify_q(const double& scale)
 {
     int nlocal = atom->nlocal;
     int * mask = atom->mask;
