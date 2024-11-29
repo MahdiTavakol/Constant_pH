@@ -622,11 +622,13 @@ void FixNHConstantPH::init()
 
 void FixNHConstantPH::nve_v()
 {
-
   FixNH::nve_v();
+  
+  bigint ntimestep = update->ntimestep;
+  if (ntimestep % 1) return; 
+  
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-  
   
   for (int i = 0; i < n_lambdas; i++)
      v_lambdas[i] += dtf * a_lambdas[i];
@@ -640,6 +642,10 @@ void FixNHConstantPH::nve_v()
 void FixNHConstantPH::nve_x()
 {
   FixNH::nve_x();
+  
+  bigint ntimestep = update->ntimestep;
+  if (ntimestep % 1) return; 
+  
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
   for (int i = 0; i < n_lambdas; i++)
@@ -655,16 +661,27 @@ void FixNHConstantPH::nve_x()
 void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
+  
+  bigint ntimestep = update->ntimestep;
+  if (ntimestep % 1000) {
+    for (int i = 0; i < n_lambdas; i++)
+      v_lambdas[i] = 0.0;
+  }
+  if (ntimestep % 1) return; 
+  
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
   if (which == NOBIAS) {
      for (int i = 0; i < n_lambdas; i++) {
         v_lambdas[i] *= factor_eta;
-        if (x_lambdas[i] < 0.0)
-           v_lambdas[i] = std::abs(v_lambdas[i]);
+        /*if (x_lambdas[i] > -0.1 && x_lambdas[i] < 1.1)
+           v_lambdas[i] *= factor_eta;
+           */
+        /*if (x_lambdas[i] < 0.0)
+           v_lambdas[i] = std::abs(a_lambdas[i]);
         else if (x_lambdas[i] > 1.0)
-           v_lambdas[i] = -std::abs(v_lambdas[i]);
+           v_lambdas[i] = -std::abs(a_lambdas[i]);*/
      }
   } else if (which == BIAS) {
      // This needs to be implemented
