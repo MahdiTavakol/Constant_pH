@@ -18,6 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
+   v0.03.07
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -611,6 +612,8 @@ void FixNHConstantPH::init()
   v_lambdas = new double[n_lambdas];
   a_lambdas = new double[n_lambdas];
   m_lambdas = new double[n_lambdas];
+  
+  std::srand(static_cast<unsigned int>(std::time(nullptr)));
 }
 
 /* ----------------------------------------------------------------------
@@ -619,11 +622,42 @@ void FixNHConstantPH::init()
 
 void FixNHConstantPH::nve_v()
 {
+  double r1, r2;
+  double tau_lambda = 500; // 500fs = 0.5ps
+  double alpha_lambda = 0.0;
   FixNH::nve_v();
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  fix_constant_pH->return_T_lambda(T_lambda);
+  
+  
+  double ke_target_lambda = n_lambdas * boltz * t_target;
+  double ke_current_lambda = n_lambdas * boltz * T_lambda;
+  double factor = exp(-1.0*dtv / tau_lambda);
+  
+  
+  double sum_r2 = 0.0;
+  for (int i = 0; i < n_lambdas; i++) {
+    this->gaussian_random(r1, r2);
+    sum_r2 += r2*r2;
+  } 
+  
+   
+  double ke_new_lambda = ke_current_lambda + (1.0 - factor) * (ke_target_lambda * (r1*r1 + sum_r2)/n_lambdas - ke_current_lambda) +
+                         2.0 * r1 * std::sqrt((ke_current_lambda*ke_target_lambda/n_lambdas)*(1-factor)*factor);
+  
+  if (ke_new_lambda > 0) alpha_lambda = std::sqrt(ke_new_lambda / ke_current_lambda);
+   
+  
+  for (int i = 0; i < n_lambdas; i++) {
+    v_lambdas[i] = alpha_lambda*v_lambdas[i] + a_lambdas[i];
+  }
+  
+  /*
+  This section is for the Nose-Hoover thermostat 
   for (int i = 0; i < n_lambdas; i++)
      v_lambdas[i] += dtf * a_lambdas[i];
+  */
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
@@ -669,7 +703,7 @@ void FixNHConstantPH::nh_v_temp()
 }
 
 /* ----------------------------------------------------------------------
-   memory usage of Irregular
+   memory usage
 ------------------------------------------------------------------------- */
 
 double FixNHConstantPH::memory_usage()
