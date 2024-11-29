@@ -11,12 +11,20 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   Constant pH support added by: Mahdi Tavakol (Oxford)
+   v0.03.06
+------------------------------------------------------------------------- */
+
 #ifndef LMP_FIX_NH_CONSTANT_PH_H
 #define LMP_FIX_NH_CONSTANT_PH_H
+
+#include <ctime>
 
 #include "fix.h"    // IWYU pragma: export
 #include "fix_constant_pH.h"
 #include "fix_nh.h"
+
 
 namespace LAMMPS_NS {
 
@@ -32,11 +40,20 @@ class FixNHConstantPH : public FixNH {
   void nve_x() override;
   void nve_v() override;
   void nh_v_temp() override;
+  inline static void gaussian_random(double& r1, double& r2)
+  {
+    double u1 = static_cast<double>(std::rand())/static_cast<double>(RAND_MAX);
+    double u2 = static_cast<double>(std::rand())/static_cast<double>(RAND_MAX);
+  
+    r1 = std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
+    r2 = std::sqrt(-2.0 * std::log(u1)) * std::sin(2.0 * M_PI * u2);
+  }
 
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
   char *fix_constant_pH_id;
   double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
+  double T_lambda;
   int n_lambdas;
 
 };
