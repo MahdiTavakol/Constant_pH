@@ -233,15 +233,15 @@ void FixConstantPH::init()
 void FixConstantPH::setup(int /*vflag*/)
 {
    // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
-    w = 200; //50.0;
-    s = 0.3; //0.3;
-    h = 4; //0; //10.0;
-    k = 2.553; //0; //4.417; //6.267;
-    a = 0.034041; //0.04764; //0.04208; //0.05130;
-    b = 0.005238; //0.002957; //0.001411;
-    r = 16.458; //21.428;
-    m = 0.1507; //0.1078;
-    d = 2.0; //3.5; //5.0;
+    w = 200;
+    s = 0.3;
+    h = 4;
+    k = 2.553;
+    a = 0.03401;
+    b = 0.005238;
+    r = 16.458; 
+    m = 0.1507;
+    d = 2.0;
     // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
     m_lambda = 20;
     pair1 = nullptr;
@@ -385,6 +385,16 @@ void FixConstantPH::return_params(double* const _x_lambdas, double* const _v_lam
 }
 
 /* ---------------------------------------------------------------------
+    This one just returns the value of T_lambda
+   --------------------------------------------------------------------- */
+   
+void FixConstantPH::return_T_lambda(double& _T_lambda)
+{
+    calculate_T_lambda();
+    _T_lambda = this->T_lambda;
+}
+
+/* ---------------------------------------------------------------------
     sets the values of the x_lambdas, v_lambdas, ... possibly by the intergrating
     fix styles
     --------------------------------------------------------------------- */
@@ -472,7 +482,6 @@ void FixConstantPH::read_pH_structure_files()
    MPI_Bcast(typePerProtMol,ntypes+1,MPI_INT,0,world);
    MPI_Bcast(pH1qs,ntypes+1,MPI_DOUBLE,0,world);
    MPI_Bcast(pH2qs,ntypes+1,MPI_DOUBLE,0,world);
-   
 }
 
 
@@ -844,20 +853,18 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 
    for (int i = 0; i < n_lambdas; i++) {
       for (int j = 0; j < n_lambda_atoms[i]; j++) {
-	  q[j] = q_prot[j] - q_deprot[j];
+	  //double delta_q = q_prot[j] - q_deprot[j];
 	  // I need to figure out how to identify those atoms
       }
       for (int k = 0; k < n_lambdas; k++) {
 	  if (k == i) continue;
 	  for (int l = 0; l < n_lambda_atoms[k]; l++) {
-	      q[l] = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
+	      //double q = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
               // Double check if the q_prot and q_deprot are in the right place
 	      // how should I identify those atoms
 	  }
       }
       energy_local[i] = 0.0;
-
-      update_lmp();
       if (force->pair) energy_local[i] += force->pair->eng_coul;
       // You need to add the kspace contribution too
    }
@@ -884,13 +891,15 @@ void FixConstantPH::update_a_lambda()
 
    //df = 1.0;
    //f = 1.0;
-   double  f_lambda = -(HB-HA - df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda);
+   double  f_lambda = -(HB-HA - df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda); // I'm not sure about the sign of the df*kT*log(10)*(pK-pH) 
 
    this->a_lambda = f_lambda /m_lambda; // 4.184*0.0001*f_lambda / m_lambda;
    /*#ifdef DEBUG
 	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
    #endif*/
 
+
+   // I am not sure about the sign of the f*kT*log(10)*(pK-pH)
    double  H_lambda = (1-lambda)*HA + lambda*HB - f*kT*log(10*(pK-pH)) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
    // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
 	
@@ -1011,4 +1020,3 @@ double FixConstantPH::memory_usage()
                  pvatom_orig_bytes + keatom_orig_bytes + kvatom_orig_bytes;
   return bytes;
 }
-
