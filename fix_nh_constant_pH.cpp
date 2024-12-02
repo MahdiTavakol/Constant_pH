@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.07
+   v0.03.10
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -663,10 +663,10 @@ void FixNHConstantPH::nh_v_temp()
   FixNH::nh_v_temp();
   
   bigint ntimestep = update->ntimestep;
-  if (ntimestep % 1000) {
+  /*if (ntimestep % 1000) {
     for (int i = 0; i < n_lambdas; i++)
       v_lambdas[i] = 0.0;
-  }
+  }*/
   if (ntimestep % 1) return; 
   
   fix_constant_pH->return_nparams(n_lambdas);
