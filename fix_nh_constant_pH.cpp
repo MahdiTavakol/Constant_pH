@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.12
+   v0.03.10
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -672,7 +672,8 @@ void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
   
-  bool andersen_flag = true;
+  bool andersen_flag = false;
+  bool bussi_flag = true;
   
   
   if (andersen_flag) {
@@ -705,6 +706,26 @@ void FixNHConstantPH::nh_v_temp()
       // This needs to be implemented
       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
+  }
+  
+  if (bussi_flag) {
+     double tau_t = 1000;
+     double dt = update->dt;
+     double t_lambda_current;
+     double t_lambda_target = t_target;
+     fix_constant_pH->return_T_lambda(t_lambda_current);
+
+     
+     double scaling_factor = std::sqrt(t_lambda_target/t_lambda_current);
+
+     if (which == NOBIAS) {
+        double friction = (t_lambda_target/t_lambda_current - 1) / tau_t;
+        zeta += friction * dt; 
+        for (int i = 0; i < n_lambdas; i++) {
+           v_lambdas[i] *= scaling_factor;
+           v_lambdas[i] *= exp(-zeta*t);
+        }
+     }
   }
   
   
