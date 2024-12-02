@@ -49,6 +49,9 @@ class FixNHConstantPH : public FixNH {
   double T_lambda;
   int n_lambdas;
 
+  // Parameter for the Bussi thermostat of the lambda variables
+  double zeta;
+
 };
 
 }    // namespace LAMMPS_NS
