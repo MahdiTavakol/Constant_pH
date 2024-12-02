@@ -615,6 +615,8 @@ void FixNHConstantPH::init()
   m_lambdas = new double[n_lambdas];
   
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+  zeta = 0.0;
 }
 
 /* ----------------------------------------------------------------------
