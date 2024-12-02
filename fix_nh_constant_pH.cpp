@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.10
+   v0.03.12
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -672,33 +672,41 @@ void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
   
-  bigint ntimestep = update->ntimestep;
-
-  double t_andersen = 6000;
-  double dt = update->dt;
-  double kT = force->boltz * T;
-  double P = 1 - std::exp(-dt/t_andersen);
-   
-  /*if (ntimestep % 1000) {
-    for (int i = 0; i < n_lambdas; i++)
-      v_lambdas[i] = 0.0;
-  }*/
+  bool andersen_flag = true;
   
-  fix_constant_pH->return_nparams(n_lambdas);
-  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  
+  if (andersen_flag) {
+    bigint ntimestep = update->ntimestep;
 
-  if (which == NOBIAS) {
-     for (int i = 0; i < n_lambdas; i++) {
+    double t_andersen = 500;
+    double dt = update->dt;
+    double kT = force->boltz * t_target;
+    double P = 1 - std::exp(-dt/t_andersen);
+   
+    /*if (ntimestep % 1000) {
+      for (int i = 0; i < n_lambdas; i++)
+        v_lambdas[i] = 0.0;
+    }*/
+  
+    fix_constant_pH->return_nparams(n_lambdas);
+    fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+    if (which == NOBIAS) {
+      for (int i = 0; i < n_lambdas; i++) {
         double r = static_cast<double>(rand()) / RAND_MAX;
         if (r < P) {
-           double sigma = std::sqrt(kT/ m_lambdas[i]);
-           v_lambdas[i] = random_normal(0.0, sigma);
+           if (comm->me == 0) error->warning(FLERR,"here");
+           double mean = 0.0;
+           double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
+           v_lambdas[i] = random_normal(mean, sigma);
         }
-     }
-  } else if (which == BIAS) {
-     // This needs to be implemented
-     error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+      }
+    } else if (which == BIAS) {
+      // This needs to be implemented
+      error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+    }
   }
+  
   
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
