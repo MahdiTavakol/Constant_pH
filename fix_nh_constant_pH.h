@@ -40,14 +40,7 @@ class FixNHConstantPH : public FixNH {
   void nve_x() override;
   void nve_v() override;
   void nh_v_temp() override;
-  inline static void gaussian_random(double& r1, double& r2)
-  {
-    double u1 = static_cast<double>(std::rand())/static_cast<double>(RAND_MAX);
-    double u2 = static_cast<double>(std::rand())/static_cast<double>(RAND_MAX);
-  
-    r1 = std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
-    r2 = std::sqrt(-2.0 * std::log(u1)) * std::sin(2.0 * M_PI * u2);
-  }
+  double random_normal(double mean, double stddev);
 
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
