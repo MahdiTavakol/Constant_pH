@@ -61,7 +61,7 @@ enum{ISO,ANISO,TRICLINIC};
  ---------------------------------------------------------------------- */
 
 FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
-    FixNH(lmp, narg-2, arg), fix_constant_pH_id(nullptr),
+    FixNH(lmp, narg-3, arg), fix_constant_pH_id(nullptr),
     x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg < 4) utils::missing_cmd_args(FLERR, std::string("fix ") + style, error);
@@ -370,7 +370,8 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
 
     } else if (strcmp(arg[iarg],"fix_constant_pH_id") == 0) {
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
-       iarg += 2;
+       t_andersen = utils::numeric(FLERR,arg[iarg+2],false,lmp);
+       iarg += 3;
 
     } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
   }
@@ -674,14 +675,14 @@ void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
   
-  bool andersen_flag = false;
-  bool bussi_flag = true;
+  bool andersen_flag = true;
+  bool bussi_flag = false;
   
   
   if (andersen_flag) {
     bigint ntimestep = update->ntimestep;
 
-    double t_andersen = 500;
+    //double t_andersen = 500;
     double dt = update->dt;
     double kT = force->boltz * t_target;
     double P = 1 - std::exp(-dt/t_andersen);
@@ -698,7 +699,6 @@ void FixNHConstantPH::nh_v_temp()
       for (int i = 0; i < n_lambdas; i++) {
         double r = static_cast<double>(rand()) / RAND_MAX;
         if (r < P) {
-           if (comm->me == 0) error->warning(FLERR,"here");
            double mean = 0.0;
            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
            v_lambdas[i] = random_normal(mean, sigma);
@@ -721,11 +721,11 @@ void FixNHConstantPH::nh_v_temp()
      double scaling_factor = std::sqrt(t_lambda_target/t_lambda_current);
 
      if (which == NOBIAS) {
-        double friction = (t_lambda_target/t_lambda_current - 1) / tau_t;
+        double friction = (t_lambda_current/t_lambda_target - 1) / tau_t;
         zeta += friction * dt; 
         for (int i = 0; i < n_lambdas; i++) {
            v_lambdas[i] *= scaling_factor;
-           v_lambdas[i] *= exp(-zeta*t);
+           //v_lambdas[i] *= exp(-zeta*dt);
         }
      }
   }
