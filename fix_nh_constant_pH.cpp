@@ -43,6 +43,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <random>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -625,7 +626,6 @@ void FixNHConstantPH::nve_v()
   FixNH::nve_v();
   
   bigint ntimestep = update->ntimestep;
-  if (ntimestep % 1) return; 
   
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
@@ -644,7 +644,6 @@ void FixNHConstantPH::nve_x()
   FixNH::nve_x();
   
   bigint ntimestep = update->ntimestep;
-  if (ntimestep % 1) return; 
   
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
@@ -652,6 +651,17 @@ void FixNHConstantPH::nve_x()
      x_lambdas[i] += dtv * v_lambdas[i];
 
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+}
+
+/* ----------------------------------------------------------------------
+   random number generator
+-----------------------------------------------------------------------*/
+
+double FixNHConstantPH::random_normal(double mean, double stddev)
+{
+  static std::mt19937 generator(std::random_device{}());
+  std::normal_distribution<double> distribution(mean, stddev);
+  return distribution(generator);
 }
 
 /* ----------------------------------------------------------------------
@@ -663,25 +673,27 @@ void FixNHConstantPH::nh_v_temp()
   FixNH::nh_v_temp();
   
   bigint ntimestep = update->ntimestep;
+
+  double t_andersen = 6000;
+  double dt = update->dt;
+  double kT = force->boltz * T;
+  double P = 1 - std::exp(-dt/t_andersen);
+   
   /*if (ntimestep % 1000) {
     for (int i = 0; i < n_lambdas; i++)
       v_lambdas[i] = 0.0;
   }*/
-  if (ntimestep % 1) return; 
   
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
   if (which == NOBIAS) {
      for (int i = 0; i < n_lambdas; i++) {
-        v_lambdas[i] *= factor_eta;
-        /*if (x_lambdas[i] > -0.1 && x_lambdas[i] < 1.1)
-           v_lambdas[i] *= factor_eta;
-           */
-        /*if (x_lambdas[i] < 0.0)
-           v_lambdas[i] = std::abs(a_lambdas[i]);
-        else if (x_lambdas[i] > 1.0)
-           v_lambdas[i] = -std::abs(a_lambdas[i]);*/
+        double r = static_cast<double>(rand()) / RAND_MAX;
+        if (r < P) {
+           double sigma = std::sqrt(kT/ m_lambdas[i]);
+           v_lambdas[i] = random_normal(0.0, sigma);
+        }
      }
   } else if (which == BIAS) {
      // This needs to be implemented
