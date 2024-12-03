@@ -13,7 +13,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.06
+   v0.03.15
 ------------------------------------------------------------------------- */
 
 #ifndef LMP_FIX_NH_CONSTANT_PH_H
@@ -52,6 +52,10 @@ class FixNHConstantPH : public FixNH {
   // Parameter for thermostat of the lambda variables
   double t_andersen;
   double zeta;
+  
+  // Parameters for the Nose-Hoover thermostat
+  double Q_lambda_nose_hoover;
+  double zeta_nose_hoover;
 
 };
 
