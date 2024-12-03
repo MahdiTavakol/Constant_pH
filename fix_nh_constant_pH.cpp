@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.13
+   v0.03.15
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -618,6 +618,10 @@ void FixNHConstantPH::init()
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
   zeta = 0.0;
+  
+  
+  Q_lambda_nose_hoover = 10.0;
+  zeta_nose_hoover = 0.0;
 }
 
 /* ----------------------------------------------------------------------
@@ -675,8 +679,9 @@ void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
   
-  bool andersen_flag = true;
+  bool andersen_flag = false;
   bool bussi_flag = false;
+  bool nose_hoover_flag = true;
   
   
   if (andersen_flag) {
@@ -728,6 +733,22 @@ void FixNHConstantPH::nh_v_temp()
            //v_lambdas[i] *= exp(-zeta*dt);
         }
      }
+  }
+  
+  if (nose_hoover_flag) {
+     double dt = update->dt;
+     double t_lambda_current;
+     double t_lambda_target = t_target;
+     
+     fix_constant_pH->return_T_lambda(t_lambda_current);
+     fix_constant_pH->return_nparams(n_lambdas);
+     fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  
+  
+     zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
+     
+     for (int i = 0; i < n_lambdas; i++)
+        v_lambdas[i] *= std::exp(-zeta_nose_hoover * dt);
   }
   
   
