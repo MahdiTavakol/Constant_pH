@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.16
+   v0.03.21
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -679,7 +679,7 @@ void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
   
-  bool andersen_flag = false;
+  bool andersen_flag = true;
   bool bussi_flag = false;
   bool nose_hoover_flag = false;
   
