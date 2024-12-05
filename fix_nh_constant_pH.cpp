@@ -681,7 +681,7 @@ void FixNHConstantPH::nh_v_temp()
   
   bool andersen_flag = false;
   bool bussi_flag = false;
-  bool nose_hoover_flag = true;
+  bool nose_hoover_flag = false;
   
   
   if (andersen_flag) {
