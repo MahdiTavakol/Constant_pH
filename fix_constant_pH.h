@@ -46,7 +46,7 @@ namespace LAMMPS_NS {
 
      private:
 	// Sturcture files
-        FILE *pHStructureFile;
+        FILE **pHStructureFiles;
 
 	// Atom types and charges that change due to protonation
         int pHnTypes;
