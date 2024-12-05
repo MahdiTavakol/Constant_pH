@@ -705,7 +705,7 @@ void FixNHConstantPH::nh_v_temp()
       for (int i = 0; i < n_lambdas; i++) {
         double r = static_cast<double>(rand()) / RAND_MAX;
         fix_constant_pH->return_T_lambda(t_lambda_current);
-        if (r < P || t_lambda_current > 600.0) {
+        if (r < P || t_lambda_current > 500.0) {
            double mean = 0.0;
            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
            v_lambdas[i] = random_normal(mean, sigma);
