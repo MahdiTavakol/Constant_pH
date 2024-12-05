@@ -70,7 +70,7 @@ namespace LAMMPS_NS {
 	int pdim1;
 
 	// Lambda dynamics
-	double lambda, v_lambda, a_lambda, m_lambda;
+	double lambda, v_lambda, a_lambda, m_lambda, H_lambda;
 
         // Lambda arrays
         double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas;
