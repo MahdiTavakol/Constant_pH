@@ -55,22 +55,34 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
   if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
   // Reading the file that contains the charges before and after protonation/deprotonation
-  if (comm->me == 0) {
-      pHStructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
-      if (pHStructureFile == nullptr)
-         error->all(FLERR,"Unable to open the file");
+  nProtonableMols = utils::numeric(FLERR,arg[4],lmp);
+
+  //
+  molids = new int[nProtonableMols];
+  pKas = new int[nProtonableMols];
+  pHStructureFiles = new FILE*[nProtonableMols];
+
+  //
+  int iarg = 4;
+  for (int i = 0; i < nProtonableMols; i++) {
+     int molid = utils::numeric(FLERR,arg[iarg+1],lmp);
+     pKas[i] = utils::numeric(FLERR,arg[iarg+2],lmp);
+     if (comm->me == 0) {
+	pHStructureFiles[i] = fopen(arg[iarg+3],lmp);
+	if (pHStructureFiles[i] == nullptr)
+	   error->all(FLERR,"Unable to open the file");
+     }
+     iarg+= 3;
   }
+	
   // Hydronium ion hydrogen atoms
-  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
+  typeHW = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
   if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
   // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
 
-	
-  pK = utils::numeric(FLERR, arg[6], false, lmp);
-  pH = utils::numeric(FLERR, arg[7], false, lmp);
-  T = utils::numeric(FLERR, arg[8], false, lmp);
-  
-  pstyle = utils::strdup(arg[9]);
+  pH = utils::numeric(FLERR, arg[iarg+2], false, lmp);
+  T = utils::numeric(FLERR, arg[iarg+3], false, lmp);
+  iarg += 3;
   
 
 
@@ -151,6 +163,15 @@ FixConstantPH::~FixConstantPH()
    if (v_lambdas) delete [] v_lambdas;
    if (a_lambdas) delete [] a_lambdas;
    if (m_lambdas) delete [] m_lambdas;
+   if (molids) delete [] molids;
+   if (pKas) delete [] pKas;
+
+   if (comm->me == 0) {
+       for (int i = 0; i < nProtonableMols; i++)
+	   if (pHStructureFiles[i])
+		fclose(pHStructureFiles[i]);
+   }
+   delete [] pHStructureFiles;
 
    deallocate_storage();
 
