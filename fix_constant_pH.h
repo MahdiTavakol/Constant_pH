@@ -48,12 +48,16 @@ namespace LAMMPS_NS {
 	// Sturcture files
         FILE **pHStructureFiles;
 
-	// Atom types and charges that change due to protonation
+	// Atom types and charges that change due to protonation for each protonable group
+        int nProtonableMols;
         int *pHnTypes;
         double **pH1qs, **pH2qs;
         int **typePerProtMol;
-        int **protonable;
 	int *pKs;
+	int *molids;
+
+	// Labeling the protonable atoms
+        int *protonable;
 
 	// Input variables for constant values
 	int typeHW;
