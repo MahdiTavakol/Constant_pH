@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.15
+   v0.03.16
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -690,6 +690,7 @@ void FixNHConstantPH::nh_v_temp()
     //double t_andersen = 500;
     double dt = update->dt;
     double kT = force->boltz * t_target;
+    double t_lambda_current;
     double P = 1 - std::exp(-dt/t_andersen);
    
     /*if (ntimestep % 1000) {
@@ -703,7 +704,8 @@ void FixNHConstantPH::nh_v_temp()
     if (which == NOBIAS) {
       for (int i = 0; i < n_lambdas; i++) {
         double r = static_cast<double>(rand()) / RAND_MAX;
-        if (r < P) {
+        fix_constant_pH->return_T_lambda(t_lambda_current);
+        if (r < P || t_lambda_current > 800.0) {
            double mean = 0.0;
            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
            v_lambdas[i] = random_normal(mean, sigma);
