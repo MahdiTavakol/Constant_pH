@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.03.02----- */
+/* ---v0.03.20----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -992,7 +992,7 @@ double FixConstantPH::compute_vector(int i)
         calculate_T_lambda();
         return T_lambda;
       case 9:
-        return a_etha_v_ratio_lambda;
+        return H_lambda;
    }
    return 0.0;
 }
