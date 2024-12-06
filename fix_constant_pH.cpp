@@ -11,760 +11,996 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
+/* ---v0.04.02----- */
 
-/* ----------------------------------------------------------------------
-   Contributing authors: Mark Stevens (SNL), Aidan Thompson (SNL)
-------------------------------------------------------------------------- */
+#define DEBUG
+#ifdef DEBUG
+#include <iostream>
+#endif
+#include <random>
 
-/* ----------------------------------------------------------------------
-   Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.21
-------------------------------------------------------------------------- */
-
+#include "fix.h"
 #include "fix_constant_pH.h"
-#include "fix_nh_constant_pH.h"
-
 
 #include "atom.h"
-#include "comm.h"
-#include "compute.h"
-#include "domain.h"
+#include "atom_masks.h"
 #include "error.h"
-#include "fix_deform.h"
+
 #include "force.h"
 #include "group.h"
-#include "irregular.h"
-#include "kspace.h"
 #include "memory.h"
-#include "modify.h"
-#include "neighbor.h"
-#include "respa.h"
+#include "pair.h"
+#include "timer.h"
+#include "comm.h"
+#include "kspace.h"
 #include "update.h"
+#include "math_const.h"
+#include "modify.h"
 
-#include <cmath>
 #include <cstring>
-#include <random>
+#include <string>
+#include <map>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
+using namespace MathConst;
 
-static constexpr double DELTAFLIP = 0.1;
-static constexpr double TILTMAX = 1.5;
-static constexpr double EPSILON = 1.0e-6;
+/* ---------------------------------------------------------------------- */
 
-enum{NOBIAS,BIAS};
-enum{NONE,XYZ,XY,YZ,XZ};
-enum{ISO,ANISO,TRICLINIC};
-
-/* ----------------------------------------------------------------------
-   NVT,NPH,NPT integrators for improved Nose-Hoover equations of motion
- ---------------------------------------------------------------------- */
-
-FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
-    FixNH(lmp, narg-3, arg), fix_constant_pH_id(nullptr),
-    x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
+FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, arg), 
+       lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr), H_lambdas(nullptr),
+       protonable(nullptr), typePerProtMol(nullptr), pH1qs(nullptr), pH2qs(nullptr),
+       HAs(nullptr), HBs(nullptr), GFF_lambdas(nullptr), molids(nullptr),
+       fs(nullptr), dfs(nullptr), Us(nullptr), dUs(nullptr),
+       GFF(nullptr),
+       q_orig(nullptr), f_orig(nullptr),
+       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr)
 {
-  if (narg < 4) utils::missing_cmd_args(FLERR, std::string("fix ") + style, error);
-
-  restart_global = 1;
-  dynamic_group_allow = 1;
-  time_integrate = 1;
-  scalar_flag = 1;
-  vector_flag = 1;
-  global_freq = 1;
-  extscalar = 1;
-  extvector = 0;
-  ecouple_flag = 1;
-
-  // default values
-
-  pcouple = NONE;
-  drag = 0.0;
-  allremap = 1;
-  id_dilate = nullptr;
-  mtchain = mpchain = 3;
-  nc_tchain = nc_pchain = 1;
-  mtk_flag = 1;
-  deviatoric_flag = 0;
-  nreset_h0 = 0;
-  eta_mass_flag = 1;
-  omega_mass_flag = 0;
-  etap_mass_flag = 0;
-  flipflag = 1;
-  dipole_flag = 0;
-  dlm_flag = 0;
-  p_temp_flag = 0;
-
-  tcomputeflag = 0;
-  pcomputeflag = 0;
-
-  // turn on tilt factor scaling, whenever applicable
-
-  dimension = domain->dimension;
-
-  scaleyz = scalexz = scalexy = 0;
-  if (domain->yperiodic && domain->xy != 0.0) scalexy = 1;
-  if (domain->zperiodic && dimension == 3) {
-    if (domain->yz != 0.0) scaleyz = 1;
-    if (domain->xz != 0.0) scalexz = 1;
+  if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
+  nevery = utils::inumeric(FLERR,arg[3],false,lmp);
+  if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
+  // Reading the file that contains the charges before and after protonation/deprotonation
+  if (comm->me == 0) {
+      pHStructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
+      if (pHStructureFile == nullptr)
+         error->all(FLERR,"Unable to open the file");
   }
+  // Hydronium ion hydrogen atoms
+  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
+  if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
+  // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
 
-  // set fixed-point to default = center of cell
+	
+  pK = utils::numeric(FLERR, arg[6], false, lmp);
+  pH = utils::numeric(FLERR, arg[7], false, lmp);
+  T = utils::numeric(FLERR, arg[8], false, lmp);
+  
 
-  fixedpoint[0] = 0.5*(domain->boxlo[0]+domain->boxhi[0]);
-  fixedpoint[1] = 0.5*(domain->boxlo[1]+domain->boxhi[1]);
-  fixedpoint[2] = 0.5*(domain->boxlo[2]+domain->boxhi[2]);
 
-  // used by FixNVTSllod to preserve non-default value
+  qHs = 0.0;
+  qHWs = 0.0; //0.278;
 
-  mtchain_default_flag = 1;
-
-  tstat_flag = 0;
-  double t_period = 0.0;
-
-  double p_period[6];
-  for (int i = 0; i < 6; i++) {
-    p_start[i] = p_stop[i] = p_period[i] = p_target[i] = 0.0;
-    p_flag[i] = 0;
-  }
-
-  // process keywords
-
-  int iarg = 3;
-
+  GFF_flag = false;
+  print_Udwp_flag = false;
+  n_lambdas = 1;
+  int iarg = 9;
   while (iarg < narg) {
-    if (strcmp(arg[iarg],"temp") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} temp", style), error);
-      tstat_flag = 1;
-      t_start = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      t_target = t_start;
-      t_stop = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      t_period = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      if (t_start <= 0.0 || t_stop <= 0.0)
-        error->all(FLERR, "Target temperature for fix {} cannot be 0.0", style);
-      iarg += 4;
-
-    } else if (strcmp(arg[iarg],"iso") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} iso", style), error);
-      pcouple = XYZ;
-      p_start[0] = p_start[1] = p_start[2] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[0] = p_stop[1] = p_stop[2] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[0] = p_period[1] = p_period[2] =
-        utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[0] = p_flag[1] = p_flag[2] = 1;
-      if (dimension == 2) {
-        p_start[2] = p_stop[2] = p_period[2] = 0.0;
-        p_flag[2] = 0;
-      }
-      iarg += 4;
-    } else if (strcmp(arg[iarg],"aniso") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} aniso", style), error);
-      pcouple = NONE;
-      p_start[0] = p_start[1] = p_start[2] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[0] = p_stop[1] = p_stop[2] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[0] = p_period[1] = p_period[2] =
-        utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[0] = p_flag[1] = p_flag[2] = 1;
-      if (dimension == 2) {
-        p_start[2] = p_stop[2] = p_period[2] = 0.0;
-        p_flag[2] = 0;
-      }
-      iarg += 4;
-    } else if (strcmp(arg[iarg],"tri") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} tri", style), error);
-      pcouple = NONE;
-      scalexy = scalexz = scaleyz = 0;
-      p_start[0] = p_start[1] = p_start[2] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[0] = p_stop[1] = p_stop[2] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[0] = p_period[1] = p_period[2] =
-        utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[0] = p_flag[1] = p_flag[2] = 1;
-      p_start[3] = p_start[4] = p_start[5] = 0.0;
-      p_stop[3] = p_stop[4] = p_stop[5] = 0.0;
-      p_period[3] = p_period[4] = p_period[5] =
-        utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[3] = p_flag[4] = p_flag[5] = 1;
-      if (dimension == 2) {
-        p_start[2] = p_stop[2] = p_period[2] = 0.0;
-        p_flag[2] = 0;
-        p_start[3] = p_stop[3] = p_period[3] = 0.0;
-        p_flag[3] = 0;
-        p_start[4] = p_stop[4] = p_period[4] = 0.0;
-        p_flag[4] = 0;
-      }
-      iarg += 4;
-    } else if (strcmp(arg[iarg],"x") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} x", style), error);
-      p_start[0] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[0] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[0] = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[0] = 1;
-      deviatoric_flag = 1;
-      iarg += 4;
-    } else if (strcmp(arg[iarg],"y") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} y", style), error);
-      p_start[1] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[1] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[1] = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[1] = 1;
-      deviatoric_flag = 1;
-      iarg += 4;
-    } else if (strcmp(arg[iarg],"z") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} z", style), error);
-      p_start[2] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[2] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[2] = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[2] = 1;
-      deviatoric_flag = 1;
-      iarg += 4;
-      if (dimension == 2) error->all(FLERR,"Invalid fix {} command for a 2d simulation", style);
-
-    } else if (strcmp(arg[iarg],"yz") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} yz", style), error);
-      p_start[3] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[3] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[3] = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[3] = 1;
-      deviatoric_flag = 1;
-      scaleyz = 0;
-      iarg += 4;
-      if (dimension == 2) error->all(FLERR,"Invalid fix {} command for a 2d simulation", style);
-    } else if (strcmp(arg[iarg],"xz") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} xz", style), error);
-      p_start[4] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[4] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[4] = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[4] = 1;
-      deviatoric_flag = 1;
-      scalexz = 0;
-      iarg += 4;
-      if (dimension == 2) error->all(FLERR,"Invalid fix {} command for a 2d simulation", style);
-    } else if (strcmp(arg[iarg],"xy") == 0) {
-      if (iarg+4 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} xy", style), error);
-      p_start[5] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_stop[5] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      p_period[5] = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      p_flag[5] = 1;
-      deviatoric_flag = 1;
-      scalexy = 0;
-      iarg += 4;
-
-    } else if (strcmp(arg[iarg],"couple") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} couple", style), error);
-      if (strcmp(arg[iarg+1],"xyz") == 0) pcouple = XYZ;
-      else if (strcmp(arg[iarg+1],"xy") == 0) pcouple = XY;
-      else if (strcmp(arg[iarg+1],"yz") == 0) pcouple = YZ;
-      else if (strcmp(arg[iarg+1],"xz") == 0) pcouple = XZ;
-      else if (strcmp(arg[iarg+1],"none") == 0) pcouple = NONE;
-      else error->all(FLERR,"Illegal fix {} couple option: {}", style, arg[iarg+1]);
-      iarg += 2;
-
-    } else if (strcmp(arg[iarg],"drag") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} drag", style), error);
-      drag = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      if (drag < 0.0) error->all(FLERR, "Invalid fix {} drag argument: {}", style, drag);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"ptemp") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} ptemp", style), error);
-      p_temp = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      p_temp_flag = 1;
-      if (p_temp <= 0.0) error->all(FLERR, "Invalid fix {} ptemp argument: {}", style, p_temp);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"dilate") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} dilate", style), error);
-      if (strcmp(arg[iarg+1],"all") == 0) allremap = 1;
-      else {
-        allremap = 0;
-        delete[] id_dilate;
-        id_dilate = utils::strdup(arg[iarg+1]);
-        int idilate = group->find(id_dilate);
-        if (idilate == -1)
-          error->all(FLERR,"Fix {} dilate group ID {} does not exist", style, id_dilate);
-      }
-      iarg += 2;
-
-    } else if (strcmp(arg[iarg],"tchain") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} tchain", style), error);
-      mtchain = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
-      // used by FixNVTSllod to preserve non-default value
-      mtchain_default_flag = 0;
-      if (mtchain < 1) error->all(FLERR, "Invalid fix {} tchain argument: {}", style, mtchain);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"pchain") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} pchain", style), error);
-      mpchain = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
-      if (mpchain < 0) error->all(FLERR, "Invalid fix {} pchain argument: {}", style, mpchain);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"mtk") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} mtk", style), error);
-      mtk_flag = utils::logical(FLERR,arg[iarg+1],false,lmp);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"tloop") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} tloop", style), error);
-      nc_tchain = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
-      if (nc_tchain < 0) error->all(FLERR, "Invalid fix {} tloop argument: {}", style, nc_tchain);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"ploop") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} ploop", style), error);
-      nc_pchain = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
-      if (nc_pchain < 0) error->all(FLERR, "Invalid fix {} ploop argument: {}", style, nc_pchain);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"nreset") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} nreset", style), error);
-      nreset_h0 = utils::inumeric(FLERR,arg[iarg+1],false,lmp);
-      if (nreset_h0 < 0) error->all(FLERR, "Invalid fix {} nreset argument: {}", style, nreset_h0);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"scalexy") == 0) {
-      if (iarg+2 > narg)
-        utils::missing_cmd_args(FLERR, fmt::format("fix {} scalexy", style), error);
-      scalexy = utils::logical(FLERR,arg[iarg+1],false,lmp);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"scalexz") == 0) {
-      if (iarg+2 > narg)
-        utils::missing_cmd_args(FLERR, fmt::format("fix {} scalexz", style), error);
-      scalexz = utils::logical(FLERR,arg[iarg+1],false,lmp);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"scaleyz") == 0) {
-      if (iarg+2 > narg)
-        utils::missing_cmd_args(FLERR, fmt::format("fix {} scaleyz", style), error);
-      scaleyz = utils::logical(FLERR,arg[iarg+1],false,lmp);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"flip") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} flip", style), error);
-      flipflag = utils::logical(FLERR,arg[iarg+1],false,lmp);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"update") == 0) {
-      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} update", style), error);
-      if (strcmp(arg[iarg+1],"dipole") == 0) dipole_flag = 1;
-      else if (strcmp(arg[iarg+1],"dipole/dlm") == 0) {
-        dipole_flag = 1;
-        dlm_flag = 1;
-      } else error->all(FLERR, "Invalid fix {} update argument: {}", style, arg[iarg+1]);
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"fixedpoint") == 0) {
-      if (iarg+4 > narg)
-        utils::missing_cmd_args(FLERR, fmt::format("fix {} fixedpoint", style), error);
-      fixedpoint[0] = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      fixedpoint[1] = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-      fixedpoint[2] = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-      iarg += 4;
-
-    // disc keyword is also parsed in fix/nh/sphere
-
-    } else if (strcmp(arg[iarg],"disc") == 0) {
-      iarg++;
-
-    // keywords erate, strain, and ext are also parsed in fix/nh/uef
-
-    } else if (strcmp(arg[iarg],"erate") == 0) {
-      iarg += 3;
-    } else if (strcmp(arg[iarg],"strain") == 0) {
-      iarg += 3;
-    } else if (strcmp(arg[iarg],"ext") == 0) {
-      iarg += 2;
-
-    // keyword psllod is parsed in fix/nvt/sllod
-
-    } else if (strcmp(arg[iarg],"psllod") == 0) {
-      iarg += 2;
-
-    } else if (strcmp(arg[iarg],"fix_constant_pH_id") == 0) {
-       fix_constant_pH_id = utils::strdup(arg[iarg+1]);
-       t_andersen = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-       iarg += 3;
-
-    } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
-  }
-
-  if (fix_constant_pH_id == nullptr) error->all(FLERR, "Invalid fix_nh constant_pH");
-
-  // error checks
-
-  if (dimension == 2 && (p_flag[2] || p_flag[3] || p_flag[4]))
-    error->all(FLERR,"Invalid fix {} command for a 2d simulation", style);
-  if (dimension == 2 && (pcouple == YZ || pcouple == XZ))
-    error->all(FLERR,"Invalid fix {} command for a 2d simulation", style);
-  if (dimension == 2 && (scalexz == 1 || scaleyz == 1 ))
-    error->all(FLERR,"Invalid fix {} command for a 2d simulation", style);
-
-  if (pcouple == XYZ && (p_flag[0] == 0 || p_flag[1] == 0))
-    error->all(FLERR,"Invalid fix {} command pressure settings", style);
-  if (pcouple == XYZ && dimension == 3 && p_flag[2] == 0)
-    error->all(FLERR,"Invalid fix {} command pressure settings", style);
-  if (pcouple == XY && (p_flag[0] == 0 || p_flag[1] == 0))
-    error->all(FLERR,"Invalid fix {} command pressure settings", style);
-  if (pcouple == YZ && (p_flag[1] == 0 || p_flag[2] == 0))
-    error->all(FLERR,"Invalid fix {} command pressure settings", style);
-  if (pcouple == XZ && (p_flag[0] == 0 || p_flag[2] == 0))
-    error->all(FLERR,"Invalid fix {} command pressure settings", style);
-
-  // require periodicity in tensile dimension
-
-  if (p_flag[0] && domain->xperiodic == 0)
-    error->all(FLERR,"Cannot use fix {} on a non-periodic x dimension", style);
-  if (p_flag[1] && domain->yperiodic == 0)
-    error->all(FLERR,"Cannot use fix {} on a non-periodic y dimension", style);
-  if (p_flag[2] && domain->zperiodic == 0)
-    error->all(FLERR,"Cannot use fix {} on a non-periodic z dimension", style);
-
-  // require periodicity in 2nd dim of off-diagonal tilt component
-
-  if (p_flag[3] && domain->zperiodic == 0)
-    error->all(FLERR, "Cannot use fix {} on a 2nd non-periodic dimension", style);
-  if (p_flag[4] && domain->zperiodic == 0)
-    error->all(FLERR, "Cannot use fix {} on a 2nd non-periodic dimension", style);
-  if (p_flag[5] && domain->yperiodic == 0)
-    error->all(FLERR, "Cannot use fix {} on a 2nd non-periodic dimension", style);
-
-  if (scaleyz == 1 && domain->zperiodic == 0)
-    error->all(FLERR,"Cannot use fix {} with yz scaling when z is non-periodic dimension", style);
-  if (scalexz == 1 && domain->zperiodic == 0)
-    error->all(FLERR,"Cannot use fix {} with xz scaling when z is non-periodic dimension", style);
-  if (scalexy == 1 && domain->yperiodic == 0)
-    error->all(FLERR,"Cannot use fix {} with xy scaling when y is non-periodic dimension", style);
-
-  if (p_flag[3] && scaleyz == 1)
-    error->all(FLERR,"Cannot use fix {} with both yz dynamics and yz scaling", style);
-  if (p_flag[4] && scalexz == 1)
-    error->all(FLERR,"Cannot use fix {} with both xz dynamics and xz scaling", style);
-  if (p_flag[5] && scalexy == 1)
-    error->all(FLERR,"Cannot use fix {} with both xy dynamics and xy scaling", style);
-
-  if (!domain->triclinic && (p_flag[3] || p_flag[4] || p_flag[5]))
-    error->all(FLERR,"Can not specify Pxy/Pxz/Pyz in fix {} with non-triclinic box", style);
-
-  if (pcouple == XYZ && dimension == 3 &&
-      (p_start[0] != p_start[1] || p_start[0] != p_start[2] ||
-       p_stop[0] != p_stop[1] || p_stop[0] != p_stop[2] ||
-       p_period[0] != p_period[1] || p_period[0] != p_period[2]))
-    error->all(FLERR,"Invalid fix {} pressure settings", style);
-  if (pcouple == XYZ && dimension == 2 &&
-      (p_start[0] != p_start[1] || p_stop[0] != p_stop[1] ||
-       p_period[0] != p_period[1]))
-    error->all(FLERR,"Invalid fix {} pressure settings", style);
-  if (pcouple == XY &&
-      (p_start[0] != p_start[1] || p_stop[0] != p_stop[1] ||
-       p_period[0] != p_period[1]))
-    error->all(FLERR,"Invalid fix {} pressure settings", style);
-  if (pcouple == YZ &&
-      (p_start[1] != p_start[2] || p_stop[1] != p_stop[2] ||
-       p_period[1] != p_period[2]))
-    error->all(FLERR,"Invalid fix {} pressure settings", style);
-  if (pcouple == XZ &&
-      (p_start[0] != p_start[2] || p_stop[0] != p_stop[2] ||
-       p_period[0] != p_period[2]))
-    error->all(FLERR,"Invalid fix {} pressure settings", style);
-
-  if (dipole_flag) {
-    if (strstr(style, "/sphere")) {
-      if (!atom->omega_flag)
-        error->all(FLERR,"Using update dipole flag requires atom attribute omega");
-      if (!atom->radius_flag)
-        error->all(FLERR,"Using update dipole flag requires atom attribute radius");
-      if (!atom->mu_flag)
-        error->all(FLERR,"Using update dipole flag requires atom attribute mu");
-    } else {
-      error->all(FLERR, "Must use a '/sphere' Nose-Hoover fix style for updating dipoles");
+    if (strcmp(arg[iarg], "GFF") == 0)
+    {
+       GFF_flag = true;
+       fp = fopen(arg[iarg+1],"r");
+       if (fp == nullptr)
+         error->one(FLERR, "Cannot find fix constant_pH the GFF correction file {}",arg[iarg+1]);
+       iarg = iarg + 2;
     }
-  }
-
-  if ((tstat_flag && t_period <= 0.0) ||
-      (p_flag[0] && p_period[0] <= 0.0) ||
-      (p_flag[1] && p_period[1] <= 0.0) ||
-      (p_flag[2] && p_period[2] <= 0.0) ||
-      (p_flag[3] && p_period[3] <= 0.0) ||
-      (p_flag[4] && p_period[4] <= 0.0) ||
-      (p_flag[5] && p_period[5] <= 0.0))
-    error->all(FLERR,"Fix {} damping parameters must be > 0.0", style);
-
-  // check that ptemp is not defined with a thermostat
-  if (tstat_flag && p_temp_flag)
-    error->all(FLERR,"Thermostat in fix {} is incompatible with ptemp command", style);
-
-  // set pstat_flag and box change and restart_pbc variables
-
-  pre_exchange_flag = 0;
-  pstat_flag = 0;
-  pstyle = ISO;
-
-  for (int i = 0; i < 6; i++)
-    if (p_flag[i]) pstat_flag = 1;
-
-  if (pstat_flag) {
-    if (p_flag[0]) box_change |= BOX_CHANGE_X;
-    if (p_flag[1]) box_change |= BOX_CHANGE_Y;
-    if (p_flag[2]) box_change |= BOX_CHANGE_Z;
-    if (p_flag[3]) box_change |= BOX_CHANGE_YZ;
-    if (p_flag[4]) box_change |= BOX_CHANGE_XZ;
-    if (p_flag[5]) box_change |= BOX_CHANGE_XY;
-    no_change_box = 1;
-    if (allremap == 0) restart_pbc = 1;
-
-    // pstyle = TRICLINIC if any off-diagonal term is controlled -> 6 dof
-    // else pstyle = ISO if XYZ coupling or XY coupling in 2d -> 1 dof
-    // else pstyle = ANISO -> 3 dof
-
-    if (p_flag[3] || p_flag[4] || p_flag[5]) pstyle = TRICLINIC;
-    else if (pcouple == XYZ || (dimension == 2 && pcouple == XY)) pstyle = ISO;
-    else pstyle = ANISO;
-
-    // pre_exchange only required if flips can occur due to shape changes
-
-    if (flipflag && (p_flag[3] || p_flag[4] || p_flag[5]))
-      pre_exchange_flag = pre_exchange_migrate = 1;
-    if (flipflag && (domain->yz != 0.0 || domain->xz != 0.0 ||
-                     domain->xy != 0.0))
-      pre_exchange_flag = pre_exchange_migrate = 1;
-  }
-
-  // convert input periods to frequencies
-
-  t_freq = 0.0;
-  p_freq[0] = p_freq[1] = p_freq[2] = p_freq[3] = p_freq[4] = p_freq[5] = 0.0;
-
-  if (tstat_flag) t_freq = 1.0 / t_period;
-  if (p_flag[0]) p_freq[0] = 1.0 / p_period[0];
-  if (p_flag[1]) p_freq[1] = 1.0 / p_period[1];
-  if (p_flag[2]) p_freq[2] = 1.0 / p_period[2];
-  if (p_flag[3]) p_freq[3] = 1.0 / p_period[3];
-  if (p_flag[4]) p_freq[4] = 1.0 / p_period[4];
-  if (p_flag[5]) p_freq[5] = 1.0 / p_period[5];
-
-  // Nose/Hoover temp and pressure init
-
-  size_vector = 0;
-
-  if (tstat_flag) {
-    int ich;
-    eta = new double[mtchain];
-
-    // add one extra dummy thermostat, set to zero
-
-    eta_dot = new double[mtchain+1];
-    eta_dot[mtchain] = 0.0;
-    eta_dotdot = new double[mtchain];
-    for (ich = 0; ich < mtchain; ich++) {
-      eta[ich] = eta_dot[ich] = eta_dotdot[ich] = 0.0;
+    else if ((strcmp(arg[iarg],"Qs") == 0))
+    {
+       qHs = utils::numeric(FLERR, arg[iarg+1],false,lmp);
+       qHWs = utils::numeric(FLERR, arg[iarg+2],false,lmp);
+       iarg = iarg + 3;
     }
-    eta_mass = new double[mtchain];
-    size_vector += 2*2*mtchain;
-  }
-
-  if (pstat_flag) {
-    omega[0] = omega[1] = omega[2] = 0.0;
-    omega_dot[0] = omega_dot[1] = omega_dot[2] = 0.0;
-    omega_mass[0] = omega_mass[1] = omega_mass[2] = 0.0;
-    omega[3] = omega[4] = omega[5] = 0.0;
-    omega_dot[3] = omega_dot[4] = omega_dot[5] = 0.0;
-    omega_mass[3] = omega_mass[4] = omega_mass[5] = 0.0;
-    if (pstyle == ISO) size_vector += 2*2*1;
-    else if (pstyle == ANISO) size_vector += 2*2*3;
-    else if (pstyle == TRICLINIC) size_vector += 2*2*6;
-
-    if (mpchain) {
-      int ich;
-      etap = new double[mpchain];
-
-      // add one extra dummy thermostat, set to zero
-
-      etap_dot = new double[mpchain+1];
-      etap_dot[mpchain] = 0.0;
-      etap_dotdot = new double[mpchain];
-      for (ich = 0; ich < mpchain; ich++) {
-        etap[ich] = etap_dot[ich] =
-          etap_dotdot[ich] = 0.0;
-      }
-      etap_mass = new double[mpchain];
-      size_vector += 2*2*mpchain;
+    else if ((strcmp(arg[iarg],"Print_Udwp") == 0))
+    {
+	print_Udwp_flag = true;
+	Udwp_fp = fopen(arg[iarg+1],"w");
+	if (Udwp_fp == nullptr) 
+	    error->one(FLERR, "Cannot find fix constant_pH the Udwp debugging file {}",arg[iarg+1]);
+	iarg = iarg + 2;
     }
+    else if ((strcmp(arg[iarg],"molids") == 0)) {
+	n_lambdas = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	memory->create(molids,n_lambdas,"constant_pH:lambdas");
+	iarg+=2;
+	for (int i = 0; i < n_lambdas; i++) {
+	    molids[i] = utils::numeric(FLERR,arg[iarg],false,lmp);
+	    iarg++;
+	}
+    }
+    else
+       error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
+   }
+  
+   fixgpu = nullptr;
+  
+  
+  
+   array_flag = 1;
+   size_array_rows = 10;
+   size_array_cols = n_lambdas;
 
-    if (deviatoric_flag) size_vector += 1;
-  }
-
-  if (pre_exchange_flag) irregular = new Irregular(lmp);
-  else irregular = nullptr;
-
-  // initialize vol0,t0 to zero to signal uninitialized
-  // values then assigned in init(), if necessary
-
-  vol0 = t0 = 0.0;
 }
 
 /* ---------------------------------------------------------------------- */
 
-FixNHConstantPH::~FixNHConstantPH()
+FixConstantPH::~FixConstantPH()
 {
-  FixNH::~FixNH();
-  if (fix_constant_pH_id) delete [] fix_constant_pH_id;
-  if (x_lambdas) delete [] x_lambdas;
-  if (v_lambdas) delete [] v_lambdas;
-  if (a_lambdas) delete [] a_lambdas;
-  if (m_lambdas) delete [] m_lambdas; 
+   if (lambdas)   memory->destroy(lambdas);
+   if (v_lambdas) memory->destroy(v_lambdas);
+   if (a_lambdas) memory->destroy(a_lambdas);
+   if (m_lambdas) memory->destroy(m_lambdas);
+   if (H_lambdas) memory->destroy(H_lambdas);
+   if (protonable) memory->destroy(protonable);
+   if (typePerProtMol) memory->destroy(typePerProtMol);
+   if (pH1qs) memory->destroy(pH1qs);
+   if (pH2qs) memory->destroy(pH2qs);
+   if (HAs) memory->destroy(HAs);
+   if (HBs) memory->destroy(HBs);
+   if (GFF_lambdas) memory->destroy(GFF_lambdas);
+   if (molids) memory->destroy(molids);
+   if (fs) memory->destroy(fs);
+   if (dfs) memory->destroy(dfs);
+   if (Us) memory->destroy(Us);
+   if (dUs) memory->destroy(dUs);
+
+   if (GFF) memory->destroy(GFF);
+   
+
+   deallocate_storage();
+
+   if (fp && (comm->me == 0)) fclose(fp);
+   if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
+}
+
+/* ----------------------------------------------------------------------
+
+   ---------------------------------------------------------------------- */
+
+int FixConstantPH::setmask()
+{
+   int mask = 0;
+   mask |= INITIAL_INTEGRATE; // Calculates the a_lambda
+   return mask;	
+}
+
+/* ----------------------------------------------------------------------
+   Setup
+   ---------------------------------------------------------------------- */
+   
+void FixConstantPH::init()
+{
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixNHConstantPH::init()
+void FixConstantPH::setup(int /*vflag*/)
 {
-  FixNH::init();
-  fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
-  fix_constant_pH->return_nparams(n_lambdas);
-   
-  x_lambdas = new double[n_lambdas];
-  v_lambdas = new double[n_lambdas];
-  a_lambdas = new double[n_lambdas];
-  m_lambdas = new double[n_lambdas];
-  
-  std::srand(static_cast<unsigned int>(std::time(nullptr)));
+   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
+    w = 200;
+    s = 0.3;
+    h = 4;
+    k = 2.553;
+    a = 0.03401;
+    b = 0.005238;
+    r = 16.458; 
+    m = 0.1507;
+    d = 2.0;
 
-  zeta = 0.0;
-  
-  
-  Q_lambda_nose_hoover = 10.0;
-  zeta_nose_hoover = 0.0;
-}
 
-/* ----------------------------------------------------------------------
-   perform half-step update of velocities
------------------------------------------------------------------------*/
+	
+    // Reading the structure of protonable states before and after protonation.
+    read_pH_structure_files();
 
-void FixNHConstantPH::nve_v()
-{
-  FixNH::nve_v();
-  
-  bigint ntimestep = update->ntimestep;
-  
-  fix_constant_pH->return_nparams(n_lambdas);
-  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-  
-  for (int i = 0; i < n_lambdas; i++)
-     v_lambdas[i] += dtf * a_lambdas[i];
-  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-}
 
-/* ----------------------------------------------------------------------
-   perform full-step update of positions
------------------------------------------------------------------------*/
+    // Checking if we have enough hydronium ions to neutralize the system
+    calculate_num_prot_num_HWs();
+	
+    fixgpu = modify->get_fix_by_id("package_gpu");
 
-void FixNHConstantPH::nve_x()
-{
-  FixNH::nve_x();
-  
-  bigint ntimestep = update->ntimestep;
-  
-  fix_constant_pH->return_nparams(n_lambdas);
-  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-  for (int i = 0; i < n_lambdas; i++)
-     x_lambdas[i] += dtv * v_lambdas[i];
 
-  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-}
 
-/* ----------------------------------------------------------------------
-   random number generator
------------------------------------------------------------------------*/
 
-double FixNHConstantPH::random_normal(double mean, double stddev)
-{
-  static std::mt19937 generator(std::random_device{}());
-  std::normal_distribution<double> distribution(mean, stddev);
-  return distribution(generator);
-}
 
-/* ----------------------------------------------------------------------
-   perform half-step thermostat scaling of velocities
------------------------------------------------------------------------*/
+    memory->create(lambdas,n_lambdas,"constant_pH:lambdas");
+    memory->create(v_lambdas,n_lambdas,"constant_pH:v_lambdas");
+    memory->create(a_lambdas,n_lambdas,"constant_pH:a_lambdas");
+    memory->create(m_lambdas,n_lambdas,"constant_pH:m_lambdas");
+    memory->create(H_lambdas,n_lambdas,"constant_pH:H_lambdas");
 
-void FixNHConstantPH::nh_v_temp()
-{
-  FixNH::nh_v_temp();
-  
-  bool andersen_flag = true;
-  bool bussi_flag = false;
-  bool nose_hoover_flag = false;
-  
-  
-  if (andersen_flag) {
-    bigint ntimestep = update->ntimestep;
+    memory->create(HAs,n_lambdas,"constant_pH:HAs");
+    memory->create(HBs,n_lambdas,"constant_pH:HBs");
+    memory->create(GFF_lambdas,n_lambdas,"constant_pH:GFF_lambdas");
+    memory->create(fs,n_lambdas,"constant_pH:fs");
+    memory->create(dfs,n_lambdas,"constant_pH:df");
+    memory->create(Us,n_lambdas,"constant_pH:Us");
+    memory->create(dUs,n_lambdas,"constant_pH:dUs");
+    
+    
+    for (int j = 0; j < n_lambdas; j++)
+        GFF_lambdas[j] = 0.0;
+    if (GFF_flag)
+	init_GFF();
 
-    //double t_andersen = 500;
-    double dt = update->dt;
-    double kT = force->boltz * t_target;
-    double t_lambda_current;
-    double P = 1 - std::exp(-dt/t_andersen);
-   
-    /*if (ntimestep % 1000) {
-      for (int i = 0; i < n_lambdas; i++)
-        v_lambdas[i] = 0.0;
-    }*/
-  
-    fix_constant_pH->return_nparams(n_lambdas);
-    fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+    if (print_Udwp_flag)
+	print_Udwp();
+	
+    // This would not work in the initialize section as the m_lambda has not been set yet!
+    initialize_v_lambda(this->T);
+	
 
-    if (which == NOBIAS) {
-      for (int i = 0; i < n_lambdas; i++) {
-        double r = static_cast<double>(rand()) / RAND_MAX;
-        fix_constant_pH->return_T_lambda(t_lambda_current);
-        if (r < P) {
-           double mean = 0.0;
-           double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
-           v_lambdas[i] = random_normal(mean, sigma);
-        }
-      }
-    } else if (which == BIAS) {
-      // This needs to be implemented
-      error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+    for (int i = 0; i < n_lambdas; i++) {
+	lambdas[i] = 0.0;
+	v_lambdas[i] = 0.0;
+	a_lambdas[i] = 0.0;
+	m_lambdas[i] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
     }
-  }
-  
-  if (bussi_flag) {
-     double tau_t = 1000;
-     double dt = update->dt;
-     double t_lambda_current;
-     double t_lambda_target = t_target;
-     fix_constant_pH->return_T_lambda(t_lambda_current);
+	
+    nmax = atom->nmax;
+    allocate_storage();
 
-     
-     double scaling_factor = std::sqrt(t_lambda_target/t_lambda_current);
-
-     if (which == NOBIAS) {
-        double friction = (t_lambda_current/t_lambda_target - 1) / tau_t;
-        zeta += friction * dt; 
-        for (int i = 0; i < n_lambdas; i++) {
-           v_lambdas[i] *= scaling_factor;
-           //v_lambdas[i] *= exp(-zeta*dt);
-        }
-     }
-  }
-  
-  if (nose_hoover_flag) {
-     double dt = update->dt;
-     double t_lambda_current;
-     double t_lambda_target = t_target;
-     
-     fix_constant_pH->return_T_lambda(t_lambda_current);
-     fix_constant_pH->return_nparams(n_lambdas);
-     fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-  
-  
-     zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
-     
-     for (int i = 0; i < n_lambdas; i++)
-        v_lambdas[i] *= std::exp(-zeta_nose_hoover * dt);
-  }
-  
-  
-  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
 /* ----------------------------------------------------------------------
-   memory usage
+   This part calculates the acceleration of the lambdas parameter
+   which is obtained from the force acting on it
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::initial_integrate(int /*vflag*/)
+{
+   compute_Hs<-1>();
+   calculate_dfs();
+   calculate_dUs();
+   update_a_lambda();
+   compute_Hs<1>();
+   compute_q_total();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::update_a_lambda()
+{
+   if (GFF_flag) calculate_GFFs();
+   double NA = 6.022*1e23;
+   double kj2kcal = 0.239006;
+   double kT = force->boltz * T;
+
+   //df = 1.0;
+   //f = 1.0;
+
+   for (int i = 0; i < n_lambdas; i++) {
+	double  f_lambda = -(HBs[i]-HAs[i] - dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // I'm not sure about the sign of the df*kT*log(10)*(pK-pH) 
+	this->a_lambdas[i] = f_lambda /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
+	// I am not sure about the sign of the f*kT*log(10)*(pK-pH)
+        this->H_lambdas[i] = (1-lambdas[i])*HAs[i] + lambdas[i]*HBs[i] - fs[i]*kT*log(10*(pK-pH)) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i]); // This might not be needed. May be I need to tally this into energies.
+        // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
+   }	
+}
+	
+/* ----------------------------------------------------------------------- */
+
+template <int stage>
+void FixConstantPH::compute_Hs()
+{
+   if (stage == -1)
+   {
+      if (nmax < atom->nmax)
+      {
+	  nmax = atom->nmax;
+          allocate_storage();
+	  deallocate_storage();
+      }
+      for (int j = 0; j < n_lambdas; j++) {
+	   double* lambdas_j = new double[n_lambdas];
+	   std::fill(lambdas_j,lambdas_j+n_lambdas,0.0);
+	   backup_restore_qfev<1>();
+	   lambdas_j[j] = 0.0;
+	   modify_qs(lambdas_j);
+	   update_lmp();
+	   HAs[j] = compute_epair();
+           backup_restore_qfev<-1>();
+	   lambdas_j[j] = 1.0;
+	   modify_qs(lambdas_j);
+	   HBs[j] = compute_epair();
+	   backup_restore_qfev<-1>();
+           delete [] lambdas_j;
+      }
+   }
+   if (stage == 1)
+   {
+      modify_qs(lambdas); //should define a change_parameters(const double);
+      //update_lmp(); This update_lmp() might not work here since I am not sure about the correct values for the eflag and vflag variables... Anyway, the epsilon and charge values have been updated according to the pH value and lammps will do the rest
+   }
+}
+
+/* ----------------------------------------------------------------------
+   returns the number of the lambda parameters
+  ----------------------------------------------------------------------- */
+
+void FixConstantPH::return_nparams(int& _n_params) const
+{
+    _n_params = this->n_lambdas;
+}
+
+/* ----------------------------------------------------------------------
+   returns the x_lambdas, v_lambdas, ....
+   The memories for these should be allocated before hands
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::return_params(double* const _x_lambdas, double* const _v_lambdas, 
+                           double* const _a_lambdas, double* const _m_lambdas) const 
+{
+    for (int i = 0; i < n_lambdas; i++) {
+	_x_lambdas[i] = lambdas[i];
+	_v_lambdas[i] = v_lambdas[i];
+	_a_lambdas[i] = a_lambdas[i];
+	_m_lambdas[i] = m_lambdas[i];
+    }
+}
+
+/* ---------------------------------------------------------------------
+    This one just returns the value of T_lambda
+   --------------------------------------------------------------------- */
+   
+void FixConstantPH::return_T_lambda(double& _T_lambda)
+{
+    calculate_T_lambda();
+    _T_lambda = this->T_lambda;
+}
+
+/* ---------------------------------------------------------------------
+    sets the values of the x_lambdas, v_lambdas, ... possibly by the intergrating
+    fix styles
+    --------------------------------------------------------------------- */
+
+void FixConstantPH::reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
+                          const double* const _a_lambdas, const double* const _m_lambdas)
+{
+    for (int i = 0; i < n_lambdas; i++) {
+	lambdas[i] = _x_lambdas[i];
+	v_lambdas[i] = _v_lambdas[i];
+	a_lambdas[i] = _a_lambdas[i];
+	m_lambdas[i] = _m_lambdas[i];
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::read_pH_structure_files()
+{
+   /* File format
+    * Comment 
+    * pHnTypes
+    * type1,  number of type1 atoms in the protonable molecule, qBeforeProtonation, qAfterProtonation
+    * ...   U1 = -k*exp(-(lambda-1-b)*(lambda-1-b)/(2*a*a));
+   U2 = -k*exp(-(lambda+b)*(lambda+b)/(2*a*a));
+   U3 = d*exp(-(lambda-0.5)*(lambda-0.5)/(2*s*s));
+   U4 = 0.5*w*(1-erff(r*(lambda+m)));
+   U5 = 0.5*w*(1+erff(r*(lambda-1-m)));
+    * ...
+    */
+
+   /*Allocating the required memory*/
+   int ntypes = atom->ntypes;
+   memory->create(protonable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
+   memory->create(typePerProtMol,ntypes+1,"constant_pH:typePerProtMol");
+   memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
+   memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
+
+
+
+   char line[128];
+   if (comm->me == 0)
+   {
+       if (!pHStructureFile)
+           error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
+       fgets(line,sizeof(line),pHStructureFile);
+       fgets(line,sizeof(line),pHStructureFile);
+       line[strcspn(line,"\n")] = '\0';
+
+       char *token = strtok(line,",");
+       pHnTypes = std::stoi(token);
+       for (int i = 1; i < ntypes+1; i++)
+       {
+	   protonable[i] = 0;
+	   typePerProtMol[i] = 0;
+	   pH1qs[i] = 0.0;
+           pH2qs[i] = 0.0;
+       }   
+       for (int i = 0; i < pHnTypes; i++)
+       {
+	  if (fgets(line,sizeof(line),pHStructureFile) == nullptr)
+	       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
+	  line[strcspn(line,"\n")] = '\0';
+	  token = strtok(line,",");
+	  int type = std::stoi(token);
+	  protonable[type] = 1;
+	  token = strtok(NULL,",");
+	  typePerProtMol[type] = std::stoi(token);
+	  token = strtok(NULL,",");
+	  pH1qs[type] = std::stod(token);
+	  token = strtok(NULL,",");
+          pH2qs[type] = std::stod(token);
+       }
+       fclose(pHStructureFile);
+       pHStructureFile = nullptr;
+   }
+   
+   MPI_Bcast(protonable,ntypes+1,MPI_INT,0,world);
+   MPI_Bcast(typePerProtMol,ntypes+1,MPI_INT,0,world);
+   MPI_Bcast(pH1qs,ntypes+1,MPI_DOUBLE,0,world);
+   MPI_Bcast(pH2qs,ntypes+1,MPI_DOUBLE,0,world);
+}
+
+
+/* ----------------------------------------------------------------------
+   Calculating the number of protonable and HW atoms
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_num_prot_num_HWs()
+{
+   double tol = 1e-5;
+   int * type = atom->type;
+   int nlocal = atom->nlocal;
+   int * num_local = new int[2]{0,0};
+   int * num_total = new int[2]{0,0};
+   
+   for (int i = 0; i < nlocal; i++)
+   {
+      if (type[i] == typeHW)
+        num_local[0]++;
+      if (protonable[type[i]])
+        num_local[1]++;
+   }
+
+   MPI_Allreduce(num_local,num_total,2,MPI_INT,MPI_SUM,world);
+   num_HWs = num_total[0];
+   num_prots = num_total[1];
+   
+   delete [] num_local;
+   delete [] num_total;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_dfs()
+{
+   for (int j = 0; j < n_lambdas; j++) {
+	fs[j] = 1.0/(1+exp(-50*(lambdas[j]-0.5)));
+        dfs[j] = 50*exp(-50*(lambdas[j]-0.5))*(fs[j]*fs[j]);
+   }
+}
+
+/* ----------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_dUs()
+{
+   double U1, U2, U3, U4, U5;
+   double dU1, dU2, dU3, dU4, dU5;
+   for (int j = 0; j < n_lambdas; j++) {
+        U1 = -k*exp(-(lambdas[j]-1-b)*(lambdas[j]-1-b)/(2*a*a));
+   	U2 = -k*exp(-(lambdas[j]+b)*(lambdas[j]+b)/(2*a*a));
+   	U3 = d*exp(-(lambdas[j]-0.5)*(lambdas[j]-0.5)/(2*s*s));
+   	U4 = 0.5*w*(1-erff(r*(lambdas[j]+m)));
+   	U5 = 0.5*w*(1+erff(r*(lambdas[j]-1-m)));
+   	dU1 = -((lambdas[j]-1-b)/(a*a))*U1;
+   	dU2 = -((lambdas[j]+b)/(a*a))*U2;
+   	dU3 = -((lambdas[j]-0.5)/(s*s))*U3;
+   	dU4 = -0.5*w*r*2*exp(-r*r*(lambdas[j]+m)*(lambdas[j]+m))/sqrt(M_PI);
+   	dU5 = 0.5*w*r*2*exp(-r*r*(lambdas[j]-1-m)*(lambdas[j]-1-m))/sqrt(M_PI);
+
+    	Us[j] =  U1 +  U2 +  U3 +  U4 +  U5;
+   	dUs[j] = dU1 + dU2 + dU3 + dU4 + dU5;   
+   }
+}
+
+/* ----------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_dU(const double& _lambda, double& _U, double& _dU)
+{
+   double U1, U2, U3, U4, U5;
+   double dU1, dU2, dU3, dU4, dU5;
+   U1 = -k*exp(-(_lambda-1-b)*(_lambda-1-b)/(2*a*a));
+   U2 = -k*exp(-(_lambda+b)*(_lambda+b)/(2*a*a));
+   U3 = d*exp(-(_lambda-0.5)*(_lambda-0.5)/(2*s*s));
+   U4 = 0.5*w*(1-erff(r*(_lambda+m)));
+   U5 = 0.5*w*(1+erff(r*(_lambda-1-m)));
+   dU1 = -((_lambda-1-b)/(a*a))*U1;
+   dU2 = -((_lambda+b)/(a*a))*U2;
+   dU3 = -((_lambda-0.5)/(s*s))*U3;
+   dU4 = -0.5*w*r*2*exp(-r*r*(_lambda+m)*(_lambda+m))/sqrt(M_PI);
+   dU5 = 0.5*w*r*2*exp(-r*r*(_lambda-1-m)*(_lambda-1-m))/sqrt(M_PI);
+
+   _U =  U1 +  U2 +  U3 +  U4 +  U5;
+   _dU = dU1 + dU2 + dU3 + dU4 + dU5;   
+}
+
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::print_Udwp()
+{
+    double lambda_Udwp, U_Udwp, dU_Udwp;
+    int n_points = 100;
+	
+    lambda_Udwp = -0.5;
+    double dlambda_Udwp = 2.0/(double)n_points;
+
+    fprintf(Udwp_fp,"Lambda,U,dU\n");
+    for (int i = 0; i <= n_points; i++) {
+	calculate_dU(lambda_Udwp,U_Udwp,dU_Udwp);
+        fprintf(Udwp_fp,"%f,%f,%f\n",lambda_Udwp,U_Udwp,dU_Udwp);
+	lambda_Udwp += dlambda_Udwp;
+    }
+    fclose(Udwp_fp);
+}
+
+/* ----------------------------------------------------------------------
+   manage storage for charge, force, energy, virial arrays
+   taken from src/FEP/compute_fep.cpp
 ------------------------------------------------------------------------- */
 
-double FixNHConstantPH::memory_usage()
+void FixConstantPH::allocate_storage()
 {
-  double bytes = 0.0;
-  bytes += 4.0*n_lambdas*sizeof(double); // x_lambdas, v_lambdas, a_lambdas and m_lambdas
-  if (irregular) bytes += irregular->memory_usage();
+  /* It should be nmax since in the case that 
+     the newton flag is on the force in the 
+     ghost atoms also must be update and the 
+     nmax contains the maximum number of nlocal 
+     and nghost atoms.
+  */
+  int nlocal = atom->nmax; 
+  memory->create(f_orig, nlocal, 3, "constant_pH:f_orig");
+  memory->create(q_orig, nlocal, "constant_pH:q_orig");
+  memory->create(peatom_orig, nlocal, "constant_pH:peatom_orig");
+  memory->create(pvatom_orig, nlocal, 6, "constant_pH:pvatom_orig");
+  if (force->kspace) {
+     memory->create(keatom_orig, nlocal, "constant_pH:keatom_orig");
+     memory->create(kvatom_orig, nlocal, 6, "constant_pH:kvatom_orig");
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::deallocate_storage()
+{
+  if (q_orig) memory->destroy(q_orig);
+  if (f_orig) memory->destroy(f_orig);
+  if (peatom_orig) memory->destroy(peatom_orig);
+  if (pvatom_orig) memory->destroy(pvatom_orig);
+  /* If kspace->force is true these two have been already allocated and 
+     here is no need to check it since the lammps destructor first destructs
+     the kspace so that "if (force->kspace)" in the destructor for 
+     ComputeFEEConstantPH leads to an error!
+  */
+  
+  if (keatom_orig) memory->destroy(keatom_orig);
+  if (kvatom_orig) memory->destroy(kvatom_orig);
+
+  f_orig = nullptr;
+  peatom_orig = keatom_orig = nullptr;
+  pvatom_orig = kvatom_orig = nullptr;
+}
+
+/* ----------------------------------------------------------------------
+   Forward-reverse copy function to be used in backup_restore_qfev()
+   ---------------------------------------------------------------------- */
+
+template  <int direction>
+void FixConstantPH::forward_reverse_copy(double &a,double &b)
+{
+  if (direction == 1) a = b;
+  if (direction == -1) b = a;
+}
+
+template  <int direction>
+void FixConstantPH::forward_reverse_copy(double* a,double* b, int i)
+{
+  if (direction == 1) a[i] = b[i];
+  if (direction == -1) b[i] = a[i];
+}
+
+template  <int direction>
+void FixConstantPH::forward_reverse_copy(double** a,double** b, int i, int j)
+{
+  if (direction == 1) a[i][j] = b[i][j];
+  if (direction == -1) b[i][j] = a[i][j];
+}
+
+/* ----------------------------------------------------------------------
+   backup and restore arrays with charge, force, energy, virial
+   taken from src/FEP/compute_fep.cpp
+   backup ==> direction == 1
+   restore ==> direction == -1
+------------------------------------------------------------------------- */
+
+template <int direction>
+void FixConstantPH::backup_restore_qfev()
+{
+  int i;
+
+
+  int nall = atom->nlocal + atom->nghost;
+  int natom = atom->nlocal;
+  if (force->newton || force->kspace->tip4pflag) natom += atom->nghost;
+
+  double **f = atom->f;
+  for (i = 0; i < natom; i++)
+    for (int j = 0 ; j < 3; j++)
+       forward_reverse_copy<direction>(f_orig,f,i,j);
+  
+
+  double *q = atom->q;
+  for (int i = 0; i < natom; i++)
+     forward_reverse_copy<direction>(q_orig,q,i);
+
+  forward_reverse_copy<direction>(eng_vdwl_orig,force->pair->eng_vdwl);
+  forward_reverse_copy<direction>(eng_coul_orig,force->pair->eng_coul);
+
+  for (int i = 0; i < 6; i++)
+	  forward_reverse_copy<direction>(pvirial_orig ,force->pair->virial, i);
+
+  if (update->eflag_atom) {
+    double *peatom = force->pair->eatom;
+    for (i = 0; i < natom; i++) forward_reverse_copy<direction>(peatom_orig,peatom, i);
+  }
+  if (update->vflag_atom) {
+    double **pvatom = force->pair->vatom;
+    for (i = 0; i < natom; i++)
+      for (int j = 0; j < 6; j++)
+      forward_reverse_copy<direction>(pvatom_orig,pvatom,i,j);
+  }
+
+  if (force->kspace) {
+     forward_reverse_copy<direction>(energy_orig,force->kspace->energy);
+     for (int j = 0; j < 6; j++)
+         forward_reverse_copy<direction>(kvirial_orig,force->kspace->virial,j);
+	  
+     if (update->eflag_atom) {
+        double *keatom = force->kspace->eatom;
+        for (i = 0; i < natom; i++) forward_reverse_copy<direction>(keatom_orig,keatom,i);
+     }
+     if (update->vflag_atom) {
+        double **kvatom = force->kspace->vatom;
+        for (i = 0; i < natom; i++) 
+	  for (int j = 0; j < 6; j++)
+             forward_reverse_copy<direction>(kvatom_orig,kvatom,i,j);
+     }
+  }
+}
+
+/* --------------------------------------------------------------
+
+   -------------------------------------------------------------- */
+   
+void FixConstantPH::modify_qs(double* scales)
+{
+    int nlocal = atom->nlocal;
+    int * mask = atom->mask;
+    int * type = atom->type;
+    int ntypes = atom->ntypes;
+    double * q = atom->q;
+
+
+    double * q_changes_local = new double[4]{0.0,0.0,0.0,0.0};
+    double * q_changes = new double[4]{0.0,0.0,0.0,0.0};
+
+    // update the charges
+    for (int j = 0; j < n_lambdas; j++) {
+    	for (int i = 0; i < nlocal; i++)
+    	{
+	    int molid_i = atom->molecule[i];
+            if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
+            {
+                 double q_init = q_orig[i];
+                 q[i] = pH1qs[type[i]] + scales[j] * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+	         q_changes_local[0]++;
+	         q_changes_local[1] += (q[i] - q_init);
+            }
+        }
+    }
+    
+    MPI_Allreduce(q_changes_local,q_changes,2,MPI_DOUBLE,MPI_SUM,world);
+    double HW_q_change = -q_changes[1]/static_cast<double>(num_HWs);
+    
+    for (int i = 0; i < nlocal; i++)
+    {
+       if (type[i] == typeHW)
+       {
+	   double q_init = q_orig[i];
+	   q[i] = q_init + HW_q_change; //The total charge should be neutral
+	   q_changes_local[2]++;
+	   q_changes_local[3] += (q[i] - q_init);
+       }
+    }
+
+    /* The purpose of this part this is just to debug the total charge.
+       So, in the final version of the code this part should be 
+       commented out!
+    */
+    /*if (update->ntimestep % nevery == 0) {
+    	MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    	if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {}",q_changes[0],q_changes[2],q_changes[1],q_changes[3]);
+    }*/
+    
+    
+    //compute_q_total();
+    
+    delete [] q_changes_local;
+    delete [] q_changes;
+}
+
+
+/* ----------------------------------------------------------------------
+   modify force and kspace in lammps according
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::update_lmp() {
+   int eflag = ENERGY_GLOBAL;
+   int vflag = 0;
+   timer->stamp();
+   if (force->pair && force->pair->compute_flag) {
+     force->pair->compute(eflag, vflag);
+     timer->stamp(Timer::PAIR);
+   }
+   if (force->kspace && force->kspace->compute_flag) {
+     force->kspace->compute(eflag, vflag);
+     timer->stamp(Timer::KSPACE);
+   }
+
+   // accumulate force/energy/virial from /gpu pair styles
+   if (fixgpu) fixgpu->post_force(vflag);
+}
+
+/* ---------------------------------------------------------------------
+   Add forcefield correction term deltaGFF in equation 2 of
+   https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_GFFs()
+{
+   for (int j = 0; j < n_lambdas; j++) {
+   	int i = 0;
+   	while (i < GFF_size && GFF[i][0] < lambdas[j]) i++;
+
+   	if (i == 0)
+   	{
+      	    error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambdas[j]);
+            GFF_lambdas[j] = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambdas[j] - GFF[0][0]);
+        }
+        if (i > 0 && i < GFF_size - 1)
+            GFF_lambdas[j] = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j] - GFF[i-1][0]);
+        if (i == GFF_size - 1)
+        {
+            error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambdas[j]);
+            GFF_lambdas[j] = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j] - GFF[i][0]);
+        }
+   }
+}
+
+
+/* ---------------------------------------------------------------------
+   Read the data file containing the term deltaGFF in equation 2 of 
+   https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::init_GFF()
+{
+   char line[100];
+   fgets(line,sizeof(line),fp);
+   line[strcspn(line,"\n")] = 0;
+   GFF_size = atoi(line);
+   memory->create(GFF,GFF_size,2,"constant_pH:GFF");
+   int i = 0;
+   while(fgets(line,sizeof(line), fp) != NULL && i < GFF_size) {
+      double _lambda, _GFF;
+      line[strcspn(line,"\n")] = 0;
+      char * token = strtok(line, ",");
+      if (token != NULL) 
+	 _lambda = atof(token);
+      else 
+	 error->one(FLERR,"The GFF correction file in the fix constant_pH is in a wrong format!");
+      token = strtok(line, ",");
+      if (token != NULL)
+	 _GFF = atof(token);
+      else
+	 error->one(FLERR,"The GFF correction file in the fix constant_pH is in a wrong format!");
+      GFF[i][0] = _lambda;
+      GFF[i][1] = _GFF;
+      i++;   
+   }	
+   if (fp && (comm->me == 0)) fclose(fp);
+}
+
+/* ----------------------------------------------------------------------
+   The linear charge interpolation method in Aho et al JCTC 2022
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::compute_f_lambda_charge_interpolation()
+{
+   /* Two different approaches can be used
+      either I can go with copying the compute_group_group
+      code with factor_lj = 0 or I can use the eng->coul
+      I prefer the second one as it is tidier and I guess 
+      it should be faster
+   */
+
+
+   int natoms = atom->natoms;
+   double * energy_local = new double[n_lambdas];
+   double * energy = new double[n_lambdas];
+   double * n_lambda_atoms = new double[n_lambdas];
+
+   for (int i = 0; i < n_lambdas; i++) {
+      for (int j = 0; j < n_lambda_atoms[i]; j++) {
+	  //double delta_q = q_prot[j] - q_deprot[j];
+	  // I need to figure out how to identify those atoms
+      }
+      for (int k = 0; k < n_lambdas; k++) {
+	  if (k == i) continue;
+	  for (int l = 0; l < n_lambda_atoms[k]; l++) {
+	      //double q = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
+              // Double check if the q_prot and q_deprot are in the right place
+	      // how should I identify those atoms
+	  }
+      }
+      energy_local[i] = 0.0;
+      if (force->pair) energy_local[i] += force->pair->eng_coul;
+      // You need to add the kspace contribution too
+   }
+
+   MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
+   for (int i = 0; i < n_lambdas; i++) { 
+      double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
+      a_lambdas[i] = 4.184*0.0001*force_i / m_lambdas[i]; 
+   }
+   
+   delete [] energy;
+   delete [] energy_local;
+   delete [] n_lambda_atoms;     
+}
+
+/* --------------------------------------------------------------------- */
+
+void FixConstantPH::initialize_v_lambda(const double _T_lambda)
+{
+    std::mt19937 rng;
+    std::normal_distribution<double> distribution(0.0, 1.0);
+    double kT = force->boltz * _T_lambda;
+    double ke_lambdas = 0.0;
+    double ke_lambdas_target = 0.5*n_lambdas*kT; // Not sure about this part.
+    for (int j = 0; j < n_lambdas; j++) {
+	double stddev = std::sqrt(kT/m_lambdas[j]);
+	v_lambdas[j] = distribution(rng);
+	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j];
+	v_lambdas[j]*= std::sqrt(4184/10.0)/1000.0; // A/fs
+    }
+    double scaling_factor = std::sqrt(ke_lambdas_target/ke_lambdas);
+
+    for (int j = 0; j < n_lambdas; j++)
+	v_lambdas[j] *= scaling_factor;
+
+    double v_cm = 0.0;
+    for (int j = 0; j < n_lambdas; j++)
+	v_cm += v_lambdas[j];
+    v_cm /= static_cast<double>(v_cm);
+    for (int j = 0; j < n_lambdas; j++)
+	v_lambdas[j] -= v_cm;
+}
+
+/* --------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_T_lambda()
+{
+    T_lambda = 0.0;
+    for (int j = 0; j < n_lambdas; j++)
+	T_lambda += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*1e7 / (4184*0.0019872041);
+}
+
+   
+/* --------------------------------------------------------------------- */
+
+void FixConstantPH::compute_q_total()
+{
+   double * q = atom->q;
+   double nlocal = atom->nlocal;
+   double q_local = 0.0;
+   double tolerance = 0.000001; //0.001;
+
+   for (int i = 0; i <nlocal; i++)
+       q_local += q[i];
+
+    MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
+
+    if ((q_total >= tolerance || q_total <= -tolerance) && comm->me == 0)
+    	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {} from {}",q_total,comm->me);
+}
+
+/* --------------------------------------------------------------------- */
+
+double FixConstantPH::compute_epair()
+{
+   //if (update->eflag_global != update->ntimestep)
+   //   error->all(FLERR,"Energy was not tallied on the needed timestep");
+
+   int natoms = atom->natoms;
+
+   double energy_local = 0.0;
+   double energy = 0.0;
+   if (force->pair) energy_local += (force->pair->eng_vdwl + force->pair->eng_coul);
+
+   /* As the bond, angle, dihedral and improper energies 
+      do not change with the espilon, we do not need to 
+      include them in the energy. We are interested in 
+      their difference afterall */
+
+   MPI_Allreduce(&energy_local,&energy,1,MPI_DOUBLE,MPI_SUM,world);
+   energy /= static_cast<double> (natoms); // To convert to kcal/mol the total energy must be devided by the number of atoms
+   return energy;
+}
+
+/* ----------------------------------------------------------------------
+   implementing a method to access the HA, HB, lambda, v_lambda and 
+   a_lambda values 
+   ---------------------------------------------------------------------- */
+   
+double FixConstantPH::compute_array(int i, int j)
+{ 
+   double kj2kcal = 0.239006;
+   double kT = force->boltz * T;
+   switch(i)
+   {
+      case 0:
+        return HAs[j];
+      case 1:
+        return HBs[j];
+      case 2:
+        return dfs[j]*kT*log(10)*(pK-pH);
+      case 3:
+        return kj2kcal*dUs[j];
+      case 4:
+        return GFF_lambdas[j];
+      case 5:
+        return lambdas[j];
+      case 6:
+        return v_lambdas[j];
+      case 7:
+        return a_lambdas[j];
+      case 8:
+        calculate_T_lambda();
+        return T_lambda;
+      case 9:
+        return H_lambdas[j];
+   }
+   return 0.0;
+}
+
+/* ----------------------------------------------------------------------
+   memory usage of local atom-based array --> Needs to be updated at the end
+   ---------------------------------------------------------------------- */
+
+double FixConstantPH::memory_usage()
+{
+  int nmax = atom->nmax;
+  int nlocal = atom->nlocal;
+  int ntypes = atom->ntypes;
+  double GFF_bytes = 2.0 * GFF_size * sizeof(double);
+  double epsilon_init_bytes = (double) (ntypes + 1) * (double) (ntypes + 1) * sizeof(double);
+  double q_orig_bytes = (double) nlocal * sizeof(double);
+  double f_orig_bytes = (double) nlocal * 3.0 * sizeof(double);
+  double peatom_orig_bytes = (double) nlocal * sizeof(double);
+  double pvatom_orig_bytes = (double) nlocal * 6.0 * sizeof(double);
+  double keatom_orig_bytes = (double) nlocal * sizeof(double);
+  double kvatom_orig_bytes = (double) nlocal * 6.0 * sizeof(double);
+  double bytes = GFF_bytes + epsilon_init_bytes + \
+	         q_orig_bytes + f_orig_bytes + peatom_orig_bytes + \
+                 pvatom_orig_bytes + keatom_orig_bytes + kvatom_orig_bytes;
   return bytes;
 }
