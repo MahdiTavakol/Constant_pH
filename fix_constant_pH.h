@@ -92,12 +92,6 @@ namespace LAMMPS_NS {
         bool print_Udwp_flag;
         FILE *Udwp_fp;
         void print_Udwp();
-        
-        // Parameters for thermostating the lambda variable
-        double etha_lambda;
-        double Q_lambda;
-        double T_lambda;
-        double a_etha_v_ratio_lambda;
 
         // The q_total used to calculate the HW charges
         double q_total;
@@ -106,12 +100,6 @@ namespace LAMMPS_NS {
 
 
 	class Fix *fixgpu;
-
-	// This is just a pointer to the non-bonded interaction parameters and does not have any allocated memory
-	// This should not be deallocated since the original pointer will be deallocated later on by the LAMMPS
-	double **epsilon;
-	// _init is the initial value of hydrogen atoms properties which is multiplied by lambda at each step
-	double **epsilon_init;
 
 
         int nmax;
