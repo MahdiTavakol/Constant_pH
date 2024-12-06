@@ -456,10 +456,10 @@ void FixConstantPH::read_pH_structure_files()
 
    /*Allocating the required memory*/
    int ntypes = atom->ntypes;
-   memory->create(protonable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
-   memory->create(typePerProtMol,ntypes+1,"constant_pH:typePerProtMol");
-   memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
-   memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
+   memory->create(protonable,atom->nmolecules,"constant_pH:protonable"); 
+   memory->create(typePerProtMol,atom->nmolecules,"constant_pH:typePerProtMol");
+   memory->create(pH1qs,atom->nmolecules,"constant_pH:pH1qs");
+   memory->create(pH2qs,atom->nmolecules,"constant_pH:pH2qs");
 
 
 
@@ -474,7 +474,7 @@ void FixConstantPH::read_pH_structure_files()
 
        char *token = strtok(line,",");
        pHnTypes = std::stoi(token);
-       for (int i = 1; i < ntypes+1; i++)
+       for (int i = 1; i < atom->nmolecules; i++)
        {
 	   protonable[i] = 0;
 	   typePerProtMol[i] = 0;
