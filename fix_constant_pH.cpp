@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.03.21----- */
+/* ---v0.04.02----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -123,8 +123,9 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
    Q_lambda = 100.0;
   
   
-   vector_flag = 1;
-   size_vector = 10;
+   array_flag = 1;
+   size_array_rows = 10;
+   size_array_cols = n_lambdas;
 
 }
 
@@ -980,33 +981,33 @@ double FixConstantPH::compute_epair()
    a_lambda values 
    ---------------------------------------------------------------------- */
    
-double FixConstantPH::compute_vector(int i)
+double FixConstantPH::compute_array(int i, int j)
 { 
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
    switch(i)
    {
       case 0:
-        return HA;
+        return HAs[j];
       case 1:
-        return HB;
+        return HBs[j];
       case 2:
         return df*kT*log(10)*(pK-pH);
       case 3:
-        return kj2kcal*dU;
+        return kj2kcal*dUs[j];
       case 4:
-        return GFF_lambda;
+        return GFF_lambdas[j];
       case 5:
-        return lambda;
+        return lambdas[j];
       case 6:
-        return v_lambda;
+        return v_lambdas[j];
       case 7:
-        return a_lambda;
+        return a_lambdas[j];
       case 8:
         calculate_T_lambda();
         return T_lambda;
       case 9:
-        return H_lambda;
+        return H_lambdas[j];
    }
    return 0.0;
 }
