@@ -34,7 +34,7 @@ namespace LAMMPS_NS {
 	void init() override;
 	void setup(int) override;
 	void initial_integrate(int) override;
-        double compute_vector(int) override;
+        double compute_array(int, int) override;
 	double memory_usage() override;
 
         // Functions for accessing or reseting the lambda dynamics parameters
