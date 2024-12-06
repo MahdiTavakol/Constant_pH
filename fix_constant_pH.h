@@ -67,6 +67,7 @@ namespace LAMMPS_NS {
 
         // Lambda arrays
         double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas, * H_lambdas;
+        double T_lambda;
         char ** molids;
         int n_lambdas;
 
@@ -122,8 +123,9 @@ namespace LAMMPS_NS {
         void read_pH_structure_files();
         void restore_epsilon();
 	void calculate_dq();
-	void calculate_df();
-	void calculate_dU();
+	void calculate_dfs();
+	void calculate_dUs();
+	void calculate_dU(const double& _lambda, double& _U, double& _dU);
 	void calculate_T_lambda();
 	void initialize_v_lambda(const double _T_lambda);
 	void integrate_lambda();
@@ -139,7 +141,7 @@ namespace LAMMPS_NS {
 	void backup_restore_qfev();
 	void init_GFF();
 	void calculate_GFFs();
-	void modify_q(double *scales);
+	void modify_qs(double *scales);
 	void update_lmp();
         void compute_f_lambda_charge_interpolation();
 	double compute_epair();
