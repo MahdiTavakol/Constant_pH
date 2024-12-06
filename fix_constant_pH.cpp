@@ -51,6 +51,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
        protonable(nullptr), typePerProtMol(nullptr), pH1qs(nullptr), pH2qs(nullptr),
        HAs(nullptr), HBs(nullptr), GFF_lambdas(nullptr), molids(nullptr),
        fs(nullptr), dfs(nullptr), Us(nullptr), dUs(nullptr),
+       GFF(nullptr),
        q_orig(nullptr), f_orig(nullptr),
        peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr), 
 {
@@ -155,6 +156,8 @@ FixConstantPH::~FixConstantPH()
    if (dfs) memory->destroy(dfs);
    if (Us) memory->destroy(Us);
    if (dUs) memory->destroy(dUs);
+
+   if (GFF) memory->destory(GFF);
    
 
    deallocate_storage();
@@ -201,7 +204,6 @@ void FixConstantPH::setup(int /*vflag*/)
 
 	
     GFF_lambda = 0.0;
-    GFF = nullptr;
     if (GFF_flag)
 	init_GFF();
 
@@ -268,7 +270,7 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 
 void FixConstantPH::update_a_lambda()
 {
-   if (GFF_flag) calculate_GFF();
+   if (GFF_flag) calculate_GFFs();
    double NA = 6.022*1e23;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
@@ -298,19 +300,19 @@ void FixConstantPH::compute_Hs()
           allocate_storage();
 	  deallocate_storage();
       }
-      for (int i = 0; i < n_lambdas; i++) {
-	   double* lambdas_i = new double[n_lambdas](0.0);
+      for (int j = 0; j < n_lambdas; j++) {
+	   double* lambdas_j = new double[n_lambdas](0.0);
 	   backup_restore_qfev<1>();
-	   lambdas_i[i] = 0.0;
-	   modify_q(lambdas_i);
+	   lambdas_j[j] = 0.0;
+	   modify_q(lambdas_j);
 	   update_lmp();
-	   HAs[i] = compute_epair();
+	   HAs[j] = compute_epair();
            backup_restore_qfev<-1>();
-	   lambdas_i[i] = 1.0;
-	   modify_q(lambdas_i);
-	   HBs[i] = compute_epair();
+	   lambdas_i[j] = 1.0;
+	   modify_q(lambdas_j);
+	   HBs[j] = compute_epair();
 	   backup_restore_qfev<-1>();
-           delete [] lambdas_i;
+           delete [] lambdas_j;
       }
    }
    if (stage == 1)
@@ -472,9 +474,9 @@ void FixConstantPH::calculate_num_prot_num_HWs()
 
 void FixConstantPH::calculate_dfs()
 {
-   for (int i = 0; i < n_lambdas; i++) {
-	fs[i] = 1.0/(1+exp(-50*(lambdas[i]-0.5)));
-        dfs[i] = 50*exp(-50*(lambdas[i]-0.5))*(fs[i]*fs[i]);
+   for (int j = 0; j < n_lambdas; j++) {
+	fs[j] = 1.0/(1+exp(-50*(lambdas[j]-0.5)));
+        dfs[j] = 50*exp(-50*(lambdas[j]-0.5))*(fs[j]*fs[j]);
    }
 }
 
@@ -484,17 +486,17 @@ void FixConstantPH::calculate_dUs()
 {
    double U1, U2, U3, U4, U5;
    double dU1, dU2, dU3, dU4, dU5;
-   for (int i = 0; i < n_lambdas; i++) {
-        U1 = -k*exp(-(lambdas[i]-1-b)*(lambdas[i]-1-b)/(2*a*a));
-   	U2 = -k*exp(-(lambdas[i]+b)*(lambdas[i]+b)/(2*a*a));
-   	U3 = d*exp(-(lambdas[i]-0.5)*(lambdas[i]-0.5)/(2*s*s));
-   	U4 = 0.5*w*(1-erff(r*(lambdas[i]+m)));
-   	U5 = 0.5*w*(1+erff(r*(lambdas[i]-1-m)));
-   	dU1 = -((lambdas[i]-1-b)/(a*a))*U1;
-   	dU2 = -((lambdas[i]+b)/(a*a))*U2;
-   	dU3 = -((lambdas[i]-0.5)/(s*s))*U3;
-   	dU4 = -0.5*w*r*2*exp(-r*r*(lambdas[i]+m)*(lambdas[i]+m))/sqrt(M_PI);
-   	dU5 = 0.5*w*r*2*exp(-r*r*(lambdas[i]-1-m)*(lambdas[i]-1-m))/sqrt(M_PI);
+   for (int j = 0; j < n_lambdas; j++) {
+        U1 = -k*exp(-(lambdas[j]-1-b)*(lambdas[j]-1-b)/(2*a*a));
+   	U2 = -k*exp(-(lambdas[j]+b)*(lambdas[j]+b)/(2*a*a));
+   	U3 = d*exp(-(lambdas[j]-0.5)*(lambdas[j]-0.5)/(2*s*s));
+   	U4 = 0.5*w*(1-erff(r*(lambdas[j]+m)));
+   	U5 = 0.5*w*(1+erff(r*(lambdas[j]-1-m)));
+   	dU1 = -((lambdas[j]-1-b)/(a*a))*U1;
+   	dU2 = -((lambdas[j]+b)/(a*a))*U2;
+   	dU3 = -((lambdas[j]-0.5)/(s*s))*U3;
+   	dU4 = -0.5*w*r*2*exp(-r*r*(lambdas[j]+m)*(lambdas[j]+m))/sqrt(M_PI);
+   	dU5 = 0.5*w*r*2*exp(-r*r*(lambdas[j]-1-m)*(lambdas[j]-1-m))/sqrt(M_PI);
 
     	Us[i] =  U1 +  U2 +  U3 +  U4 +  U5;
    	dUs[i] = dU1 + dU2 + dU3 + dU4 + dU5;   
@@ -751,14 +753,14 @@ void FixConstantPH::calculate_GFFs()
    	if (i == 0)
    	{
       	    error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
-            GFF_lambdas[j] = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambda - GFF[0][0]);
+            GFF_lambdas[j] = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambdas[j] - GFF[0][0]);
         }
         if (i > 0 && i < GFF_size - 1)
-            GFF_lambdas[j] = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i-1][0]);
+            GFF_lambdas[j] = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j] - GFF[i-1][0]);
         if (i == GFF_size - 1)
         {
             error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
-            GFF_lambdas[j] = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i][0]);
+            GFF_lambdas[j] = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j] - GFF[i][0]);
         }
    }
 }
@@ -946,7 +948,6 @@ double FixConstantPH::memory_usage()
   int nmax = atom->nmax;
   int nlocal = atom->nlocal;
   int ntypes = atom->ntypes;
-  double pair_bytes = sizeof(Pair);
   double GFF_bytes = 2.0 * GFF_size * sizeof(double);
   double epsilon_init_bytes = (double) (ntypes + 1) * (double) (ntypes + 1) * sizeof(double);
   double q_orig_bytes = (double) nlocal * sizeof(double);
