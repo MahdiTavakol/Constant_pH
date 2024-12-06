@@ -79,6 +79,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 
   GFF_flag = false;
   print_Udwp_flag = false;
+  n_lambdas = 1;
   int iarg = 10;
   while (iarg < narg) {
     if (strcmp(arg[iarg], "GFF") == 0)
@@ -102,6 +103,15 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	if (Udwp_fp == nullptr) 
 	    error->one(FLERR, "Cannot find fix constant_pH the Udwp debugging file {}",arg[iarg+1]);
 	iarg = iarg + 2;
+    }
+    else if ((strcmp(arg[iarg],"molids") == 0)) {
+	n_lambdas = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	molids = new char*[n_lambdas];
+	iarg+=2;
+	for (int i = 0; i < nmols; i++) {
+	    molids[i] = utils::strdup(arg[iarg]);
+	    iarg++;
+	}
     }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
@@ -147,6 +157,11 @@ FixConstantPH::~FixConstantPH()
    memory->destroy(protonable);
 
 
+   if (molids) {
+	for (int i = 0; i < n_lambdas; i++)
+	    if (molids[i]) delete [] molids[i];
+	delete [] molids;
+   }
    if (lambdas)   delete [] lambdas;
    if (v_lambdas) delete [] v_lambdas;
    if (a_lambdas) delete [] a_lambdas;
@@ -291,17 +306,17 @@ void FixConstantPH::setup(int /*vflag*/)
 
 
 
-    n_lambdas = 1; // Just for now
     lambdas   = new double[n_lambdas];
     v_lambdas = new double[n_lambdas];
     a_lambdas = new double[n_lambdas];
     m_lambdas = new double[n_lambdas];
 
-    lambdas[0] = 0.0;
-    v_lambdas[0] = 0.0;
-    a_lambdas[0] = 0.0;
-    m_lambdas[0] = 20.0;
-
+    for (int i = 0; i < n_lambdas; i++) {
+	lambdas[i] = 0.0;
+	v_lambdas[i] = 0.0;
+	a_lambdas[i] = 0.0;
+	m_lambdas[i] = 20.0;
+    }
 	
     nmax = atom->nmax;
     allocate_storage();
@@ -323,6 +338,35 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
    compute_q_total();
 }
 
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::update_a_lambda()
+{
+   if (GFF_flag) calculate_GFF();
+   double NA = 6.022*1e23;
+   double kj2kcal = 0.239006;
+   double kT = force->boltz * T;
+
+   //df = 1.0;
+   //f = 1.0;
+
+   for (int i = 0; i < n_lambdas; i++) {
+	double  f_lambda = -(HBs[i]-HAs[i] - df*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // I'm not sure about the sign of the df*kT*log(10)*(pK-pH) 
+	this->a_lambdas[i] = f_lambda /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
+	// I am not sure about the sign of the f*kT*log(10)*(pK-pH)
+   this->H_lambda = (1-lambda)*HA + lambda*HB - f*kT*log(10*(pK-pH)) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
+   // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
+   }
+   
+
+   
+
+
+
+
+	
+}
+	
 /* ----------------------------------------------------------------------- */
 
 template <int stage>
@@ -336,19 +380,24 @@ void FixConstantPH::compute_Hs()
           allocate_storage();
 	  deallocate_storage();
       }
-      backup_restore_qfev<1>();      // backup charge, force, energy, virial array values
-      modify_q(0.0); //should define a change_parameters(const int);
-      update_lmp(); // update the lammps force and virial values
-      HA = compute_epair(); 
-      backup_restore_qfev<-1>();        // restore charge, force, energy, virial array values
-      modify_q(1.0); //should define a change_parameters(const double);
-      update_lmp();
-      HB = compute_epair();           // HB is for the protonated state with lambda==1 
-      backup_restore_qfev<-1>();      // restore charge, force, energy, virial array values
+      for (int i = 0; i < n_lambdas; i++) {
+	   double* lambdas_i = new double[n_lambdas](0.0);
+	   backup_restore_qfev<1>();
+	   lambdas_i[i] = 0.0;
+	   modify_q(lambdas_i);
+	   update_lmp();
+	   HAs[i] = compute_epair();
+           backup_restore_qfev<-1>();
+	   lambdas_i[i] = 1.0;
+	   modify_q(lambdas_i);
+	   HBs[i] = compute_epair();
+	   backup_restore_qfev<-1>();
+           delete [] lambdas_i;
+      }
    }
    if (stage == 1)
    {
-      modify_q(lambda); //should define a change_parameters(const double);
+      modify_q(lambdas); //should define a change_parameters(const double);
       //update_lmp(); This update_lmp() might not work here since I am not sure about the correct values for the eflag and vflag variables... Anyway, the epsilon and charge values have been updated according to the pH value and lammps will do the rest
    }
 }
@@ -878,31 +927,6 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
    delete [] energy;
    delete [] energy_local;
    delete [] n_lambda_atoms;     
-}
-
-/* ---------------------------------------------------------------------- */
-
-void FixConstantPH::update_a_lambda()
-{
-   if (GFF_flag) calculate_GFF();
-   double NA = 6.022*1e23;
-   double kj2kcal = 0.239006;
-   double kT = force->boltz * T;
-
-   //df = 1.0;
-   //f = 1.0;
-   double  f_lambda = -(HB-HA - df*kT*log(10)*(pK-pH) + kj2kcal*dU - GFF_lambda); // I'm not sure about the sign of the df*kT*log(10)*(pK-pH) 
-
-   this->a_lambda = f_lambda /m_lambda; // 4.184*0.0001*f_lambda / m_lambda;
-   /*#ifdef DEBUG
-	std::cout << "The a_lambda and f_lambda are :" << a_lambda << "," << f_lambda << std::endl;
-   #endif*/
-
-
-   // I am not sure about the sign of the f*kT*log(10)*(pK-pH)
-   this->H_lambda = (1-lambda)*HA + lambda*HB - f*kT*log(10*(pK-pH)) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
-   // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
-	
 }
 
 /* --------------------------------------------------------------------- */
