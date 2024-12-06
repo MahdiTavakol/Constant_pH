@@ -17,6 +17,7 @@
 #ifdef DEBUG
 #include <iostream>
 #endif
+#include <random>
 
 #include "fix.h"
 #include "fix_constant_pH.h"
@@ -851,14 +852,37 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 
 void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {
-    v_lambda = sqrt(0.0019872041*4184.0 * _T_lambda / (10.0 * m_lambda))/1000.0;
+    std::mt19937 rng;
+    std::normal_distribution<double> distribution(0.0, 1.0);
+    double kT = force->boltz * _T_lambda;
+    double ke_lambdas = 0.0;
+    double ke_lambdas_target = 0.5*n_lambdas*kT; // Not sure about this part.
+    for (int j = 0; j < n_lambdas; j++) {
+	double stddev = std::sqrt(kT/m_lambdas[j]);
+	v_lambdas[j] = distribution(rng);
+	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j];
+	v_lambdas[j]*= std::sqrt(4184/10.0)/1000.0; // A/fs
+    }
+    double scaling_factor = std::sqrt(ke_lambdas_target/ke_lambdas);
+
+    for (int j = 0; j < n_lambdas; j++)
+	v_lambdas[j] *= scaling_factor;
+
+    v_cm = 0.0;
+    for (int j = 0; j < n_lambdas; j++)
+	v_cm += v_lambdas[j];
+    v_cm /= static_cast<double>(v_cm);
+    for (int j = 0; j < n_lambdas; j++)
+	v_lambdas[j] -= vcm;
 }
 
 /* --------------------------------------------------------------------- */
 
 void FixConstantPH::calculate_T_lambda()
 {
-    T_lambda = m_lambda * v_lambda * v_lambda*1e7 / (4184*0.0019872041);
+    T_lambda = 0.0;
+    for (int j = 0; j < n_lambdas; j++)
+	T_lambda += 0.5*m_lambdas*v_lambdas[j]*v_lambdas[j]*1e7 / (4184*0.0019872041);
 }
 
    
