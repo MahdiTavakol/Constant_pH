@@ -47,9 +47,12 @@ using namespace MathConst;
 /* ---------------------------------------------------------------------- */
 
 FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, arg), 
-       lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr), 
-       protonable(nullptr), typePerProtMol(nullptr), pH1qs(nullptr), pH2qs(nullptr), q_orig(nullptr), f_orig(nullptr),
-       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr)
+       lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr), H_lambdas(nullptr),
+       protonable(nullptr), typePerProtMol(nullptr), pH1qs(nullptr), pH2qs(nullptr),
+       HAs(nullptr), HBs(nullptr), GFF_lambdas(nullptr), molids(nullptr),
+       fs(nullptr), dfs(nullptr), Us(nullptr), dUs(nullptr),
+       q_orig(nullptr), f_orig(nullptr),
+       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr), 
 {
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
@@ -119,8 +122,6 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   
    fixgpu = nullptr;
   
-   etha_lambda = 0.0;
-   Q_lambda = 100.0;
   
   
    array_flag = 1;
@@ -133,40 +134,28 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 
 FixConstantPH::~FixConstantPH()
 {
-   #ifdef DEBUG
-       std::cout << "Releasing epsilon_init" << std::endl;
-   #endif
-   memory->destroy(epsilon_init);
-   #ifdef DEBUG
-       std::cout << "Releasing GFF" << std::endl;
-   #endif
-   if (GFF != nullptr) memory->destroy(GFF);
-
-   #ifdef DEBUG
-       std::cout << "Releasing pparam1" << std::endl;
-   #endif
-   delete [] pparam1;
-   #ifdef DEBUG
-       std::cout << "Releasing pstyle" << std::endl;
-   #endif
-   delete [] pstyle;
-
-
-   memory->destroy(pH1qs);
-   memory->destroy(pH2qs);
-   memory->destroy(typePerProtMol);
-   memory->destroy(protonable);
-
-
+   if (lambdas)   memory->destory(lambdas);
+   if (v_lambdas) memory->destory(v_lambdas);
+   if (a_lambdas) memory->destory(a_lambdas);
+   if (m_lambdas) memory->destory(m_lambdas);
+   if (H_lambdas) memory->destory(H_lambdas);
+   if (protonable) memory->destroy(protonable);
+   if (typePerProtMol) memory->destroy(typePerProtMol);
+   if (pH1qs) memory->destroy(pH1qs);
+   if (pH2qs) memory->destroy(pH2qs);
+   if (HAs) memory->destroy(HAs);
+   if (HBs) memory->destroy(HBs);
+   if (GFF_lambdas) memory->destroy(GFF_lambdas);
    if (molids) {
 	for (int i = 0; i < n_lambdas; i++)
 	    if (molids[i]) delete [] molids[i];
 	delete [] molids;
    }
-   if (lambdas)   delete [] lambdas;
-   if (v_lambdas) delete [] v_lambdas;
-   if (a_lambdas) delete [] a_lambdas;
-   if (m_lambdas) delete [] m_lambdas;
+   if (fs) memory->destroy(fs);
+   if (dfs) memory->destroy(dfs);
+   if (Us) memory->destroy(Us);
+   if (dUs) memory->destroy(dUs);
+   
 
    deallocate_storage();
 
@@ -191,57 +180,6 @@ int FixConstantPH::setmask()
    
 void FixConstantPH::init()
 {
-   std::map<std::string, std::string> pair_params;
-   
-   pair_params["lj/cut/soft/omp"] = "lambda";
-   pair_params["lj/cut/coul/cut/soft/gpu"] = "lambda";
-   pair_params["lj/cut/coul/cut/soft/omp"] = "lambda";
-   pair_params["lj/cut/coul/long/soft"] = "lambda";
-   pair_params["lj/cut/coul/long/soft/gpu"] = "lambda";
-   pair_params["lj/cut/coul/long/soft/omp"] = "lambda";
-   pair_params["lj/cut/tip4p/long/soft"] = "lambda";
-   pair_params["lj/cut/tip4p/long/soft/omp"] = "lambda";
-   pair_params["lj/charmm/coul/long/soft"] = "lambda";
-   pair_params["lj/charmm/coul/long/soft/omp"] = "lambda";
-   pair_params["lj/class2/soft"] = "lambda";
-   pair_params["lj/class2/coul/cut/soft"] = "lambda";
-   pair_params["lj/class2/coul/long/soft"] = "lambda";
-   pair_params["coul/cut/soft"] = "lambda";
-   pair_params["coul/cut/soft/omp"] = "lambda";
-   pair_params["coul/long/soft"] = "lambda";
-   pair_params["coul/long/soft/omp"] = "lambda";
-   pair_params["tip4p/long/soft"] = "lambda";
-   pair_params["tip4p/long/soft/omp"] = "lambda";
-   pair_params["morse/soft"] = "lambda";
-   
-   pair_params["lj/charmm/coul/charmm"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/gpu"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/intel"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/charmm/implicit/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/long"] = "epsilon";
-   pair_params["lj/charmm/coul/long/gpu"] = "epsilon";
-   pair_params["lj/charmm/coul/long/intel"] = "epsilon";
-   pair_params["lj/charmm/coul/long/kk"] = "epsilon";
-   pair_params["lj/charmm/coul/long/opt"] = "epsilon";
-   pair_params["lj/charmm/coul/long/omp"] = "epsilon";
-   pair_params["lj/charmm/coul/msm"] = "epsilon";
-   pair_params["lj/charmm/coul/msm/omp"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/charmmfsh"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/long"] = "epsilon";
-   pair_params["lj/charmmfsw/coul/long/kk"] = "epsilon";
-
-   if (pair_params.find(pstyle) == pair_params.end())
-      error->all(FLERR,"The pair style {} is not currently supported in fix constant_pH",pstyle);
-   
-   pparam1 = new char[pair_params[pstyle].length()+1];
-   std::strcpy(pparam1,pair_params[pstyle].c_str());
-   
-   
-   
 }
 
 /* ---------------------------------------------------------------------- */
@@ -260,27 +198,6 @@ void FixConstantPH::setup(int /*vflag*/)
     d = 2.0;
     // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
     m_lambda = 20;
-    pair1 = nullptr;
-  
-    if (lmp->suffix_enable)
-        pair1 = force->pair_match(std::string(pstyle)+"/"+lmp->suffix,1);
-    if (pair1 == nullptr)
-        pair1 = force->pair_match(pstyle,1); // I need to define the pstyle variable
-    void *ptr1 = pair1->extract(pparam1,pdim1);
-    if (ptr1 == nullptr)
-        error->all(FLERR,"Fix constant_pH pair style {} was not found",pstyle);
-    if (pdim1 != 2)
-         error->all(FLERR,"Pair style parameter {} is not compatible with fix constant_pH", pparam1);
-         
-    epsilon = (double **) ptr1;
-    
-    int ntypes = atom->ntypes;
-    memory->create(epsilon_init,ntypes+1,ntypes+1,"constant_pH:epsilon_init");
-
-    // The limits for these two loops are correct.
-    for (int i = 1; i < ntypes+1; i++)
-        for (int j = i; j < ntypes+1; j++)
-             epsilon_init[i][j] = epsilon[i][j];
 
 	
     GFF_lambda = 0.0;
@@ -306,11 +223,19 @@ void FixConstantPH::setup(int /*vflag*/)
     initialize_v_lambda(310.00);
 
 
+    memory->create(lambdas,n_lambdas,"constant_pH:lambdas");
+    memory->create(v_lambdas,n_lambdas,"constant_pH:v_lambdas");
+    memory->create(a_lambdas,n_lambdas,"constant_pH:a_lambdas");
+    memory->create(m_lambdas,n_lambdas,"constant_pH:m_lambdas");
+    memory->create(H_lambdas,n_lambdas,"constant_pH:H_lambdas");
 
-    lambdas   = new double[n_lambdas];
-    v_lambdas = new double[n_lambdas];
-    a_lambdas = new double[n_lambdas];
-    m_lambdas = new double[n_lambdas];
+    memory->create(HAs,n_lambdas,"constant_pH:HAs");
+    memory->create(HBs,n_lambdas,"constant_pH:HBs");
+    memory->create(GFF_lambdas,n_lambdas,"constant_pH:GFF_lambdas");
+    memory->create(fs,n_lambdas,"constant_pH:fs");
+    memory->create(dfs,n_lambdas,"constant_pH:df");
+    memory->create(Us,n_lambdas,"constant_pH:Us");
+    memory->create(dUs,n_lambdas,"constant_pH:dUs");
 
     for (int i = 0; i < n_lambdas; i++) {
 	lambdas[i] = 0.0;
