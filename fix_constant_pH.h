@@ -43,6 +43,7 @@ namespace LAMMPS_NS {
                            double* const _a_lambdas, double* const _m_lambdas) const;
         void reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
                           const double* const _a_lambdas, const double* const _m_lambdas);
+        void return_T_lambda(double& _T_lambda);
 
      private:
 	// Sturcture files
