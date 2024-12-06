@@ -58,15 +58,16 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   nProtonableMols = utils::numeric(FLERR,arg[4],lmp);
 
   //
-  molids = new int[nProtonableMols];
+  molids = new char*[nProtonableMols];
   pKas = new int[nProtonableMols];
   pHStructureFiles = new FILE*[nProtonableMols];
 
   //
   int iarg = 4;
   for (int i = 0; i < nProtonableMols; i++) {
-     int molid = utils::numeric(FLERR,arg[iarg+1],lmp);
+     molids[i] = utils::strdup(FLERR,arg[iarg+1],lmp);
      pKas[i] = utils::numeric(FLERR,arg[iarg+2],lmp);
+     if (molids[i] > atom->nmolecules) error->all(FLERR,"The wrong molecule id in the fix constant/pH");
      if (comm->me == 0) {
 	pHStructureFiles[i] = fopen(arg[iarg+3],lmp);
 	if (pHStructureFiles[i] == nullptr)
