@@ -61,20 +61,13 @@ namespace LAMMPS_NS {
 	double pK, pH, T;
 
 	double a, b, s, m, w, r, d, k, h;
-	double HA, HB;
-	double U, dU;
+	double* HAs, * HBs;
+	double* Us, * dUs;
 	
-	// Pair style parameters
-        // I am not sure why I do not release the pstyle
-	char * pstyle, * pparam1;
-	Pair * pair1;
-	int pdim1;
-
-	// Lambda dynamics
-	double lambda, v_lambda, a_lambda, m_lambda, H_lambda;
 
         // Lambda arrays
-        double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas;
+        double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas, * H_lambdas;
+        char ** molids;
         int n_lambdas;
 
         // The protonable groups
@@ -86,14 +79,14 @@ namespace LAMMPS_NS {
 	int num_HWs, num_prots;
 
 	// The smoothing function 
-	double f, df;
+	double * fs, * dfs;
 
 	// Parameters for the forcefield modifiction term
         bool GFF_flag;
 	FILE *fp;
 	double **GFF;
 	int GFF_size;
-	double GFF_lambda;
+	double* GFF_lambdas;
 
         // Parameters for printing the Udwp
         bool print_Udwp_flag;
@@ -157,8 +150,8 @@ namespace LAMMPS_NS {
 	template <int direction>
 	void backup_restore_qfev();
 	void init_GFF();
-	void calculate_GFF();
-	void modify_q(const double& scale);
+	void calculate_GFFs();
+	void modify_q(double *scales);
 	void update_lmp();
         void compute_f_lambda_charge_interpolation();
 	double compute_epair();
