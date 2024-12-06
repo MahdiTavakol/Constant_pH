@@ -68,7 +68,7 @@ namespace LAMMPS_NS {
         // Lambda arrays
         double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas, * H_lambdas;
         double T_lambda;
-        char ** molids;
+        int * molids;
         int n_lambdas;
 
         // The protonable groups
@@ -153,3 +153,4 @@ namespace LAMMPS_NS {
 
 #endif
 #endif
+

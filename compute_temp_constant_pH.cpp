@@ -26,7 +26,7 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-ComputeTempConstantPH::ComputeTempConstantPH(LAMMPS *lmp, int narg, char **arg) : ComputeTemp(lmp, narg, arg), 
+ComputeTempConstantPH::ComputeTempConstantPH(LAMMPS *lmp, int narg, char **arg) : ComputeTemp(lmp, narg-1, arg), 
 fix_constant_pH_id(nullptr), x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg != 4) error->all(FLERR, "Illegal compute temp constant pH command");
@@ -119,17 +119,21 @@ double ComputeTempConstantPH::compute_scalar()
         t += (v[i][0] * v[i][0] + v[i][1] * v[i][1] + v[i][2] * v[i][2]) * mass[type[i]];
   }
 
-  MPI_Allreduce(&t, &scalar, 1, MPI_DOUBLE, MPI_SUM, world);
 
   fix_constant_pH->return_nparams(_n_lambdas);
   if (n_lambdas != _n_lambdas)
      error->all(FLERR,"The n_lambdas parameter in the compute temperature constant pH is not the same as the n_lambdas in the fix constant pH: {},{}",n_lambdas,_n_lambdas);
+
+  MPI_Allreduce(&t, &scalar, 1, MPI_DOUBLE, MPI_SUM, world);
+  
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas); // The return_parameters section should be implemented in the fix_constant_pH.cpp code
+  
+  double scaling_factor = 100.0;
 
   for (int i = 0; i < n_lambdas; i++)
-     scalar += v_lambdas[i]*v_lambdas[i] * m_lambdas[i];
+     scalar += v_lambdas[i]*v_lambdas[i] * m_lambdas[i] *scaling_factor;
 
-   
+  
   if (dynamic) dof_compute();
   if (dof < 0.0 && natoms_temp > 0.0)
     error->all(FLERR, "Temperature compute degrees of freedom < 0");

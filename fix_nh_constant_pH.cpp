@@ -768,3 +768,4 @@ double FixNHConstantPH::memory_usage()
   if (irregular) bytes += irregular->memory_usage();
   return bytes;
 }
+
