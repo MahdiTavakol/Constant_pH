@@ -331,8 +331,8 @@ void FixConstantPH::setup(int /*vflag*/)
 void FixConstantPH::initial_integrate(int /*vflag*/)
 {
    compute_Hs<-1>();
-   calculate_df();
-   calculate_dU();
+   calculate_dfs();
+   calculate_dUs();
    update_a_lambda();
    compute_Hs<1>();
    compute_q_total();
@@ -354,17 +354,9 @@ void FixConstantPH::update_a_lambda()
 	double  f_lambda = -(HBs[i]-HAs[i] - df*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // I'm not sure about the sign of the df*kT*log(10)*(pK-pH) 
 	this->a_lambdas[i] = f_lambda /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
 	// I am not sure about the sign of the f*kT*log(10)*(pK-pH)
-   this->H_lambda = (1-lambda)*HA + lambda*HB - f*kT*log(10*(pK-pH)) + kj2kcal*U + (m_lambda/2.0)*(v_lambda*v_lambda); // This might not be needed. May be I need to tally this into energies.
-   // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
-   }
-   
-
-   
-
-
-
-
-	
+        this->H_lambdas[i] = (1-lambda)*HAs[i] + lambda*HBs[i] - f*kT*log(10*(pK-pH)) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i]); // This might not be needed. May be I need to tally this into energies.
+        // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
+   }	
 }
 	
 /* ----------------------------------------------------------------------- */
@@ -425,12 +417,6 @@ void FixConstantPH::return_params(double* const _x_lambdas, double* const _v_lam
 	_a_lambdas[i] = a_lambdas[i];
 	_m_lambdas[i] = m_lambdas[i];
     }
-
-    // just for now
-    _x_lambdas[0] = lambda;
-    _v_lambdas[0] = v_lambda;
-    _a_lambdas[0] = a_lambda;
-    _m_lambdas[0] = m_lambda;
 }
 
 /* ---------------------------------------------------------------------
@@ -457,12 +443,6 @@ void FixConstantPH::reset_params(const double* const _x_lambdas, const double* c
 	a_lambdas[i] = _a_lambdas[i];
 	m_lambdas[i] = _m_lambdas[i];
     }
-
-    // just for now
-    lambda = _x_lambdas[0];
-    v_lambda = _v_lambdas[0];
-    a_lambda = _a_lambdas[0];
-    m_lambda = _m_lambdas[0];
 }
 
 /* ---------------------------------------------------------------------- */
@@ -564,31 +544,35 @@ void FixConstantPH::calculate_num_prot_num_HWs()
 
 /* ---------------------------------------------------------------------- */
 
-void FixConstantPH::calculate_df()
+void FixConstantPH::calculate_dfs()
 {
-   f = 1.0/(1+exp(-50*(lambda-0.5)));
-   df = 50*exp(-50*(lambda-0.5))*(f*f);
+   for (int i = 0; i < n_lambdas; i++) {
+	fs[i] = 1.0/(1+exp(-50*(lambdas[i]-0.5)));
+        dfs[i] = 50*exp(-50*(lambdas[i]-0.5))*(fs[i]*fs[i]);
+   }
 }
 
 /* ----------------------------------------------------------------------- */
 
-void FixConstantPH::calculate_dU()
+void FixConstantPH::calculate_dUs()
 {
    double U1, U2, U3, U4, U5;
    double dU1, dU2, dU3, dU4, dU5;
-   U1 = -k*exp(-(lambda-1-b)*(lambda-1-b)/(2*a*a));
-   U2 = -k*exp(-(lambda+b)*(lambda+b)/(2*a*a));
-   U3 = d*exp(-(lambda-0.5)*(lambda-0.5)/(2*s*s));
-   U4 = 0.5*w*(1-erff(r*(lambda+m)));
-   U5 = 0.5*w*(1+erff(r*(lambda-1-m)));
-   dU1 = -((lambda-1-b)/(a*a))*U1;
-   dU2 = -((lambda+b)/(a*a))*U2;
-   dU3 = -((lambda-0.5)/(s*s))*U3;
-   dU4 = -0.5*w*r*2*exp(-r*r*(lambda+m)*(lambda+m))/sqrt(M_PI);
-   dU5 = 0.5*w*r*2*exp(-r*r*(lambda-1-m)*(lambda-1-m))/sqrt(M_PI);
+   for (int i = 0; i < n_lambdas; i++) {
+        U1 = -k*exp(-(lambdas[i]-1-b)*(lambdas[i]-1-b)/(2*a*a));
+   	U2 = -k*exp(-(lambdas[i]+b)*(lambdas[i]+b)/(2*a*a));
+   	U3 = d*exp(-(lambdas[i]-0.5)*(lambdas[i]-0.5)/(2*s*s));
+   	U4 = 0.5*w*(1-erff(r*(lambdas[i]+m)));
+   	U5 = 0.5*w*(1+erff(r*(lambdas[i]-1-m)));
+   	dU1 = -((lambdas[i]-1-b)/(a*a))*U1;
+   	dU2 = -((lambdas[i]+b)/(a*a))*U2;
+   	dU3 = -((lambdas[i]-0.5)/(s*s))*U3;
+   	dU4 = -0.5*w*r*2*exp(-r*r*(lambdas[i]+m)*(lambdas[i]+m))/sqrt(M_PI);
+   	dU5 = 0.5*w*r*2*exp(-r*r*(lambdas[i]-1-m)*(lambdas[i]-1-m))/sqrt(M_PI);
 
-    U =  U1 +  U2 +  U3 +  U4 +  U5;
-   dU = dU1 + dU2 + dU3 + dU4 + dU5;
+    	Us[i] =  U1 +  U2 +  U3 +  U4 +  U5;
+   	dUs[i] = dU1 + dU2 + dU3 + dU4 + dU5;   
+   }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -748,7 +732,7 @@ void FixConstantPH::backup_restore_qfev()
 
    -------------------------------------------------------------- */
    
-void FixConstantPH::modify_q(const double& scale)
+void FixConstantPH::modify_qs(double* scales)
 {
     int nlocal = atom->nlocal;
     int * mask = atom->mask;
@@ -761,15 +745,18 @@ void FixConstantPH::modify_q(const double& scale)
     double * q_changes = new double[4]{0.0,0.0,0.0,0.0};
 
     // update the charges
-    for (int i = 0; i < nlocal; i++)
-    {
-       if (protonable[type[i]] == 1)
-       {
-           double q_init = q_orig[i];
-           q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
-	   q_changes_local[0]++;
-	   q_changes_local[1] += (q[i] - q_init);
-       }
+    for (int j = 0; j < n_lambdas; j++) {
+    	for (int i = 0; i < nlocal; i++)
+    	{
+	    char* molid_i = atom->molecules[molecule[i]]->id;
+            if (protonable[type[i]] == 1 && !strcmp(molid_i,molids[j]))
+            {
+                 double q_init = q_orig[i];
+                 q[i] = pH1qs[type[i]] + scales[j] * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+	         q_changes_local[0]++;
+	         q_changes_local[1] += (q[i] - q_init);
+            }
+        }
     }
     
     MPI_Allreduce(q_changes_local,q_changes,2,MPI_DOUBLE,MPI_SUM,world);
@@ -825,6 +812,33 @@ void FixConstantPH::update_lmp() {
 }
 
 /* ---------------------------------------------------------------------
+   Add forcefield correction term deltaGFF in equation 2 of
+   https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_GFFs()
+{
+   for (int j = 0; j < n_lambdas; j++) {
+   	int i = 0;
+   	while (i < GFF_size && GFF[i][0] < lambdas[j]) i++;
+
+   	if (i == 0)
+   	{
+      	    error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
+            GFF_lambdas[j] = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambda - GFF[0][0]);
+        }
+        if (i > 0 && i < GFF_size - 1)
+            GFF_lambdas[j] = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i-1][0]);
+        if (i == GFF_size - 1)
+        {
+            error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
+            GFF_lambdas[j] = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i][0]);
+        }
+   }
+}
+
+
+/* ---------------------------------------------------------------------
    Read the data file containing the term deltaGFF in equation 2 of 
    https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
    --------------------------------------------------------------------- */
@@ -855,30 +869,6 @@ void FixConstantPH::init_GFF()
       i++;   
    }	
    if (fp && (comm->me == 0)) fclose(fp);
-}
-
-/* ---------------------------------------------------------------------
-   Add forcefield correction term deltaGFF in equation 2 of
-   https://pubs.acs.org/doi/full/10.1021/acs.jctc.5b01160
-   --------------------------------------------------------------------- */
-
-void FixConstantPH::calculate_GFF()
-{
-   int i = 0;
-   while (i < GFF_size && GFF[i][0] < lambda) i++;
-
-   if (i == 0)
-   {
-      error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
-      GFF_lambda = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambda - GFF[0][0]);
-   }
-   if (i > 0 && i < GFF_size - 1)
-      GFF_lambda = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i-1][0]);
-   if (i == GFF_size - 1)
-   {
-      error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
-      GFF_lambda = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i][0]);
-   }
 }
 
 /* ----------------------------------------------------------------------
