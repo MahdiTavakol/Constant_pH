@@ -54,7 +54,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
        fs(nullptr), dfs(nullptr), Us(nullptr), dUs(nullptr),
        GFF(nullptr),
        q_orig(nullptr), f_orig(nullptr),
-       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr), 
+       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr)
 {
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
@@ -75,8 +75,6 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   pH = utils::numeric(FLERR, arg[7], false, lmp);
   T = utils::numeric(FLERR, arg[8], false, lmp);
   
-  pstyle = utils::strdup(arg[9]);
-  
 
 
   qHs = 0.0;
@@ -85,7 +83,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   GFF_flag = false;
   print_Udwp_flag = false;
   n_lambdas = 1;
-  int iarg = 10;
+  int iarg = 9;
   while (iarg < narg) {
     if (strcmp(arg[iarg], "GFF") == 0)
     {
@@ -113,7 +111,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	n_lambdas = utils::numeric(FLERR,arg[iarg+1],false,lmp);
 	molids = new char*[n_lambdas];
 	iarg+=2;
-	for (int i = 0; i < nmols; i++) {
+	for (int i = 0; i < n_lambdas; i++) {
 	    molids[i] = utils::strdup(arg[iarg]);
 	    iarg++;
 	}
@@ -136,11 +134,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 
 FixConstantPH::~FixConstantPH()
 {
-   if (lambdas)   memory->destory(lambdas);
-   if (v_lambdas) memory->destory(v_lambdas);
-   if (a_lambdas) memory->destory(a_lambdas);
-   if (m_lambdas) memory->destory(m_lambdas);
-   if (H_lambdas) memory->destory(H_lambdas);
+   if (lambdas)   memory->destroy(lambdas);
+   if (v_lambdas) memory->destroy(v_lambdas);
+   if (a_lambdas) memory->destroy(a_lambdas);
+   if (m_lambdas) memory->destroy(m_lambdas);
+   if (H_lambdas) memory->destroy(H_lambdas);
    if (protonable) memory->destroy(protonable);
    if (typePerProtMol) memory->destroy(typePerProtMol);
    if (pH1qs) memory->destroy(pH1qs);
@@ -158,7 +156,7 @@ FixConstantPH::~FixConstantPH()
    if (Us) memory->destroy(Us);
    if (dUs) memory->destroy(dUs);
 
-   if (GFF) memory->destory(GFF);
+   if (GFF) memory->destroy(GFF);
    
 
    deallocate_storage();
@@ -200,11 +198,11 @@ void FixConstantPH::setup(int /*vflag*/)
     r = 16.458; 
     m = 0.1507;
     d = 2.0;
-    // m_lambda = 20u taken from https://www.mpinat.mpg.de/627830/usage
-    m_lambda = 20;
+
 
 	
-    GFF_lambda = 0.0;
+    for (int j = 0; j < n_lambdas; j++)
+        GFF_lambdas[j] = 0.0;
     if (GFF_flag)
 	init_GFF();
 
@@ -244,7 +242,7 @@ void FixConstantPH::setup(int /*vflag*/)
 	lambdas[i] = 0.0;
 	v_lambdas[i] = 0.0;
 	a_lambdas[i] = 0.0;
-	m_lambdas[i] = 20.0;
+	m_lambdas[i] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
     }
 	
     nmax = atom->nmax;
@@ -280,10 +278,10 @@ void FixConstantPH::update_a_lambda()
    //f = 1.0;
 
    for (int i = 0; i < n_lambdas; i++) {
-	double  f_lambda = -(HBs[i]-HAs[i] - df*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // I'm not sure about the sign of the df*kT*log(10)*(pK-pH) 
+	double  f_lambda = -(HBs[i]-HAs[i] - dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // I'm not sure about the sign of the df*kT*log(10)*(pK-pH) 
 	this->a_lambdas[i] = f_lambda /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
 	// I am not sure about the sign of the f*kT*log(10)*(pK-pH)
-        this->H_lambdas[i] = (1-lambda)*HAs[i] + lambda*HBs[i] - f*kT*log(10*(pK-pH)) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i]); // This might not be needed. May be I need to tally this into energies.
+        this->H_lambdas[i] = (1-lambdas[i])*HAs[i] + lambdas[i]*HBs[i] - fs[i]*kT*log(10*(pK-pH)) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i]); // This might not be needed. May be I need to tally this into energies.
         // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
    }	
 }
@@ -302,15 +300,16 @@ void FixConstantPH::compute_Hs()
 	  deallocate_storage();
       }
       for (int j = 0; j < n_lambdas; j++) {
-	   double* lambdas_j = new double[n_lambdas](0.0);
+	   double* lambdas_j = new double[n_lambdas];
+	   std::fill(lambdas_j,lambdas_j+n_lambdas,0.0);
 	   backup_restore_qfev<1>();
 	   lambdas_j[j] = 0.0;
-	   modify_q(lambdas_j);
+	   modify_qs(lambdas_j);
 	   update_lmp();
 	   HAs[j] = compute_epair();
            backup_restore_qfev<-1>();
-	   lambdas_i[j] = 1.0;
-	   modify_q(lambdas_j);
+	   lambdas_j[j] = 1.0;
+	   modify_qs(lambdas_j);
 	   HBs[j] = compute_epair();
 	   backup_restore_qfev<-1>();
            delete [] lambdas_j;
@@ -318,7 +317,7 @@ void FixConstantPH::compute_Hs()
    }
    if (stage == 1)
    {
-      modify_q(lambdas); //should define a change_parameters(const double);
+      modify_qs(lambdas); //should define a change_parameters(const double);
       //update_lmp(); This update_lmp() might not work here since I am not sure about the correct values for the eflag and vflag variables... Anyway, the epsilon and charge values have been updated according to the pH value and lammps will do the rest
    }
 }
@@ -499,29 +498,50 @@ void FixConstantPH::calculate_dUs()
    	dU4 = -0.5*w*r*2*exp(-r*r*(lambdas[j]+m)*(lambdas[j]+m))/sqrt(M_PI);
    	dU5 = 0.5*w*r*2*exp(-r*r*(lambdas[j]-1-m)*(lambdas[j]-1-m))/sqrt(M_PI);
 
-    	Us[i] =  U1 +  U2 +  U3 +  U4 +  U5;
-   	dUs[i] = dU1 + dU2 + dU3 + dU4 + dU5;   
+    	Us[j] =  U1 +  U2 +  U3 +  U4 +  U5;
+   	dUs[j] = dU1 + dU2 + dU3 + dU4 + dU5;   
    }
 }
+
+/* ----------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_dU(const double& _lambda, double& _U, double& _dU)
+{
+   double U1, U2, U3, U4, U5;
+   double dU1, dU2, dU3, dU4, dU5;
+   U1 = -k*exp(-(_lambda-1-b)*(_lambda-1-b)/(2*a*a));
+   U2 = -k*exp(-(_lambda+b)*(_lambda+b)/(2*a*a));
+   U3 = d*exp(-(_lambda-0.5)*(_lambda-0.5)/(2*s*s));
+   U4 = 0.5*w*(1-erff(r*(_lambda+m)));
+   U5 = 0.5*w*(1+erff(r*(_lambda-1-m)));
+   dU1 = -((_lambda-1-b)/(a*a))*U1;
+   dU2 = -((_lambda+b)/(a*a))*U2;
+   dU3 = -((_lambda-0.5)/(s*s))*U3;
+   dU4 = -0.5*w*r*2*exp(-r*r*(_lambda+m)*(_lambda+m))/sqrt(M_PI);
+   dU5 = 0.5*w*r*2*exp(-r*r*(_lambda-1-m)*(_lambda-1-m))/sqrt(M_PI);
+
+   _U =  U1 +  U2 +  U3 +  U4 +  U5;
+   _dU = dU1 + dU2 + dU3 + dU4 + dU5;   
+}
+
 
 /* ---------------------------------------------------------------------- */
 
 void FixConstantPH::print_Udwp()
 {
-    double lambda_backup = this->lambda;
+    double lambda_Udwp, U_Udwp, dU_Udwp;
     int n_points = 100;
 	
-    lambda = -0.5;
-    double dlambda = 2.0/(double)n_points;
+    lambda_Udwp = -0.5;
+    double dlambda_Udwp = 2.0/(double)n_points;
 
     fprintf(Udwp_fp,"Lambda,U,dU\n");
     for (int i = 0; i <= n_points; i++) {
-	calculate_dU();
-        fprintf(Udwp_fp,"%f,%f,%f\n",lambda,U,dU);
-	lambda += dlambda;
+	calculate_dU(lambda_Udwp,U_Udwp,dU_Udwp);
+        fprintf(Udwp_fp,"%f,%f,%f\n",lambda_Udwp,U_Udwp,dU_Udwp);
+	lambda_Udwp += dlambda_Udwp;
     }
     fclose(Udwp_fp);
-    lambda = lambda_backup;
 }
 
 /* ----------------------------------------------------------------------
@@ -677,7 +697,7 @@ void FixConstantPH::modify_qs(double* scales)
     for (int j = 0; j < n_lambdas; j++) {
     	for (int i = 0; i < nlocal; i++)
     	{
-	    char* molid_i = atom->molecules[molecule[i]]->id;
+	    char* molid_i = atom->molecules[atom->molecule[i]]->id;
             if (protonable[type[i]] == 1 && !strcmp(molid_i,molids[j]))
             {
                  double q_init = q_orig[i];
@@ -753,14 +773,14 @@ void FixConstantPH::calculate_GFFs()
 
    	if (i == 0)
    	{
-      	    error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
+      	    error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambdas[j]);
             GFF_lambdas[j] = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambdas[j] - GFF[0][0]);
         }
         if (i > 0 && i < GFF_size - 1)
             GFF_lambdas[j] = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j] - GFF[i-1][0]);
         if (i == GFF_size - 1)
         {
-            error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
+            error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambdas[j]);
             GFF_lambdas[j] = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j] - GFF[i][0]);
         }
    }
@@ -868,12 +888,12 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     for (int j = 0; j < n_lambdas; j++)
 	v_lambdas[j] *= scaling_factor;
 
-    v_cm = 0.0;
+    double v_cm = 0.0;
     for (int j = 0; j < n_lambdas; j++)
 	v_cm += v_lambdas[j];
     v_cm /= static_cast<double>(v_cm);
     for (int j = 0; j < n_lambdas; j++)
-	v_lambdas[j] -= vcm;
+	v_lambdas[j] -= v_cm;
 }
 
 /* --------------------------------------------------------------------- */
@@ -882,7 +902,7 @@ void FixConstantPH::calculate_T_lambda()
 {
     T_lambda = 0.0;
     for (int j = 0; j < n_lambdas; j++)
-	T_lambda += 0.5*m_lambdas*v_lambdas[j]*v_lambdas[j]*1e7 / (4184*0.0019872041);
+	T_lambda += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*1e7 / (4184*0.0019872041);
 }
 
    
@@ -943,7 +963,7 @@ double FixConstantPH::compute_array(int i, int j)
       case 1:
         return HBs[j];
       case 2:
-        return df*kT*log(10)*(pK-pH);
+        return dfs[j]*kT*log(10)*(pK-pH);
       case 3:
         return kj2kcal*dUs[j];
       case 4:
@@ -980,7 +1000,7 @@ double FixConstantPH::memory_usage()
   double pvatom_orig_bytes = (double) nlocal * 6.0 * sizeof(double);
   double keatom_orig_bytes = (double) nlocal * sizeof(double);
   double kvatom_orig_bytes = (double) nlocal * 6.0 * sizeof(double);
-  double bytes = pair_bytes + GFF_bytes + epsilon_init_bytes + \
+  double bytes = GFF_bytes + epsilon_init_bytes + \
 	         q_orig_bytes + f_orig_bytes + peatom_orig_bytes + \
                  pvatom_orig_bytes + keatom_orig_bytes + kvatom_orig_bytes;
   return bytes;
