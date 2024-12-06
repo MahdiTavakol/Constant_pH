@@ -54,7 +54,7 @@ namespace LAMMPS_NS {
         double **pH1qs, **pH2qs;
         int **typePerProtMol;
 	int *pKs;
-	int *molids;
+	char **molids;
 
 	// Labeling the protonable atoms
         int *protonable;
