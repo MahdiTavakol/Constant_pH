@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.21
+   v0.04.06
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -710,8 +710,8 @@ void FixNHConstantPH::nh_v_temp()
            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
            v_lambdas[i] = random_normal(mean, sigma);
         }
-        if (lambdas[i] < -0.1 || lambdas[i] > 1.1)
-           v_lambdas[i] = -(lambdas[i]/std::abs(lambdas[i]))*std::abs(v_lambdas[i]);
+        if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
+           v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
       }
     } else if (which == BIAS) {
       // This needs to be implemented
