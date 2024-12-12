@@ -24,11 +24,12 @@ FixStyle(AdaptiveProtonation,FixAdaptiveProtonation);
 #include "fix.h"
 
 namespace LAMMPS_NS {
+	friend FixConstantPH; // It needs to access the number of protonable molecules
 
-	class FixMetaAR : public Fix {
+	class FixAdaptiveProtonation : public Fix {
 	public:
-		FixMetaAR(class LAMMPS*, int, char**);
-		~FixMetaAR() override;
+		FixAdaptiveProtonation(class LAMMPS*, int, char**);
+		~FixAdaptiveProtonation() override;
 		int setmask() override;
 		void init() override;
 		void setup(int) override;
@@ -41,6 +42,9 @@ namespace LAMMPS_NS {
 	private:
 		// Input variables for constant values
     		double typeP, typeO, typeH, typeOw, typeHw, typeOHbond, threshold;
+
+		// The number of protonable phosphates should add a routine to update them
+		int n_protonable;
     
 
 		// Input variables for variable values
