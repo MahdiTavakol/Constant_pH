@@ -1,4 +1,4 @@
-/* -*- c++ -*- ----------------------------------------------------------
+ /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
    LAMMPS development team: developers@lammps.org
@@ -93,6 +93,10 @@ namespace LAMMPS_NS {
         bool print_Udwp_flag;
         FILE *Udwp_fp;
         void print_Udwp();
+
+	// Functions needed to communicate with fix adaptive protonation command
+	FixAdaptiveProtonation* fix_adaptive_protonation_id;
+	int* protonableMolIDs;
 
         // The q_total used to calculate the HW charges
         double q_total;
