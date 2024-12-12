@@ -96,7 +96,6 @@ namespace LAMMPS_NS {
 
 	// Functions needed to communicate with fix adaptive protonation command
 	FixAdaptiveProtonation* fix_adaptive_protonation_id;
-	int* protonableMolIDs;
 
         // The q_total used to calculate the HW charges
         double q_total;
