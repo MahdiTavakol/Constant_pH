@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.04.07----- */
+/* ---v0.05.01----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -119,7 +119,8 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
     }
     else if (strcmp(arg[iarg],"Fix_adaptive_protonation") == 0) {
 	fix_adaptive_protonation_id = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-	iarg+=2;
+	nevery_fix_adaptive = utils::numeric(FLERR,arg[iarg+2],false,lmp);
+	iarg+=3;
     }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
@@ -183,6 +184,8 @@ int FixConstantPH::setmask()
    
 void FixConstantPH::init()
 {
+   fix_adaptive_protonation = static_cast<fix_adaptive_protonation_id*>(modify->get_fix_by_id(fix_adaptive_protonation_id));
+   n_lambdas = fix_adaptive_protonation->n_protonable;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -199,8 +202,6 @@ void FixConstantPH::setup(int /*vflag*/)
     r = 16.458; 
     m = 0.1507;
     d = 2.0;
-
-
 	
     // Reading the structure of protonable states before and after protonation.
     read_pH_structure_files();
@@ -211,49 +212,66 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
-
-
-
-
-    memory->create(lambdas,n_lambdas,"constant_pH:lambdas");
-    memory->create(v_lambdas,n_lambdas,"constant_pH:v_lambdas");
-    memory->create(a_lambdas,n_lambdas,"constant_pH:a_lambdas");
-    memory->create(m_lambdas,n_lambdas,"constant_pH:m_lambdas");
-    memory->create(H_lambdas,n_lambdas,"constant_pH:H_lambdas");
-
-    memory->create(HAs,n_lambdas,"constant_pH:HAs");
-    memory->create(HBs,n_lambdas,"constant_pH:HBs");
-    memory->create(GFF_lambdas,n_lambdas,"constant_pH:GFF_lambdas");
-    memory->create(fs,n_lambdas,"constant_pH:fs");
-    memory->create(dfs,n_lambdas,"constant_pH:df");
-    memory->create(Us,n_lambdas,"constant_pH:Us");
-    memory->create(dUs,n_lambdas,"constant_pH:dUs");
-    
-    
-    for (int j = 0; j < n_lambdas; j++)
-        GFF_lambdas[j] = 0.0;
+    reallocate_lambda_storage();
+       
     if (GFF_flag)
 	init_GFF();
 
     if (print_Udwp_flag)
 	print_Udwp();
-	
-    // This would not work in the initialize section as the m_lambda has not been set yet!
-    initialize_v_lambda(this->T);
-	
 
-    for (int i = 0; i < n_lambdas; i++) {
-	lambdas[i] = 0.0;
-	v_lambdas[i] = 0.0;
-	a_lambdas[i] = 0.0;
-	m_lambdas[i] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
-    }
-	
+
     nmax = atom->nmax;
     allocate_storage();
 
 }
 
+/* ----------------------------------------------------------------------
+   This function resets reallocates the dynamically allocated memories for
+   constant pH whenever the n_lambdas change
+   ----------------------------------------------------------------------  */
+
+void FixConstantPH::reallocate_lambda_storage()
+{
+   if (lambdas) memory->destroy(lambdas);
+   if (v_lambdas) memory->destroy(v_lambdas);
+   if (a_lambdas) memory->destroy(a_lambdas);
+   if (m_lambdas) memory->destroy(m_lambdas);
+   if (H_lambdas) memory->destroy(H_lambdas);
+
+   if (HAs) memory->destroy(HAs);
+   if (HBs) memory->destroy(HBs);
+   if (GFF_lambdas) memory->destroy(GFF_lambdas);
+   if (fs) memory->destroy(fs);
+   if (dfs) memory->destroy(dfs);
+   if (Us) memory->destroy(Us);
+   if (dUs) memory->destroy(dUs);
+	
+   memory->create(lambdas,n_lambdas,"constant_pH:lambdas");
+   memory->create(v_lambdas,n_lambdas,"constant_pH:v_lambdas");
+   memory->create(a_lambdas,n_lambdas,"constant_pH:a_lambdas");
+   memory->create(m_lambdas,n_lambdas,"constant_pH:m_lambdas");
+   memory->create(H_lambdas,n_lambdas,"constant_pH:H_lambdas");
+
+   memory->create(HAs,n_lambdas,"constant_pH:HAs");
+   memory->create(HBs,n_lambdas,"constant_pH:HBs");
+   memory->create(GFF_lambdas,n_lambdas,"constant_pH:GFF_lambdas");
+   memory->create(fs,n_lambdas,"constant_pH:fs");
+   memory->create(dfs,n_lambdas,"constant_pH:df");
+   memory->create(Us,n_lambdas,"constant_pH:Us");
+   memory->create(dUs,n_lambdas,"constant_pH:dUs");
+
+   for (int i = 0; i < n_lambdas; i++) {
+      lambdas[i] = 0.0;
+      v_lambdas[i] = 0.0;
+      a_lambdas[i] = 0.0;
+      m_lambdas[i] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
+      GFF_lambdas[j] = 0.0;
+   } 
+
+   // This would not work in the initialize section as the m_lambda has not been set yet!
+   initialize_v_lambda(this->T);
+}
 /* ----------------------------------------------------------------------
    This part calculates the acceleration of the lambdas parameter
    which is obtained from the force acting on it
@@ -261,6 +279,12 @@ void FixConstantPH::setup(int /*vflag*/)
 
 void FixConstantPH::initial_integrate(int /*vflag*/)
 {
+   if ((update->ntimestep % ) {
+       if (fix_adaptive_protonation->n_protonable != n_lambdas) {
+	   n_lambdas = fix_adaptive_protonation->n_protonable;
+           reallocate_lambda_storage();
+       }
+   }
    compute_Hs<-1>();
    calculate_dfs();
    calculate_dUs();
