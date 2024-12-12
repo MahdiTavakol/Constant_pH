@@ -257,6 +257,35 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
 }
 
 /* ----------------------------------------------------------------------------------------
+   Setting separate molecule ids for different phosphate ions 
+   It might need to be a separate command in LAMMPS
+   ---------------------------------------------------------------------------------------- */
+
+void FixAdaptiveProtonation::set_molecule_id()
+{
+   int nlocal = atom->nlocal;
+   int * molecule = atom->molecule;
+   int * num_bond = atom->num_bond;
+   int ** bond_atom = atom->bond_atom;
+   int * tag = atom->tag; // atom-id
+   int * molecule_id = new int[nlocal];
+
+   for (int i = 0; i < nlocal; i++) {
+      molecule_id[i] = tag[i];
+   }
+
+   for (int i = 0; i < nlocal; i++) {
+      for (int k = 0; k < num_bond[i]; k++) {
+         int jtag = bond_atom[i][k]; // the tag (atom-id) of kth bonds of atom i
+         // The question is that what is what the molecule id of jtag atom is 
+         int molecule_id[i] = MIN(molecule_id[i],molecule_id[j]); // I am not sure about header for the MIN 
+      }
+   }
+
+   // You need to think about neighbor exchange;
+}
+
+/* ----------------------------------------------------------------------------------------
    changing the protonation state of phosphates 
    ---------------------------------------------------------------------------------------- */
 
