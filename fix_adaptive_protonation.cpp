@@ -263,20 +263,22 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
 
 void FixAdaptiveProtonation::set_molecule_id()
 {
+   int natom = atom->nlocal + atom->nghost;
    int nlocal = atom->nlocal;
    int * molecule = atom->molecule;
    int * num_bond = atom->num_bond;
    int ** bond_atom = atom->bond_atom;
    int * tag = atom->tag; // atom-id
-   int * molecule_id = new int[nlocal];
+   int * molecule_id = new int[natom];
 
-   for (int i = 0; i < nlocal; i++) {
+   for (int i = 0; i < natom; i++) {
       molecule_id[i] = tag[i];
    }
 
    for (int i = 0; i < nlocal; i++) {
       for (int k = 0; k < num_bond[i]; k++) {
          int jtag = bond_atom[i][k]; // the tag (atom-id) of kth bonds of atom i
+         for (int j = 0; j < natom; j++)
          // The question is that what is what the molecule id of jtag atom is 
          int molecule_id[i] = MIN(molecule_id[i],molecule_id[j]); // I am not sure about header for the MIN 
       }
