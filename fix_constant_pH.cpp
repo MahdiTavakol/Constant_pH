@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.04.02----- */
+/* ---v0.04.07----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -54,7 +54,8 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
        fs(nullptr), dfs(nullptr), Us(nullptr), dUs(nullptr),
        GFF(nullptr),
        q_orig(nullptr), f_orig(nullptr),
-       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr)
+       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr),
+       fix_adaptive_protonation_id(nullptr)
 {
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
@@ -115,6 +116,10 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	    molids[i] = utils::numeric(FLERR,arg[iarg],false,lmp);
 	    iarg++;
 	}
+    }
+    else if (strcmp(arg[iarg],"Fix_adaptive_protonation") == 0) {
+	fix_adaptive_protonation_id = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	iarg+=2;
     }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
