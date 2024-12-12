@@ -95,7 +95,8 @@ namespace LAMMPS_NS {
         void print_Udwp();
 
 	// Functions needed to communicate with fix adaptive protonation command
-	FixAdaptiveProtonation* fix_adaptive_protonation_id;
+	int fix_adaptive_protonation_id;
+	FixAdaptiveProtonation* fix_adaptive_protonation;
 
         // The q_total used to calculate the HW charges
         double q_total;
