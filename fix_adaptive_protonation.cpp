@@ -58,7 +58,7 @@ enum { NONE, CONSTANT, EQUAL, ATOM };
 FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) :
    Fix(lmp, narg, arg), typePstr(nullptr), typeOstr(nullptr), typeHstr(nullptr)
 {
-   if (narg < 9) utils::missing_cmd_args(FLERR, "fix AdaptiveProtonation", error);
+   if (narg < 10) utils::missing_cmd_args(FLERR, "fix AdaptiveProtonation", error);
 
    dynamic_group_allow = 0;
    scalar_flag = 1; 
@@ -100,32 +100,15 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
       typeHstyle = CONSTANT;
    }
    if (utils::strmatch(arg[7], "^v_")) {
-      error->all(FLERR,"The variable input for typeOH bond in AdaptiveProtonation is not supported yet!");
-   }
-   else
-   {
-      typeOHbond = utils::numeric(FLERR,arg[7],false,lmp);
-   }
-   if (utils::strmatch(arg[8], "^v_")) {
       error->all(FLERR,"The variable input for threshold in AdaptiveProtonation is not supported yet!");
    }
    else
    {
-      threshold = utils::numeric(FLERR,arg[8],false,lmp);
+      threshold = utils::numeric(FLERR,arg[7],false,lmp);
    }
-
-
-   // optional args
-
-
-
-   // set up reneighboring from src/fix_evaporate.cpp
-   force_reneighbor = 1;
-   next_reneighbor = (update->ntimestep/nevery) * nevery + nevery;
-
-   // the number of added atoms
-   numaddedatoms = 0;
-
+   pKa = utils::numeric(FLERR,arg[8],false,lmp);
+   pH   = utils::numeric(FLERR,arg[9],false,lmp);
+   
    nmax = 1;
    memory->create(mark,nmax,"AdaptiveProtontation:mark");
 }
@@ -277,14 +260,10 @@ void FixAdaptiveProtonation::set_molecule_id()
 
    for (int i = 0; i < nlocal; i++) {
       for (int k = 0; k < num_bond[i]; k++) {
-         int j;
          int jtag = bond_atom[i][k]; // the tag (atom-id) of kth bonds of atom i
-         for (int j = 0; j < natom; j++) {
-            if (tag[j] == jtag)
-               break;
-         }
-         if (j == natom) {
-            error->warning(FLERR,"fix adaptive protonation cannot find the bonded atom to atom with id of {}",tag[i]);
+         int j = atom->map(jtag);
+         if (j == -1) {
+            error->warning(FLERR,"Bond atom missing in fix AdaptiveProtonation");
             continue;
          }
          molecule_id[j] = jtag;
@@ -329,23 +308,26 @@ void FixAdaptiveProtonation::change_protonation()
    for (int i = 0; i < nlocal; i++)
       hlist[i] = 0;
 
-   if (atom->avec->bonds_allow && 
-      (style == BOND || style == MULTI || style == ATOM)) {
-      int * num_bond = atom->num_bond;
+   if (atom->avec->bonds_allow && (style == BOND || style == MULTI || style == ATOM)) {
+      
+      int pAtom;     // local atom id for the P atom
+      int oAtoms[3]; // local atom id for the O atoms
+      int hAtoms[3]; // local atom id for the H atoms
 
       for (int i = 0; i < nlocal; i++) {
          if (mark[i] == 0) continue;
-         int pAtom, * oAtoms, * hAtoms; 
-         oAtoms = new int[3];
-         hAtoms = new int[3];
          pAtom = i;
          int numHs = 0; 
-         for (int m = 0; m < num_bond[i]; m++) {
+         for (int m = 0; m < atom->num_bond[i]; m++) {
+            /* 
+               bond_atoms[i][m] contains the global id (tag) of the connected atom
+               so there is a need for mapping the global id to the local one
+            */
             int atom2 = atom->map(atom->bond_atom[i][m]);
-            if (m < 3) oAtoms[i] = atom2;
+            if (m < 3) oAtoms[m] = atom2;
             else error->warning(FLERR,"Number of atoms connected to P is {}",num_bond[i]);
             if (atom2 == -1) error->warning(FLERR,"Bond atom missing in fix AdaptiveProtonation");
-            for (int n = 0; n < num_bond[atom2]; n++) {
+            for (int n = 0; n < atom->num_bond[atom2]; n++) {
                int atom3 = atom->map(atom->bond_atom[atom2][n]);
                if (type[atom3] == typeH) 
                {
@@ -358,27 +340,63 @@ void FixAdaptiveProtonation::change_protonation()
             }      
             if (mark[i] == 1  && numHs == 3) continue; // H3PO4 in solution. Nothing to do here!  
             if (mark[i] == -1 && numHs == 0) continue; // PO4 out of water. Nothing to do here!
-            // This has definitly came from the HAp surface
+            // This has definitly come from the HAp surface
             if (mark[i] == 1 && numHs == 0) {
                // adding hydrogens to this phosphate
-               // For the moment we just add two hydrogens
-               double * coor1, * coor2;
-               coor1[0] = x[i][0] + 0.9;
-               coor1[1] = x[i][1];
-               coor1[2] = x[i][2];
-               coor2[0] = x[i][0] - 0.8;
-               coor2[1] = x[i][1];
-               coor2[2] = x[i][2];
+               // For the moment we just add three hydrogens
+               double coor1[3], coor2[3], coor3[3];
+               
+               coor1[0] = x[oAtoms[0]][0] + 0.9;
+               coor1[1] = x[oAtoms[0]][1];
+               coor1[2] = x[oAtoms[0]][2];
+               coor2[0] = x[oAtoms[1]][0] - 0.8;
+               coor2[1] = x[oAtoms[1]][1];
+               coor2[2] = x[oAtoms[1]][2];
+               coor3[0] = x[oAtoms[2]][0];
+               coor3[1] = x[oAtoms[2]][1] + 0.64;
+               coor3[2] = x[oAtoms[2]][2] - 0.64;
+
+
+               error->warning(FLERR,"atom->natoms before adding atoms = {}",atom->natoms);
                atom->avec->create_atom(typeH,coor1);
                atom->avec->create_atom(typeH,coor2);
-               int j1 = atom->natoms + 1;
-               int j2 = atom->natoms + 2;
-               atom->natom += 1;
+               atom->avec->create_atom(typeH,coor3);
+               error->warning(FLERR,"atom->natoms after adding atoms = {}",atom->natoms);
+               
+               numaddedatoms+=2;
+
+               int tagj1 = (tag[nlocal-3] > 0)? tag[nlocal-3]: atom->natoms-3;
+               int tagj2 = (tag[nlocal-2] > 0)? tag[nlocal-2]: atom->natoms-2;
+               int tagj3 = (tag[nlocal-1] > 0)? tag[nlocal-1]: atom->natoms-1;
+               atom->natom += 3; // I am not sure if this is required or not.
+
+
+               // atom->avec->create_atoms itself updates the atom->nlocal value
+               int j1 = atom->nlocal - 3;
+               int j2 = atom->nlocal - 2;
+               int j3 = atom->nlocal - 1;
+               
                // Let's connect these two new Hs to the P
                if (num_bond[i] == atom->bond_per_atom)
                   error->one(FLERR,"Num bonds exceeded bonds per atom in fix AdaptiveProtonation");
-               bond_type[i][num_bond[i]] = bondOHtype;
-               bond_atom[i][num_bond[i]] = tag[j1];
+
+               /*
+                 I guess that the size of bond_type and bond_atom is atom->bond_per_atom so there is enough space there
+               */
+               bond_type[oAtoms[0]][num_bond[i]] = bondOHtype;
+               bond_atom[oAtoms[0]][num_bond[i]] = tagj1;
+               num_bond[oAtoms[0]]++;
+               bond_type[hAtoms[0]][0] = bondOHtype;
+               bond_atom[hAtoms[0]][0] = tagj2;
+               num_bond[hAtoms[0]]++;
+               bond_type[hAtoms[1]][0] = bondOHtype;
+               bond_atom[hAtoms[1]][0] = 
+               num_bond[hAtoms[1]]++;
+               bond_type[hAtoms[2]][0] = bondOHtype;
+               num_bond[hAtoms[2]]++;
+               
+               bond_atom[i][num_bond[i]] = tagj1;
+               bond_atom[i]
                num_bond[i]++;
                if (num_bond[i] == atom->bond_per_atom)
                   error->one(FLERR,"Num bonds exceeded bonds per atom in fix AdaptiveProtonation");
@@ -400,8 +418,6 @@ void FixAdaptiveProtonation::change_protonation()
                }
             }
          }
-         delete [] oAtoms;
-         delete [] hAtoms;
       }
    }
 
