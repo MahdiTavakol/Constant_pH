@@ -296,7 +296,7 @@ void FixAdaptiveProtonation::set_molecule_id()
    changing the protonation state of phosphates 
    ---------------------------------------------------------------------------------------- */
 
-void FixAdaptiveProtonation::change_protonation()
+void FixAdaptiveProtonation::modify_protonable_hydrogens()
 {
    int nlocal = atom->nlocal;
    tagint *tag = atom->tag;
@@ -337,89 +337,112 @@ void FixAdaptiveProtonation::change_protonation()
                       error->warning(FLERR,"Number of protons are {}",++numHs);
                   hlist[atom3] = 1;
                }
-            }      
-            if (mark[i] == 1  && numHs == 3) continue; // H3PO4 in solution. Nothing to do here!  
-            if (mark[i] == -1 && numHs == 0) continue; // PO4 out of water. Nothing to do here!
-            // This has definitly come from the HAp surface
-            if (mark[i] == 1 && numHs == 0) {
-               // adding hydrogens to this phosphate
-               // For the moment we just add three hydrogens
-               double coor1[3], coor2[3], coor3[3];
-               
-               coor1[0] = x[oAtoms[0]][0] + 0.9;
-               coor1[1] = x[oAtoms[0]][1];
-               coor1[2] = x[oAtoms[0]][2];
-               coor2[0] = x[oAtoms[1]][0] - 0.8;
-               coor2[1] = x[oAtoms[1]][1];
-               coor2[2] = x[oAtoms[1]][2];
-               coor3[0] = x[oAtoms[2]][0];
-               coor3[1] = x[oAtoms[2]][1] + 0.64;
-               coor3[2] = x[oAtoms[2]][2] - 0.64;
-
-
-               error->warning(FLERR,"atom->natoms before adding atoms = {}",atom->natoms);
-               atom->avec->create_atom(typeH,coor1);
-               atom->avec->create_atom(typeH,coor2);
-               atom->avec->create_atom(typeH,coor3);
-               error->warning(FLERR,"atom->natoms after adding atoms = {}",atom->natoms);
-               
-               numaddedatoms+=2;
-
-               int tagj1 = (tag[nlocal-3] > 0)? tag[nlocal-3]: atom->natoms-3;
-               int tagj2 = (tag[nlocal-2] > 0)? tag[nlocal-2]: atom->natoms-2;
-               int tagj3 = (tag[nlocal-1] > 0)? tag[nlocal-1]: atom->natoms-1;
-               atom->natom += 3; // I am not sure if this is required or not.
-
-
-               // atom->avec->create_atoms itself updates the atom->nlocal value
-               int j1 = atom->nlocal - 3;
-               int j2 = atom->nlocal - 2;
-               int j3 = atom->nlocal - 1;
-               
-               // Let's connect these two new Hs to the P
-               if (num_bond[i] == atom->bond_per_atom)
-                  error->one(FLERR,"Num bonds exceeded bonds per atom in fix AdaptiveProtonation");
-
-               /*
-                 I guess that the size of bond_type and bond_atom is atom->bond_per_atom so there is enough space there
-               */
-               bond_type[oAtoms[0]][num_bond[i]] = bondOHtype;
-               bond_atom[oAtoms[0]][num_bond[i]] = tagj1;
-               num_bond[oAtoms[0]]++;
-               bond_type[hAtoms[0]][0] = bondOHtype;
-               bond_atom[hAtoms[0]][0] = tagj2;
-               num_bond[hAtoms[0]]++;
-               bond_type[hAtoms[1]][0] = bondOHtype;
-               bond_atom[hAtoms[1]][0] = 
-               num_bond[hAtoms[1]]++;
-               bond_type[hAtoms[2]][0] = bondOHtype;
-               num_bond[hAtoms[2]]++;
-               
-               bond_atom[i][num_bond[i]] = tagj1;
-               bond_atom[i]
-               num_bond[i]++;
-               if (num_bond[i] == atom->bond_per_atom)
-                  error->one(FLERR,"Num bonds exceeded bonds per atom in fix AdaptiveProtonation");
-               bond_type[i][num_bond[i]] = bondOHtype;
-               bond_atom[i][num_bond[i]] = tag[j2];
-               num_bond[i]++;
             }
-            // This has come from the water
-            if (mark[i] == -1 && numHs > 0) {
-               while (numHs) {
-                  while (k < nlocal) {
-                     if (hlist[k] == 1) {
-                       avec->copy(nlocal - 1, k, 1);
-                       nlocal--;
-                       numHs--;
-                     } else
-                    k++;
-                  } 
-               }
+
+            /* 
+               Considering different values of mark[i] and setting the number of hydrogen atoms
+               to an appropriate value
+            */
+            
+            if (mark[i] == -1 && numHs == 0) continue; // PO4 inside the HAp ---> Nothing to do here!
+            if (mark[i] == -1 && numHs > 0) remove_hydrogens(numHs,hlist); //HPO4, H2PO4 or H3PO4 inside ---> The hydrogens must be removed
+            if (mark[i] == 1 && numHs == req_numHs) continue; // HxPO4 inside the surface with the exact number of required Hydrogen atoms ---> Nothing to do here!
+            if (mark[i] == 1 && numHs > req_numHs) remove_hydrogens(numHs-req_numHs,hlist); // HxPO4 in the surface or in solution with higher number of Hydrogens
+            if (mark[i] == 1 && numHs < req_numHs) {
+               /* HxPO4 in the surface or in solution with lower number of Hydrogens
+                  I would prefer to remove all the hydrogens of this phosphate and then add
+                  the required number to eliminate the possibility of having an Oxygen atom with
+                  two hydrogen atoms
+               */
+               remove_hydrogens(numHs, hlist);
+               add_hydrogens(i,req_numHs,oAtoms,hAtoms);
             }
          }
       }
    }
 
    delete [] hlist;
+}
+
+void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, const int* const oAtoms, const int* const hAtoms) 
+{
+   double *x = atom->x;
+
+   // adding hydrogens to this phosphate
+   double coors[3][3]; // Maximum three phosphate ions
+   int tags[3];
+   int js[3];
+               
+   coors[0][0] = x[oAtoms[0]][0] + 0.9;
+   coors[0][1] = x[oAtoms[0]][1];
+   coors[0][2] = x[oAtoms[0]][2];
+   coors[1][0] = x[oAtoms[1]][0] - 0.8;
+   coors[1][1] = x[oAtoms[1]][1];
+   coors[1][2] = x[oAtoms[1]][2];
+   coors[2][0] = x[oAtoms[2]][0];
+   coors[2][1] = x[oAtoms[2]][1] + 0.64;
+   coors[2][2] = x[oAtoms[2]][2] - 0.64;
+
+
+   error->warning(FLERR,"atom->natoms before adding atoms = {}",atom->natoms);
+   atom->avec->create_atom(typeH,coor1);
+   atom->avec->create_atom(typeH,coor2);
+   atom->avec->create_atom(typeH,coor3);
+   error->warning(FLERR,"atom->natoms after adding atoms = {}",atom->natoms);
+               
+   numaddedatoms+=2;
+
+   tags[0] = (tag[nlocal-3] > 0)? tag[nlocal-3]: atom->natoms-3;
+   tags[1] = (tag[nlocal-2] > 0)? tag[nlocal-2]: atom->natoms-2;
+   tags[2] = (tag[nlocal-1] > 0)? tag[nlocal-1]: atom->natoms-1;
+   atom->natom += 3; // I am not sure if this is required or not.
+
+
+   // atom->avec->create_atoms itself updates the atom->nlocal value
+   js[0] = atom->nlocal - 3;
+   js[1] = atom->nlocal - 2;
+   js[2] = atom->nlocal - 1;
+               
+   // Let's connect these two new Hs to the P
+   if (atom->num_bond[i] == atom->bond_per_atom)
+      error->one(FLERR,"Num bonds exceeded bonds per atom in fix AdaptiveProtonation");
+
+   /*
+     I guess that the size of bond_type and bond_atom is atom->bond_per_atom so there is enough space there
+   */
+
+   for (int k = 0; k < req_numHs; k++) {
+      // The kth OH bond
+      int o_local_index = oAtoms[k];
+      int h_local_index = hAtoms[k];
+      int o_global_index = atom->tag[oAtoms[k]];
+      int & o_num_bond = atom->num_bond[o_local_index];
+      int & h_num_bond = atom->num_bond[h_local_index];
+
+      // The oxygen section
+      atom->bond_type[o_local_index][o_num_bond] = bondOHtype;
+      atom->bond_atom[o_local_index][o_num_bond] = tags[k];
+      o_num_bond++;
+
+      // The hydrogen section
+      atom->bond_type[h_local_index][0] = bondOHtype;
+      atom->bond_atom[h_local_index][0] = o_global_index;
+      h_num_bond++;
+   }
+}
+
+void FixAdaptiveProtonation::remove_hydrogens(int& numHs_2_del, int* hlist)
+{
+   int nlocal = atom->nlocal;
+   int k = 0;
+   while(numHs_2_del) {
+      while(k < nlocal) {
+         if (hlist[k] == 1) {
+            avec->copy(nlocal-1, k , 1);
+            nlocal--;
+            numHs_2_del--;
+         }
+         k++;
+      }
+   }
 }
