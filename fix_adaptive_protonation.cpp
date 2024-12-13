@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.0.00----------------- */
+/* ---------- v0.05.03----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
@@ -277,14 +277,40 @@ void FixAdaptiveProtonation::set_molecule_id()
 
    for (int i = 0; i < nlocal; i++) {
       for (int k = 0; k < num_bond[i]; k++) {
+         int j;
          int jtag = bond_atom[i][k]; // the tag (atom-id) of kth bonds of atom i
-         for (int j = 0; j < natom; j++)
+         for (int j = 0; j < natom; j++) {
+            if (tag[j] == jtag)
+               break;
+         }
+         if (j == natom) {
+            error->warning(FLERR,"fix adaptive protonation cannot find the bonded atom to atom with id of {}",tag[i]);
+            continue;
+         }
+         molecule_id[j] = jtag;
          // The question is that what is what the molecule id of jtag atom is 
-         int molecule_id[i] = MIN(molecule_id[i],molecule_id[j]); // I am not sure about header for the MIN 
+         molecule_id[i] = MIN(molecule_id[i],molecule_id[j]); // I am not sure about header for the MIN
+         molecule_id[j] = molecule_id[i];
       }
    }
 
    // You need to think about neighbor exchange;
+   /*
+   no need for an exchange 
+   as LAMMPS itself takes care of exchange.
+
+   if atom i is in the proc n connected to atom j in proc n both of the atoms 
+   will be among the ghost atoms of the other atom. And as the minimum of the molecule_id
+   is the same in both the procs both the atoms would end up having the same 
+   molecule id and so there is no need for an atom exchange.
+   Of course if the molecules are long spanning multiple procs there is a need
+   for atom exchange here.
+   */
+
+   for (int i = 0; i < nlocal; i++)
+      molecule[i] = molecule_id[i];
+
+   delete [] molecule_id;
 }
 
 /* ----------------------------------------------------------------------------------------
