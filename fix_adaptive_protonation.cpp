@@ -533,8 +533,51 @@ void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, c
 void FixAdaptiveProtonation::remove_hydrogens(const int& i, int& numHs_2_del, const int oAtoms[3], const int hAtoms[3])
 {
    int nlocal = atom->nlocal;
-   int k = 0;
    
+
+
+   int p_local_index = i;
+   int p_global_index = atom->tag[p_local_index];
+   int & p_num_bond = atom->num_bond[p_local_index]; // it is here just for completeness, we are not adding any new bonds to the P atom here.
+   int & p_num_angle = atom->num_angle[p_local_index];
+
+   // Updating the topology for the P atom removing the angle involving the Hydrogen atoms
+   for (int k = 0; k < p_num_angle; k++)
+   {
+      if (atom->angle_atom1[p_local_index][k] == atom->tag[hAtoms[0]] ||
+          atom->angle_atom3[p_local_index][k] == atom->tag[hAtoms[0]] ||
+          atom->angle_atom1[p_local_index][k] == atom->tag[hAtoms[1]] ||
+          atom->angle_atom3[p_local_index][k] == atom->tag[hAtoms[1]] ||
+          atom->angle_atom1[p_local_index][k] == atom->tag[hAtoms[2]] ||
+          atom->angle_atom3[p_local_index][k] == atom->tag[hAtoms[2]]) {
+         atom->angle_type[p_local_index][k] = atom->angle_type[p_local_index][p_num_angle-1];
+         atom->angle_atom1[p_local_index][k] = atom->angle_atom1[p_local_index][p_num_angle-1];
+         atom->angle_atom2[p_local_index][k] = atom->angle_atom2[p_local_index][p_num_angle-1];
+         atom->angle_atom3[p_local_index][k] = atom->angle_atom3[p_local_index][p_num_angle-1];
+         p_num_angle--;
+      }
+   }
+
+   
+
+   // Updating the topology for the O atom removing the bond involving the deleted atoms
+   for (int k = 0; k < 3; k++) {
+      int o_local_index = oAtoms[k];
+      int o_global_index = atom->tag[o_local_index];
+      int o_num_bond = atom->num_bond[o_local_index];
+
+      for (int l = 0; l < o_num_bond; l++) {
+         if (atom->bond_atom[o_local_index][l] == atom->tag[hAtoms[0]] ||
+             atom->bond_atom[o_local_index][l] == atom->tag[hAtoms[1]] ||
+             atom->bond_atom[o_local_index][l] == atom->tag[hAtoms[2]]) {
+               atom->bond_type[o_local_index][l] = atom->bond_type[o_local_index][o_num_bond-1];
+               atom->bond_atom[o_local_index][l] = atom->bond_type[o_local_index][o_num_bond-1];
+               o_num_bond--;
+             }
+      }
+   }
+   
+   int k = 0;
    while(k < nlocal && numHs_2_del) {
       if (hAtoms[0] == k ||
           hAtoms[1] == k ||
