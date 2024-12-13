@@ -58,7 +58,7 @@ enum { NONE, CONSTANT, EQUAL, ATOM };
 FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) :
    Fix(lmp, narg, arg), typePstr(nullptr), typeOstr(nullptr), typeHstr(nullptr)
 {
-   if (narg < 10) utils::missing_cmd_args(FLERR, "fix AdaptiveProtonation", error);
+   if (narg < 11) utils::missing_cmd_args(FLERR, "fix AdaptiveProtonation", error);
 
    dynamic_group_allow = 0;
    scalar_flag = 1; 
@@ -100,14 +100,22 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
       typeHstyle = CONSTANT;
    }
    if (utils::strmatch(arg[7], "^v_")) {
+      typeOHstr = utils::strdup(arg[7]+2);
+   }
+   else
+   {
+      typeOH = utils::numeric(FLERR,arg[7],false,lmp);
+      typeHstyle = CONSTANT;
+   }
+   if (utils::strmatch(arg[8], "^v_")) {
       error->all(FLERR,"The variable input for threshold in AdaptiveProtonation is not supported yet!");
    }
    else
    {
-      threshold = utils::numeric(FLERR,arg[7],false,lmp);
+      threshold = utils::numeric(FLERR,arg[8],false,lmp);
    }
-   pKa = utils::numeric(FLERR,arg[8],false,lmp);
-   pH   = utils::numeric(FLERR,arg[9],false,lmp);
+   pKa = utils::numeric(FLERR,arg[9],false,lmp);
+   pH   = utils::numeric(FLERR,arg[10],false,lmp);
    
    nmax = 1;
    memory->create(mark,nmax,"AdaptiveProtontation:mark");
@@ -120,6 +128,7 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    delete[] typePstr;
    delete[] typeOstr;
    delete[] typeHstr;
+   delete[] typeOHstr;
 
    memory->destory(mark);
 }
@@ -167,6 +176,16 @@ void FixAdaptiveProtonation::init()
           error->all(FLERR, "Atomic style variable is not supported in fix adaptiveProtonaton");
       else
           error->all(FLERR, "Variable {} for fix adaptiveProtonatonis invalid style", typeHvar);
+   }
+   if (typeOHstr) {
+      typeOHvar = input->variable->find(typeOHstr);
+      if (typeOHvar < 0) error->all(FLERR, "Variable {} for fix AdaptiveProtonation does not exist", typeOHstr);
+      if (input->variable->equalstyle(typeOHvar))
+          typeOHstyle = EQUAL;
+      else if (input->variable->atomstyle(typeOHvar))
+          error->all(FLERR, "Atomic style variable is not supported in fix adaptiveProtonaton");
+      else
+          error->all(FLERR, "Variable {} for fix adaptiveProtonatonis invalid style", typeOHvar);
    }
 }
 
@@ -266,8 +285,6 @@ void FixAdaptiveProtonation::set_molecule_id()
             error->warning(FLERR,"Bond atom missing in fix AdaptiveProtonation");
             continue;
          }
-         molecule_id[j] = jtag;
-         // The question is that what is what the molecule id of jtag atom is 
          molecule_id[i] = MIN(molecule_id[i],molecule_id[j]); // I am not sure about header for the MIN
          molecule_id[j] = molecule_id[i];
       }
@@ -303,10 +320,7 @@ void FixAdaptiveProtonation::modify_protonable_hydrogens()
    int * type = atom->type;
    double **x = atom->x;
    AtomVec *avec = atom->avec;
-   int * hlist = new int(nlocal);
 
-   for (int i = 0; i < nlocal; i++)
-      hlist[i] = 0;
 
    if (atom->avec->bonds_allow && (style == BOND || style == MULTI || style == ATOM)) {
       
@@ -316,6 +330,10 @@ void FixAdaptiveProtonation::modify_protonable_hydrogens()
 
       for (int i = 0; i < nlocal; i++) {
          if (mark[i] == 0) continue;
+
+         for (int j = 0; j < nlocal; j++)
+            hlist[j] = 0;
+
          pAtom = i;
          int numHs = 0; 
          for (int m = 0; m < atom->num_bond[i]; m++) {
@@ -354,14 +372,12 @@ void FixAdaptiveProtonation::modify_protonable_hydrogens()
                   the required number to eliminate the possibility of having an Oxygen atom with
                   two hydrogen atoms
                */
-               remove_hydrogens(numHs, hlist);
+               remove_hydrogens(numHs, hAtoms);
                add_hydrogens(i,req_numHs,oAtoms,hAtoms);
             }
          }
       }
    }
-
-   delete [] hlist;
 }
 
 void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, const int* const oAtoms, const int* const hAtoms) 
@@ -431,18 +447,22 @@ void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, c
    }
 }
 
-void FixAdaptiveProtonation::remove_hydrogens(int& numHs_2_del, int* hlist)
+void FixAdaptiveProtonation::remove_hydrogens(int& numHs_2_del, int hAtoms[3])
 {
    int nlocal = atom->nlocal;
    int k = 0;
-   while(numHs_2_del) {
-      while(k < nlocal) {
-         if (hlist[k] == 1) {
-            avec->copy(nlocal-1, k , 1);
-            nlocal--;
-            numHs_2_del--;
-         }
-         k++;
+   
+   while(k < nlocal && numHs_2_del) {
+      if (hAtoms[0] == k ||
+          hAtoms[1] == k ||
+          hAtoms[2] == k) {
+         avec->copy(nlocal-1, k , 1);
+         nlocal--;
+         numHs_2_del--;
       }
+      k++;
    }
+
+   if (numHs_2_del)
+      error->warning(FLERR,"There is not enough hydrogen atoms for the fix adaptive protonation to delete, it should not have happen!");
 }
