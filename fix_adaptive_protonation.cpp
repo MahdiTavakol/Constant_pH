@@ -105,7 +105,14 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    else
    {
       typeOH = utils::numeric(FLERR,arg[7],false,lmp);
-      typeHstyle = CONSTANT;
+      typeOHstyle = CONSTANT;
+   }
+   if (utils::strmatch(arg[8], "^v_") {
+      typePOHstr = utils::strdup(arg[8]+2);
+   }
+   else {
+      typePOH = utils::numeric(FLERR,arg[8],false,lmp);
+      typePOHstyle = CONSTANT;  
    }
    if (utils::strmatch(arg[8], "^v_")) {
       error->all(FLERR,"The variable input for threshold in AdaptiveProtonation is not supported yet!");
@@ -168,7 +175,7 @@ void FixAdaptiveProtonation::init()
           error->all(FLERR, "Variable {} for fix adaptiveProtonatonis invalid style", typeOvar);
    }
    if (typeHstr) {
-      typeHvar = input->variable->find(typeHstr);
+      typeHvar = input->variable->find(typeHstr);typeOw, typeHw
       if (typeHvar < 0) error->all(FLERR, "Variable {} for fix AdaptiveProtonation does not exist", typeHstr);
       if (input->variable->equalstyle(typeHvar))
           typeHstyle = EQUAL;
@@ -187,6 +194,27 @@ void FixAdaptiveProtonation::init()
       else
           error->all(FLERR, "Variable {} for fix adaptiveProtonatonis invalid style", typeOHvar);
    }
+   if (typePOHstr) {
+      typePOHvar = input->variable->find(typePOHstr);
+      if (typePOHvar < 0) error->all(FLERR,"Variable {} for fix AdaptiveProtonation does not exit", typePOHstr);
+      if (input->variable->equalstyle(typePOHvar))
+         typePOHstyle = EQUAL;
+      else if (input->variable->atomstyle(typePOHvar))
+         error->all(FLERR,"Atomic style variable is not supported in fix AdaptiveProtonation");
+      else
+         error->all(FLERR,"Variable {} for fix adaptiveProtonation is invalid style",typePOHvar);
+   }
+
+
+   // reseting the molecule ids so each atom and all of its connected atoms have the same molecule id
+   int * molecule[i] = atom->molecule[i];
+   for (int i = 0; i < natom; i++) {
+      molecule[i] = tag[i];
+   }
+   set_molecule_id();
+
+   // The initial value for the change in the natoms
+   natoms_change = 0;
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -271,11 +299,8 @@ void FixAdaptiveProtonation::set_molecule_id()
    int * num_bond = atom->num_bond;
    int ** bond_atom = atom->bond_atom;
    int * tag = atom->tag; // atom-id
-   int * molecule_id = new int[natom];
 
-   for (int i = 0; i < natom; i++) {
-      molecule_id[i] = tag[i];
-   }
+
 
    for (int i = 0; i < nlocal; i++) {
       for (int k = 0; k < num_bond[i]; k++) {
@@ -285,8 +310,8 @@ void FixAdaptiveProtonation::set_molecule_id()
             error->warning(FLERR,"Bond atom missing in fix AdaptiveProtonation");
             continue;
          }
-         molecule_id[i] = MIN(molecule_id[i],molecule_id[j]); // I am not sure about header for the MIN
-         molecule_id[j] = molecule_id[i];
+         molecule[i] = MIN(molecule[i],molecule[j]); // I am not sure about header for the MIN
+         molecule[j] = molecule[i];
       }
    }
 
@@ -303,10 +328,6 @@ void FixAdaptiveProtonation::set_molecule_id()
    for atom exchange here.
    */
 
-   for (int i = 0; i < nlocal; i++)
-      molecule[i] = molecule_id[i];
-
-   delete [] molecule_id;
 }
 
 /* ----------------------------------------------------------------------------------------
@@ -325,8 +346,8 @@ void FixAdaptiveProtonation::modify_protonable_hydrogens()
    if (atom->avec->bonds_allow && (style == BOND || style == MULTI || style == ATOM)) {
       
       int pAtom;     // local atom id for the P atom
-      int oAtoms[3]; // local atom id for the O atoms
-      int hAtoms[3]; // local atom id for the H atoms
+      int oAtoms[3]; // local atom id for the O atoms  <----> It is only used for identifying those oxygen atoms needed to be added
+      int hAtoms[3]; // local atom id for the H atoms  <----> It is only used for identifying those hydrogen atoms needed to be removed
 
       for (int i = 0; i < nlocal; i++) {
          if (mark[i] == 0) continue;
@@ -363,7 +384,7 @@ void FixAdaptiveProtonation::modify_protonable_hydrogens()
             */
             
             if (mark[i] == -1 && numHs == 0) continue; // PO4 inside the HAp ---> Nothing to do here!
-            if (mark[i] == -1 && numHs > 0) remove_hydrogens(numHs,hlist); //HPO4, H2PO4 or H3PO4 inside ---> The hydrogens must be removed
+            if (mark[i] == -1 && numHs > 0) remove_hydrogens(i,numHs,oAtoms,hAtoms); //HPO4, H2PO4 or H3PO4 inside ---> The hydrogens must be removed
             if (mark[i] == 1 && numHs == req_numHs) continue; // HxPO4 inside the surface with the exact number of required Hydrogen atoms ---> Nothing to do here!
             if (mark[i] == 1 && numHs > req_numHs) remove_hydrogens(numHs-req_numHs,hlist); // HxPO4 in the surface or in solution with higher number of Hydrogens
             if (mark[i] == 1 && numHs < req_numHs) {
@@ -373,21 +394,26 @@ void FixAdaptiveProtonation::modify_protonable_hydrogens()
                   two hydrogen atoms
                */
                remove_hydrogens(numHs, hAtoms);
-               add_hydrogens(i,req_numHs,oAtoms,hAtoms);
+               add_hydrogens(i,req_numHs,oAtoms);
             }
          }
       }
    }
 }
 
-void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, const int* const oAtoms, const int* const hAtoms) 
+/* ------------------------------------------------------------------------------------------
+   Adding the requested number of hydrogen atoms to the molecule with P local id of i
+   Warning <----> This function does not take into account the number of hydrogen atoms
+   aldready present in the phosphate molecule so the best practice is to remove all
+   the hydrogen atoms and then add the required number of hydrogens
+   ------------------------------------------------------------------------------------------ */
+
+void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, const int oAtoms[3], const int hAtoms[3]) 
 {
    double *x = atom->x;
 
    // adding hydrogens to this phosphate
    double coors[3][3]; // Maximum three phosphate ions
-   int tags[3];
-   int js[3];
                
    coors[0][0] = x[oAtoms[0]][0] + 0.9;
    coors[0][1] = x[oAtoms[0]][1];
@@ -398,26 +424,10 @@ void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, c
    coors[2][0] = x[oAtoms[2]][0];
    coors[2][1] = x[oAtoms[2]][1] + 0.64;
    coors[2][2] = x[oAtoms[2]][2] - 0.64;
-
-
-   error->warning(FLERR,"atom->natoms before adding atoms = {}",atom->natoms);
-   atom->avec->create_atom(typeH,coor1);
-   atom->avec->create_atom(typeH,coor2);
-   atom->avec->create_atom(typeH,coor3);
-   error->warning(FLERR,"atom->natoms after adding atoms = {}",atom->natoms);
                
-   numaddedatoms+=2;
-
-   tags[0] = (tag[nlocal-3] > 0)? tag[nlocal-3]: atom->natoms-3;
-   tags[1] = (tag[nlocal-2] > 0)? tag[nlocal-2]: atom->natoms-2;
-   tags[2] = (tag[nlocal-1] > 0)? tag[nlocal-1]: atom->natoms-1;
-   atom->natom += 3; // I am not sure if this is required or not.
-
 
    // atom->avec->create_atoms itself updates the atom->nlocal value
-   js[0] = atom->nlocal - 3;
-   js[1] = atom->nlocal - 2;
-   js[2] = atom->nlocal - 1;
+
                
    // Let's connect these two new Hs to the P
    if (atom->num_bond[i] == atom->bond_per_atom)
@@ -428,26 +438,99 @@ void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, c
    */
 
    for (int k = 0; k < req_numHs; k++) {
-      // The kth OH bond
+      // Adding the kth hydrogen atom
+      
+      error->warning(FLERR,"atom->natoms before adding atoms = {}",atom->natoms);
+      atom->avec->create_atom(typeH,coors[k]);
+      error->warning(FLERR,"atom->natoms after adding atoms = {}",atom->natoms);
+      // If these two are the same I need to modify the atom->nlocal ---> However, it is not so likely.
+      natoms_change++;
+      
+
+      // global and local indexes of new hydrogens are needed to modify the bond and angle information in the topology
+      int tagH = (tag[atom->nlocal-1] > 0)? tag[atom->nlocal-1]: atom->natoms-1;
+      int jH = atom->nlocal-1 ;
+
+      
+      // The kth OH bond and angle (Fortunately each hydrogen contributes to just one bond and one angle!)
+      int p_local_index = i;
       int o_local_index = oAtoms[k];
-      int h_local_index = hAtoms[k];
-      int o_global_index = atom->tag[oAtoms[k]];
+      int h_local_index = jH;
+      int p_global_index = atom->tag[p_local_index];
+      int o_global_index = atom->tag[o_local_index];
+      int h_global_index = tagH;
+      int & p_num_bond = atom->num_bond[p_local_index]; // it is here just for completeness, we are not adding any new bonds to the P atom here.
       int & o_num_bond = atom->num_bond[o_local_index];
       int & h_num_bond = atom->num_bond[h_local_index];
+      int & p_num_angle = atom->num_angle[p_local_index];
+      int & o_num_angle = atom->num_angle[o_local_index];
+      int & h_num_angle = atom->num_angle[h_local_index];
 
-      // The oxygen section
+      // The oxygen section for the new bond
       atom->bond_type[o_local_index][o_num_bond] = bondOHtype;
-      atom->bond_atom[o_local_index][o_num_bond] = tags[k];
+      atom->bond_atom[o_local_index][o_num_bond] = h_global_index;
       o_num_bond++;
 
-      // The hydrogen section
+      // Just one bond is added for each added hydrogen atom
+      nbonds_change++;
+
+      // The oxygen section for the new angle
+      atom->angle_type[o_local_index][o_num_angle] = anglePOHtype;
+      atom->angle_atom1[o_local_index][o_num_angle] = p_global_index;
+      atom->angle_atom2[o_local_index][o_num_angle] = o_global_index;
+      atom->angle_atom3[o_local_index][o_num_angle] = h_global_index;
+      o_num_angle++;
+
+      // Just one angle is added for each extra hydrogen atom
+      nangles_change++;
+      
+      if (force->newton_bond) continue; // If the newton flag is on just half of the topology information is required
+      
+      // The hydrogen section for the new bond
       atom->bond_type[h_local_index][0] = bondOHtype;
       atom->bond_atom[h_local_index][0] = o_global_index;
       h_num_bond++;
+
+      // The phosphate section for the new angle
+      atom->angle_type[p_local_index][o_num_angle] = anglePOHtype;
+      atom->angle_atom1[p_local_index][o_num_angle] = p_global_index;
+      atom->angle_atom2[p_local_index][o_num_angle] = o_global_index;
+      atom->angle_atom3[p_local_index][o_num_angle] = h_global_index;
+      p_num_angle++;
+
+      // The Oxygen section for the new angle
+      atom->angle_type[o_local_index][1] = anglePOHtype;
+      atom->angle_atom1[o_local_index][i] = p_global_index;
+      atom->angle_atom2[o_local_index][i] = o_global_index;
+      atom->angle_atom3[o_local_index][i] = h_global_index;
+      o_num_angle++;
+
+      // The Hydrogen section for the new angle
+      atom->angle_type[h_local_index][i] = anglePOHtype;
+      atom->angle_atom1[h_local_index][i] = p_global_index;
+      atom->angle_atom2[h_local_index][i] = o_global_index;
+      atom->angle_atom3[h_local_index][i] = h_global_index;
+      h_num_angle = 1;
    }
+
+
+   // Summing up the total change in the natoms, nbonds and nangles
+   MPI_Allreduce(&natoms_change,&natoms_change_total,1,MPI_INT,MPI_SUM,world);
+   MPI_Allreduce(&nbonds_change,&nbonds_change_total,1,MPI_INT,MPI_SUM,world);
+   MPI_Allreduce(&nangle_change,&nangles_change_total,1,MPI_INT,MPI_SUM,world);
+
+   // Updating the number of atoms, bonds and angles
+   atom->natoms += natoms_change_total;
+   atom->nbonds += nbonds_change_total;
+   atom->nangles += nangles_change_total;
 }
 
-void FixAdaptiveProtonation::remove_hydrogens(int& numHs_2_del, int hAtoms[3])
+/* --------------------------------------------------------------------------
+   The function to remove specific number of hydrogen atoms with the local
+   ids in the hAtoms[3] array
+   -------------------------------------------------------------------------- */
+
+void FixAdaptiveProtonation::remove_hydrogens(const int& i, int& numHs_2_del, const int oAtoms[3], const int hAtoms[3])
 {
    int nlocal = atom->nlocal;
    int k = 0;
@@ -459,6 +542,8 @@ void FixAdaptiveProtonation::remove_hydrogens(int& numHs_2_del, int hAtoms[3])
          avec->copy(nlocal-1, k , 1);
          nlocal--;
          numHs_2_del--;
+
+         natoms_change--;
       }
       k++;
    }
