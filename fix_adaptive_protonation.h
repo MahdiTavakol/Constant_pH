@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.0.00----- */
+/* ---v0.05.03----- */
 
 #ifdef FIX_CLASS
 // clang-format off
@@ -25,10 +25,10 @@ FixStyle(AdaptiveProtonation,FixAdaptiveProtonation);
 
 namespace LAMMPS_NS {
 
-	class FixMetaAR : public Fix {
+	class FixAdaptiveProtonation : public Fix {
 	public:
-		FixMetaAR(class LAMMPS*, int, char**);
-		~FixMetaAR() override;
+		FixAdaptiveProtonation(class LAMMPS*, int, char**);
+		~FixAdaptiveProtonation() override;
 		int setmask() override;
 		void init() override;
 		void setup(int) override;
@@ -40,7 +40,11 @@ namespace LAMMPS_NS {
 
 	private:
 		// Input variables for constant values
-    		double typeP, typeO, typeH, typeOw, typeHw, typeOHbond, threshold;
+		int typeP, typeO, typeH, typeOw, typeHw;
+    		double threshold;
+
+		// pKa and pH values
+		int pKa, pH;
     
 
 		// Input variables for variable values
@@ -55,16 +59,9 @@ namespace LAMMPS_NS {
 		class NeighList* list;
 
 
-		// Number of neighbors
-		double * numNeighbors;
-
-		// number of added atoms
-		double numaddedatoms;
-
 		// mark 0  -> not type P
-		// mark 1  -> in water 
+		// mark 1  -> in water or on surface (protonable)
 		// mark -1 -> in solid
-                // mark -2 -> on surface
 		int * mark;
 
 
