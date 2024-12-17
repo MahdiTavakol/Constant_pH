@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.05.01----- */
+/* ---v0.05.06----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -227,11 +227,32 @@ void FixConstantPH::setup(int /*vflag*/)
 }
 
 /* ----------------------------------------------------------------------
-   This function resets reallocates the dynamically allocated memories for
+   This part calculates the acceleration of the lambdas parameter
+   which is obtained from the force acting on it
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::initial_integrate(int /*vflag*/)
+{
+   if ((update->ntimestep % nevery_fix_adaptive) {
+       if (fix_adaptive_protonation->n_protonable != n_lambdas) {
+	   n_lambdas = fix_adaptive_protonation->n_protonable;
+           reallocate_lambda_storage();
+       }
+   }
+   compute_Hs<-1>();
+   calculate_dfs();
+   calculate_dUs();
+   update_a_lambda();
+   compute_Hs<1>();
+   compute_q_total();
+}
+
+/* ----------------------------------------------------------------------
+   This function resets the molids structure and reallocates the dynamically allocated memories for
    constant pH whenever the n_lambdas change
    ----------------------------------------------------------------------  */
 
-void FixConstantPH::reallocate_lambda_storage()
+void FixConstantPH::reset_lambdas()
 {
    if (lambdas) memory->destroy(lambdas);
    if (v_lambdas) memory->destroy(v_lambdas);
@@ -271,26 +292,6 @@ void FixConstantPH::reallocate_lambda_storage()
 
    // This would not work in the initialize section as the m_lambda has not been set yet!
    initialize_v_lambda(this->T);
-}
-/* ----------------------------------------------------------------------
-   This part calculates the acceleration of the lambdas parameter
-   which is obtained from the force acting on it
-   ---------------------------------------------------------------------- */
-
-void FixConstantPH::initial_integrate(int /*vflag*/)
-{
-   if ((update->ntimestep % ) {
-       if (fix_adaptive_protonation->n_protonable != n_lambdas) {
-	   n_lambdas = fix_adaptive_protonation->n_protonable;
-           reallocate_lambda_storage();
-       }
-   }
-   compute_Hs<-1>();
-   calculate_dfs();
-   calculate_dUs();
-   update_a_lambda();
-   compute_Hs<1>();
-   compute_q_total();
 }
 
 /* ---------------------------------------------------------------------- */
