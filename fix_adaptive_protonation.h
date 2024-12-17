@@ -39,8 +39,13 @@ namespace LAMMPS_NS {
       void init_list(int, class NeighList*) override;
 
 
+      // Getting the number of protonable molids;
+      void get_n_protonable(int & n_lambdas) const
+      {
+         n_lambdas = this->n_protonable;
+      }
       // Getting the protonable molids (The molids array must be allocated otherwise an error is produced)
-      void get_protonable_molids(int * molids);
+      void get_protonable_molids(int * molids) const;
 
    protected:
       // Input variables for constant values
