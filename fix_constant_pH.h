@@ -97,7 +97,7 @@ namespace LAMMPS_NS {
 
 	// Functions needed to communicate with fix adaptive protonation command
 	int fix_adaptive_protonation_id;
-	int nevery_adaptive_protonation;
+	int nevery_fix_adaptive;
 	FixAdaptiveProtonation* fix_adaptive_protonation;
 
         // The q_total used to calculate the HW charges
@@ -160,4 +160,3 @@ namespace LAMMPS_NS {
 
 #endif
 #endif
-
