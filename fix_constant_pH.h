@@ -21,6 +21,7 @@ FixStyle(constant_pH,FixConstantPH);
 #define LMP_FIX_CONSTANTPH_H
 
 #include "fix.h"
+#include "fix_adaptive_protonation.h"
 #include "pair.h"
 
 
