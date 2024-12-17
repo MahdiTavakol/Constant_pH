@@ -22,6 +22,7 @@ FixStyle(AdaptiveProtonation,FixAdaptiveProtonation);
 #define LMP_FIX_ADAPTIVE_PROTONATION_H
 
 #include "fix.h"
+#include "atom_vec.h"
 
 namespace LAMMPS_NS {
 
@@ -49,11 +50,14 @@ namespace LAMMPS_NS {
 
    protected:
       // Input variables for constant values
-      int typeP, typeO, typeH, typeOH;
+      int typeP, typeO, typeH, typeOH, typePOH;
       double threshold;
 
       // pKa and pH values
       int pKa, pH;
+      
+      // How many hydrogen atoms should there be
+      int req_numHs;
     
 
       // Input variables for variable values
@@ -61,7 +65,7 @@ namespace LAMMPS_NS {
 
       //
       int typePvar, typeOvar, typeHvar, typeOHvar, typePOHvar;
-      int typePstyle, typeOstyle, typeSstyle, typeOHstyle, typePOHstyle;
+      int typePstyle, typeOstyle, typeHstyle, typeOHstyle, typePOHstyle;
 
 
       // Neighborlist is required for accessing neighbors
@@ -72,6 +76,11 @@ namespace LAMMPS_NS {
       // mark 1  -> in water or on surface (protonable)
       // mark -1 -> in solid
       int * mark;
+      
+      // track changes in the natoms, nbonds and nangles
+      int natoms_change, natoms_change_total;
+      int nbonds_change, nbonds_change_total;
+      int nangles_change, nangles_change_total;
 
 
 
