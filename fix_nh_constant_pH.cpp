@@ -657,12 +657,50 @@ void FixNHConstantPH::nve_x()
   for (int i = 0; i < n_lambdas; i++)
      x_lambdas[i] += dtv * v_lambdas[i];
 
+  contrain_lambdas();
+
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+}
+
+/* ---------------------------------------------------------------------
+   applies the shake algorithm to the sum of the lambdas 
+
+   It adds a  constraint according to the Donnine et al JCTC 2016 
+   equation (13).
+
+   The contraint equations were taken from the Tuckerman statistical mechanics
+   book 2nd edition pages 106.
+
+   Just one step of the shake iteration is enough as the constraint is very simple.
+   
+   --------------------------------------------------------------------- */
+
+void FixNHConstantPH::contrain_lambdas()
+{
+   double sigma_lambda = 0.0;
+   double sigma_mass_inverse  = 0.0;
+   double domega;
+   double total_charge; // The total charge that we want to constrain the system to 
+   double N_buff;
+   double mass_buff;
+   double x_lambda_buff; // Just for the moment, It should be extracted from fix constant_pH
+
+   for (int i = 0; i < n_lambdas; i++) {
+      sigma_lambda += x_lambdas[i];
+      sigma_mass_inverse += (1.0/m_lambdas[i]);
+   }
+
+   domega = -(sigma_lambda+N_buff*lambda_buff-total_charge) / (sigma_mass_inverse + (N_buff/mass_buff));
+
+   for (int i = 0; i < n_lambdas; i++)
+      x_lambdas[i] += (domega /m_lambdas[i]);
+
+   x_lambda_buff += N_buff * domega / mass_buff;
 }
 
 /* ----------------------------------------------------------------------
    random number generator
------------------------------------------------------------------------*/
+   -----------------------------------------------------------------------*/
 
 double FixNHConstantPH::random_normal(double mean, double stddev)
 {
@@ -673,7 +711,7 @@ double FixNHConstantPH::random_normal(double mean, double stddev)
 
 /* ----------------------------------------------------------------------
    perform half-step thermostat scaling of velocities
------------------------------------------------------------------------*/
+   ---------------------------------------------------------------------- */
 
 void FixNHConstantPH::nh_v_temp()
 {
