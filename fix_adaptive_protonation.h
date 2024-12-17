@@ -32,7 +32,6 @@ namespace LAMMPS_NS {
       ~FixAdaptiveProtonation() override;
       int setmask() override;
       void init() override;
-      void setup(int) override;
       void pre_exchange() override;
       double compute_scalar() override;
       double compute_vector(int) override;
@@ -104,7 +103,7 @@ namespace LAMMPS_NS {
       // Add hydrogen atoms to the phosphate with a P atom having an index of i
       void add_hydrogens(const int& i, const int& req_numHs, const int oAtoms[3], const int hAtoms[3]);
       // Remove hydrogen atoms from the phosphate with a P atom having an index of i
-      void remove_hydrogens(const int& i, int& numHs_2_del, const int oAtoms[3], const int hAtoms[3]);
+      void remove_hydrogens(const int i, int numHs_2_del, const int oAtoms[3], const int hAtoms[3]);
 
    };
 
