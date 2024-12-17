@@ -32,7 +32,7 @@ namespace LAMMPS_NS {
       int setmask() override;
       void init() override;
       void setup(int) override;
-      void pre_exchange(int) override;
+      void pre_exchange() override;
       double compute_scalar() override;
       double compute_vector(int) override;
       double memory_usage() override;
