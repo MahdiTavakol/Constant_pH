@@ -315,10 +315,10 @@ void FixConstantPH::update_a_lambda()
    //f = 1.0;
 
    for (int i = 0; i < n_lambdas; i++) {
-	double  f_lambda = -(HBs[i]-HAs[i] - dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // I'm not sure about the sign of the df*kT*log(10)*(pK-pH) 
+	double  f_lambda = -(HBs[i]-HAs[i] + dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // The df sign should be positive if the lambda = 0 is for the protonated state 
 	this->a_lambdas[i] = f_lambda /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
 	// I am not sure about the sign of the f*kT*log(10)*(pK-pH)
-        this->H_lambdas[i] = (1-lambdas[i])*HAs[i] + lambdas[i]*HBs[i] - fs[i]*kT*log(10*(pK-pH)) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i]); // This might not be needed. May be I need to tally this into energies.
+        this->H_lambdas[i] = (1-lambdas[i])*HAs[i] + lambdas[i]*HBs[i] + fs[i]*kT*log(10*(pK-pH)) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i]); // This might not be needed. May be I need to tally this into energies.
         // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
    }	
 }
