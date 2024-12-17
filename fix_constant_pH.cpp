@@ -235,9 +235,9 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 {
    if ((update->ntimestep % nevery_fix_adaptive) {
        if (fix_adaptive_protonation->n_protonable != n_lambdas) {
-	   n_lambdas = fix_adaptive_protonation->n_protonable;
+	   fix_adaptive_protonation->get_n_protonable(n_lambdas);
            reallocate_lambda_storage();
-	   fix_adaptive_protonation->get_molids(molids);
+	   fix_adaptive_protonation->get_protonable_molids(molids);
        }
    }
    compute_Hs<-1>();
