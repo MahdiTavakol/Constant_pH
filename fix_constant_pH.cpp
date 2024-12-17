@@ -237,6 +237,7 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
        if (fix_adaptive_protonation->n_protonable != n_lambdas) {
 	   n_lambdas = fix_adaptive_protonation->n_protonable;
            reallocate_lambda_storage();
+	   fix_adaptive_protonation->get_molids(molids);
        }
    }
    compute_Hs<-1>();
@@ -267,6 +268,8 @@ void FixConstantPH::reset_lambdas()
    if (dfs) memory->destroy(dfs);
    if (Us) memory->destroy(Us);
    if (dUs) memory->destroy(dUs);
+
+   if (molids) memory->destroy(molids);
 	
    memory->create(lambdas,n_lambdas,"constant_pH:lambdas");
    memory->create(v_lambdas,n_lambdas,"constant_pH:v_lambdas");
@@ -282,12 +285,15 @@ void FixConstantPH::reset_lambdas()
    memory->create(Us,n_lambdas,"constant_pH:Us");
    memory->create(dUs,n_lambdas,"constant_pH:dUs");
 
+   memory->create(molids,n_lambdas,"constant_pH:molids");
+
    for (int i = 0; i < n_lambdas; i++) {
       lambdas[i] = 0.0;
       v_lambdas[i] = 0.0;
       a_lambdas[i] = 0.0;
       m_lambdas[i] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
-      GFF_lambdas[j] = 0.0;
+      GFF_lambdas[i] = 0.0;
+      molids[i] = 0.0;
    } 
 
    // This would not work in the initialize section as the m_lambda has not been set yet!
