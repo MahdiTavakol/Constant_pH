@@ -57,7 +57,7 @@ namespace LAMMPS_NS {
     
 
       // Input variables for variable values
-      char* typePstr, *typeOstr, *typeSstr, *typeOHstr, *typePOHstr;
+      char* typePstr, *typeOstr, *typeHstr, *typeOHstr, *typePOHstr;
 
       //
       int typePvar, typeOvar, typeHvar, typeOHvar, typePOHvar;
