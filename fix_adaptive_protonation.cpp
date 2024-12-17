@@ -341,7 +341,7 @@ void FixAdaptiveProtonation::set_protonable_molids()
    int nlocal = atom->nlocal;
    int molecule = atom->molecule;
    int n_protonable_local = 0;
-   int n_protonable = 0;
+   n_protonable = 0;
    int * protonable_molids_local = new int[nlocal];
    int * protonable_molids;
 
@@ -358,7 +358,7 @@ void FixAdaptiveProtonation::set_protonable_molids()
 
 
    /* Extracting the unique molecule_ids so that I would know the 
-      n_molecule_ids and the required size of the molids array*
+      n_molecule_ids and the required size of the molids array*/
    
     // Collect all molecule IDs from all processes
     MPI_Allreduce(&n_protonable_local,&n_protonable, 1, MPI_INT, MPI_SUM, world);
@@ -393,6 +393,20 @@ void FixAdaptiveProtonation::set_protonable_molids()
     delete [] displs;
    
 }
+
+/* ----------------------------------------------------------------------------------------
+   Getting the molids for protonable molecules
+   The molids must be allocated otherwise an error occurs
+   ---------------------------------------------------------------------------------------- */
+
+void FixAdaptiveProtonation::get_protonable_molids(int *_molids) {
+   if (_molids == nullptr) error->all(FLERR,"The _molids array in the fix adaptive protonation get protonable_molids must be allocated");
+
+   for (int i = 0; i < n_protonable; i++) {
+      _molids[i] = protonable_molids[i];
+   }
+}
+
 /* ----------------------------------------------------------------------------------------
    changing the protonation state of phosphates 
    ---------------------------------------------------------------------------------------- */
