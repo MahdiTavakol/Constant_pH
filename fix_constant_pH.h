@@ -46,7 +46,7 @@ namespace LAMMPS_NS {
                           const double* const _a_lambdas, const double* const _m_lambdas);
         void return_T_lambda(double& _T_lambda);
 
-     private:
+     protected:
 	// Sturcture files
         FILE *pHStructureFile;
 
@@ -96,8 +96,8 @@ namespace LAMMPS_NS {
         void print_Udwp();
 
 	// Functions needed to communicate with fix adaptive protonation command
-	int fix_adaptive_protonation_id;
-	int nevery_adaptive_protonation;
+	char * fix_adaptive_protonation_id;
+	int nevery_fix_adaptive;
 	FixAdaptiveProtonation* fix_adaptive_protonation;
 
         // The q_total used to calculate the HW charges
@@ -160,4 +160,3 @@ namespace LAMMPS_NS {
 
 #endif
 #endif
-
