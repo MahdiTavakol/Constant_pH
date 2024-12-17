@@ -1040,4 +1040,3 @@ double FixConstantPH::memory_usage()
                  pvatom_orig_bytes + keatom_orig_bytes + kvatom_orig_bytes;
   return bytes;
 }
-
