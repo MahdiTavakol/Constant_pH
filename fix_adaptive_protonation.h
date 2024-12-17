@@ -68,6 +68,7 @@ namespace LAMMPS_NS {
 
       // array to access the molids of the protonable molecules
       int * protonable_molids;
+      int n_protonable;
 
       int nmax;
 
