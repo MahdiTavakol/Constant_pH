@@ -55,7 +55,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
        GFF(nullptr),
        q_orig(nullptr), f_orig(nullptr),
        peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr),
-       fix_adaptive_protonation_id(nullptr)
+       fix_adaptive_protonation(nullptr)
 {
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
@@ -118,7 +118,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	}
     }
     else if (strcmp(arg[iarg],"Fix_adaptive_protonation") == 0) {
-	fix_adaptive_protonation_id = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	fix_adaptive_protonation_id = utils::strdup(arg[iarg+1]);
 	nevery_fix_adaptive = utils::numeric(FLERR,arg[iarg+2],false,lmp);
 	iarg+=3;
     }
@@ -184,8 +184,8 @@ int FixConstantPH::setmask()
    
 void FixConstantPH::init()
 {
-   fix_adaptive_protonation = static_cast<fix_adaptive_protonation_id*>(modify->get_fix_by_id(fix_adaptive_protonation_id));
-   n_lambdas = fix_adaptive_protonation->n_protonable;
+   fix_adaptive_protonation = static_cast<FixAdaptiveProtonation*>(modify->get_fix_by_id(fix_adaptive_protonation_id));
+   fix_adaptive_protonation->get_n_protonable(n_lambdas);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -212,7 +212,7 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
-    reallocate_lambda_storage();
+    reset_lambdas();
        
     if (GFF_flag)
 	init_GFF();
@@ -233,10 +233,12 @@ void FixConstantPH::setup(int /*vflag*/)
 
 void FixConstantPH::initial_integrate(int /*vflag*/)
 {
-   if ((update->ntimestep % nevery_fix_adaptive) {
-       if (fix_adaptive_protonation->n_protonable != n_lambdas) {
-	   fix_adaptive_protonation->get_n_protonable(n_lambdas);
-           reallocate_lambda_storage();
+   if (!(update->ntimestep % nevery_fix_adaptive)) {
+       int n_protonable;
+       fix_adaptive_protonation->get_n_protonable(n_protonable);
+       if (n_protonable != this->n_lambdas) {
+	   this->n_lambdas = n_protonable;
+           reset_lambdas();
 	   fix_adaptive_protonation->get_protonable_molids(molids);
        }
    }
