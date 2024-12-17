@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.05.04----------------- */
+/* ---------- v0.05.06----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
@@ -132,10 +132,11 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
 
 FixAdaptiveProtonation::~FixAdaptiveProtonation()
 {
-   delete[] typePstr;
-   delete[] typeOstr;
-   delete[] typeHstr;
-   delete[] typeOHstr;
+   if (typePstr) delete[] typePstr;
+   if (typeOstr) delete[] typeOstr;
+   if (typeHstr) delete[] typeHstr;
+   if (typeOHstr) delete[] typeOHstr;
+   if (protonable_molids) delete[] protonable_molids;
 
    memory->destory(mark);
 }
@@ -240,7 +241,8 @@ void FixAdaptiveProtonation::pre_exchange(int vflag)
    }
 
    mark_protonation_deprotonation();
-   change_protonation();  
+   change_protonation();
+   set_protonable_molids();
 }
 
 /* ----------------------------------------------------------------------------------------
