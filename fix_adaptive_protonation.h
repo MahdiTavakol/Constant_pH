@@ -75,7 +75,7 @@ namespace LAMMPS_NS {
       // Setting the same molecule id for atoms connected to each other
       void set_molecule_id();
       // Allocates the protonable_molids array based on the number of molecule_ids obtained from set_molecule_id()
-      void allocate_protonable_molids();
+      void set_protonable_molids();
       // Mark phosphate atoms for protonation/deprotonation
       void mark_protonation_deprotonation();
       // Fills out the array of the molids of the protonable molecules
