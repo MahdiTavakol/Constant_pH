@@ -18,8 +18,8 @@ FixStyle(AdaptiveProtonation,FixAdaptiveProtonation);
 // clang-format on
 #else
 
-#ifndef LMP_FIX_ADAPTIVEPROTONATION_H
-#define LMP_FIX_ADAPTIVEPROTONATION_H
+#ifndef LMP_FIX_ADAPTIVE_PROTONATION_H
+#define LMP_FIX_ADAPTIVE_PROTONATION_H
 
 #include "fix.h"
 
