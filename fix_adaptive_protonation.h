@@ -64,9 +64,7 @@ namespace LAMMPS_NS {
       // mark -1 -> in solid
       int * mark;
 
-      // Molecule_ids set by the set_molecule_id()
-      int n_molecule_ids;
-      int *molids;
+
 
       // array to access the molids of the protonable molecules
       int * protonable_molids;
