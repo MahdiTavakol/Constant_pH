@@ -38,7 +38,11 @@ namespace LAMMPS_NS {
       double memory_usage() override;
       void init_list(int, class NeighList*) override;
 
-   private:
+
+      // Getting the protonable molids (The molids array must be allocated otherwise an error is produced)
+      void get_protonable_molids(int * molids);
+
+   protected:
       // Input variables for constant values
       int typeP, typeO, typeH, typeOH;
       double threshold;
@@ -77,8 +81,6 @@ namespace LAMMPS_NS {
       void set_molecule_id();
       // Allocates the protonable_molids array based on the number of molecule_ids obtained from set_molecule_id()
       void set_protonable_molids();
-      // Getting the protonable molids (The molids array must be allocated otherwise an error is produced)
-      void get_protonable_molids(int * molids);
       // Mark phosphate atoms for protonation/deprotonation
       void mark_protonation_deprotonation();
       // Fills out the array of the molids of the protonable molecules
