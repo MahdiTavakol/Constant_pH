@@ -64,7 +64,7 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    dynamic_group_allow = 0;
    scalar_flag = 1; 
    vector_flag = 1;
-   size_vector = 3; // What is this?
+   size_vector = 2;
    global_freq = 1; // What is this?
    extscalar = 1; // What is this?
    extvector = 1; // What is this?
@@ -72,8 +72,7 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    virial_global_flag = 1;
    virial_peratom_flag = 1;
    respa_level_support = 1;
-   ilevel_respa = 0;
-
+   
    nevery = utils::numeric(FLERR, arg[3], false, lmp);
 
    if (utils::strmatch(arg[4], "^v_")) {
@@ -431,7 +430,7 @@ void FixAdaptiveProtonation::modify_protonable_hydrogens()
    AtomVec *avec = atom->avec;
 
 
-   if (atom->avec->bonds_allow && (style == BOND || style == MULTI || style == ATOM)) {
+   if (atom->avec->bonds_allow) {
       
       int pAtom;     // local atom id for the P atom
       int oAtoms[3]; // local atom id for the O atoms  <----> It is only used for identifying those oxygen atoms needed to be added
@@ -450,7 +449,7 @@ void FixAdaptiveProtonation::modify_protonable_hydrogens()
             */
             int atom2 = atom->map(atom->bond_atom[i][m]);
             if (m < 3) oAtoms[m] = atom2;
-            else error->warning(FLERR,"Number of atoms connected to P is {}",num_bond[i]);
+            else error->warning(FLERR,"Number of atoms connected to P is {}",atom->num_bond[i]);
             if (atom2 == -1) error->warning(FLERR,"Bond atom missing in fix AdaptiveProtonation");
             for (int n = 0; n < atom->num_bond[atom2]; n++) {
                int atom3 = atom->map(atom->bond_atom[atom2][n]);
@@ -533,7 +532,7 @@ void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, c
       
 
       // global and local indexes of new hydrogens are needed to modify the bond and angle information in the topology
-      int tagH = (tag[atom->nlocal-1] > 0)? tag[atom->nlocal-1]: atom->natoms-1;
+      int tagH = (atom->tag[atom->nlocal-1] > 0)? atom->tag[atom->nlocal-1]: atom->natoms-1;
       int jH = atom->nlocal-1 ;
 
       
@@ -572,7 +571,7 @@ void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, c
       if (force->newton_bond) continue; // If the newton flag is on just half of the topology information is required
       
       // The hydrogen section for the new bond
-      atom->bond_type[h_local_index][0] = bondOHtype;
+      atom->bond_type[h_local_index][0] = typeOH;
       atom->bond_atom[h_local_index][0] = o_global_index;
       h_num_bond++;
 
@@ -602,7 +601,7 @@ void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, c
    // Summing up the total change in the natoms, nbonds and nangles
    MPI_Allreduce(&natoms_change,&natoms_change_total,1,MPI_INT,MPI_SUM,world);
    MPI_Allreduce(&nbonds_change,&nbonds_change_total,1,MPI_INT,MPI_SUM,world);
-   MPI_Allreduce(&nangle_change,&nangles_change_total,1,MPI_INT,MPI_SUM,world);
+   MPI_Allreduce(&nangles_change,&nangles_change_total,1,MPI_INT,MPI_SUM,world);
 
    // Updating the number of atoms, bonds and angles
    atom->natoms += natoms_change_total;
@@ -619,10 +618,10 @@ void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, c
    WHEN FORCE->NEWTON_BOND????
    -------------------------------------------------------------------------- */
 
-void FixAdaptiveProtonation::remove_hydrogens(const int& i, int& numHs_2_del, const int oAtoms[3], const int hAtoms[3])
+void FixAdaptiveProtonation::remove_hydrogens(const int i, int _numHs_2_del, const int oAtoms[3], const int hAtoms[3])
 {
    int nlocal = atom->nlocal;
-   
+   int numHs_2_del = _numHs_2_del;
 
 
    int p_local_index = i;
@@ -673,7 +672,7 @@ void FixAdaptiveProtonation::remove_hydrogens(const int& i, int& numHs_2_del, co
       if (hAtoms[0] == k ||
           hAtoms[1] == k ||
           hAtoms[2] == k) {
-         avec->copy(nlocal-1, k , 1);
+         atom->avec->copy(nlocal-1, k , 1);
          nlocal--;
          numHs_2_del--;
          natoms_change--;
@@ -685,12 +684,47 @@ void FixAdaptiveProtonation::remove_hydrogens(const int& i, int& numHs_2_del, co
       error->warning(FLERR,"There is not enough hydrogen atoms for the fix adaptive protonation to delete, this should not have happen!!!");
       
    // Summing up the change in natoms, nbonds and nangles from different procs
-   MPI_Allreduce(&natoms_change,&natoms_change_total,MPI_INT,MPI_SUM,world);
-   MPI_Allreduce(&nbonds_change,&nbonds_change_total,MPI_INT,MPI_SUM,world);
-   MPI_Allreduce(&nangles_change,&nangles_change_total,MPI_INT,MPI_SUM,world);
+   MPI_Allreduce(&natoms_change,&natoms_change_total,1,MPI_INT,MPI_SUM,world);
+   MPI_Allreduce(&nbonds_change,&nbonds_change_total,1,MPI_INT,MPI_SUM,world);
+   MPI_Allreduce(&nangles_change,&nangles_change_total,1,MPI_INT,MPI_SUM,world);
    
    // Updating the total number of atoms, bonds and angles
    atom->natoms += natoms_change_total;
-   atoms->nbonds += nbonds_change_total;
-   atoms->nangles += nangles_change_total;  
+   atom->nbonds += nbonds_change_total;
+   atom->nangles += nangles_change_total;  
 }
+
+/* --------------------------------------------------------------------------
+   Output the changes in the number of hydrogen atoms
+   -------------------------------------------------------------------------- */
+
+double FixAdaptiveProtonation::compute_scalar()
+{
+   return static_cast<double>(natoms_change_total);
+}
+
+/* --------------------------------------------------------------------------
+   Output the changes in the topology --> nbonds and nangles
+   -------------------------------------------------------------------------- */
+
+double FixAdaptiveProtonation::compute_vector(int n)
+{
+   switch (n)
+   {
+      case 1:
+         return static_cast<double>(nbonds_change_total);
+      case 2:
+         return static_cast<double>(nangles_change_total);
+   }
+   error->all(FLERR,"Undefined error");
+}
+
+/* --------------------------------------------------------------------------
+   This part needs to be updated in the final version ....
+   -------------------------------------------------------------------------- */
+   
+double FixAdaptiveProtonation::memory_usage()
+{
+   return 0.0;
+}
+
