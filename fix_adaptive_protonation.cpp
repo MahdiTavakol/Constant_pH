@@ -295,6 +295,7 @@ void FixAdaptiveProtonation::set_molecule_id()
 {
    int natom = atom->nlocal + atom->nghost;
    int nlocal = atom->nlocal;
+   int nmax = atom->nmax;
    int * molecule = atom->molecule;
    int * num_bond = atom->num_bond;
    int ** bond_atom = atom->bond_atom;
@@ -327,9 +328,69 @@ void FixAdaptiveProtonation::set_molecule_id()
    Of course if the molecules are long spanning multiple procs there is a need
    for atom exchange here.
    */
-
 }
 
+/* ----------------------------------------------------------------------------------------
+   Setting the molids for protonable molecules
+   ---------------------------------------------------------------------------------------- */
+
+void FixAdaptiveProtonation::set_protonable_molids()
+{
+   int nlocal = atom->nlocal;
+   int molecule = atom->molecule;
+   int n_protonable_local = 0;
+   int n_protonable = 0;
+   int * protonable_molids_local = new int[nlocal];
+   int * protonable_molids;
+
+   int nprocs = comm->nprocs;
+   int * recv_counts = new int[nprocs];
+   int * displs = new int[nprocs];
+
+   
+   for (int i = 0; i < nlocal; i++) {
+      if (mark[i] == 1) {
+         protonable_molids_local[n_protonable_local++] = molecule[i];
+      }
+   }
+
+
+   /* Extracting the unique molecule_ids so that I would know the 
+      n_molecule_ids and the required size of the molids array*
+   
+    // Collect all molecule IDs from all processes
+    MPI_Allreduce(&n_protonable_local,&n_protonable, 1, MPI_INT, MPI_SUM, world);
+
+    protonable_molids = new int[n_protonable];
+    
+
+    MPI_Allgather(&n_protonable, 1, MPI_INT, recv_counts, 1, MPI_INT, world);
+
+    displs[0] = 0;
+    for (int i = 1; i < nprocs; i++) {
+        displs[i] = displs[i - 1] + recv_counts[i - 1];
+    }
+
+    MPI_Allgatherv(protonable_molids_local, n_protonable_local, MPI_INT, protonable_molids, recv_counts, displs, MPI_INT, world);
+
+    std::set<int> unique_molids(protonable_molids, protonable_molids + n_protonable);
+
+    delete [] protonable_molids;
+
+    n_protonable = unique_molids.size();
+
+    protonable_molids = new int[n_protonable];
+
+    int i = 0;
+    for (const int &mol_id : unique_molids) {
+        protonable_molids[i++] = mol_id;
+    }
+
+    delete [] protonable_molids_local;
+    delete [] recv_counts;
+    delete [] displs;
+   
+}
 /* ----------------------------------------------------------------------------------------
    changing the protonation state of phosphates 
    ---------------------------------------------------------------------------------------- */
