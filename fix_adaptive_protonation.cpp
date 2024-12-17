@@ -56,7 +56,8 @@ enum { NONE, CONSTANT, EQUAL, ATOM };
 /* --------------------------------------------------------------------------------------- */
 
 FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) :
-   Fix(lmp, narg, arg), typePstr(nullptr), typeOstr(nullptr), typeHstr(nullptr)
+   Fix(lmp, narg, arg), typePstr(nullptr), typeOstr(nullptr), typeHstr(nullptr),
+   typeOHstr(nullptr), typePOHstr(nullptr)
 {
    if (narg < 11) utils::missing_cmd_args(FLERR, "fix AdaptiveProtonation", error);
 
@@ -136,6 +137,7 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    if (typeOstr) delete[] typeOstr;
    if (typeHstr) delete[] typeHstr;
    if (typeOHstr) delete[] typeOHstr;
+   if (typePOHstr) delete[] typePOHstr;
    if (protonable_molids) delete[] protonable_molids;
 
    memory->destory(mark);
