@@ -64,13 +64,20 @@ namespace LAMMPS_NS {
       // mark -1 -> in solid
       int * mark;
 
+      // array to access the molids of the protonable molecules
+      int * protonable_molids;
+
       int nmax;
 
 
       // Setting the same molecule id for atoms connected to each other
       void set_molecule_id();
+      // Allocates the protonable_molids array based on the number of molecule_ids obtained from set_molecule_id()
+      void allocate_protonable_molids();
       // Mark phosphate atoms for protonation/deprotonation
       void mark_protonation_deprotonation();
+      // Fills out the array of the molids of the protonable molecules
+      void reset_protonable_molids();
       // Add/Remove hydrogens for all the phosphates in the system based on the output of the mark_protonation_deprotonation() function
       void modify_protonable_hydrogens();
       // Add hydrogen atoms to the phosphate with a P atom having an index of i
