@@ -229,7 +229,7 @@ void FixAdaptiveProtonation::init_list(int /*id*/, NeighList* ptr)
 
 /* --------------------------------------------------------------------------------------- */
 
-void FixAdaptiveProtonation::pre_exchange(int vflag)
+void FixAdaptiveProtonation::pre_exchange()
 {
    if(update->ntimestep != next_reneighbor) return;
 
