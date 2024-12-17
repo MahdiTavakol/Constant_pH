@@ -127,6 +127,7 @@ namespace LAMMPS_NS {
         void calculate_num_prot_num_HWs();
         void read_pH_structure_files();
         void restore_epsilon();
+	void reset_lambdas();
 	void calculate_dq();
 	void calculate_dfs();
 	void calculate_dUs();
