@@ -372,6 +372,12 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
        t_andersen = utils::numeric(FLERR,arg[iarg+2],false,lmp);
        iarg += 3;
+       cons_total_lambda = false;
+       if  (strcmp(arg[iarg],"constrain_total_charge") {
+          total_charge = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+          cons_total_lambda = true;
+          iarg += 2;
+       }
 
     } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
   }
@@ -657,8 +663,7 @@ void FixNHConstantPH::nve_x()
   for (int i = 0; i < n_lambdas; i++)
      x_lambdas[i] += dtv * v_lambdas[i];
 
-  contrain_lambdas();
-
+  if (cons_total_lambda) contrain_lambdas();
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
@@ -679,23 +684,25 @@ void FixNHConstantPH::contrain_lambdas()
 {
    double sigma_lambda = 0.0;
    double sigma_mass_inverse  = 0.0;
-   double domega;
-   double total_charge; // The total charge that we want to constrain the system to 
-   double N_buff;
-   double mass_buff;
-   double x_lambda_buff; // Just for the moment, It should be extracted from fix constant_pH
+   double domega; 
+
+
+   fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
 
    for (int i = 0; i < n_lambdas; i++) {
       sigma_lambda += x_lambdas[i];
       sigma_mass_inverse += (1.0/m_lambdas[i]);
    }
 
-   domega = -(sigma_lambda+N_buff*lambda_buff-total_charge) / (sigma_mass_inverse + (N_buff/mass_buff));
+   domega = -(sigma_lambda+N_buff*lambda_buff-total_charge) / (sigma_mass_inverse + (static_cast<double>(N_buff)/mass_buff));
 
    for (int i = 0; i < n_lambdas; i++)
       x_lambdas[i] += (domega /m_lambdas[i]);
 
-   x_lambda_buff += N_buff * domega / mass_buff;
+   x_lambda_buff += static_cast<double>(N_buff) * domega / mass_buff;
+
+   // the nve_x() does the reset_params for the reset of lambdas;
+   fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff,N_buff);
 }
 
 /* ----------------------------------------------------------------------
