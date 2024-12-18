@@ -48,10 +48,10 @@ namespace LAMMPS_NS {
 
 
 	// Functions to return the buffer parameters
-	void return_buffer_params(double& _x_lambda_buff, double& _v_lambda_buff, 
+	void return_buff_params(double& _x_lambda_buff, double& _v_lambda_buff, 
                                   double& _a_lambda_buff, double& _m_lambda_buff, int& _N_buff) const;
-	void reset_buffer_params(const double x_lambda_buff,const double v_lambda_buff, 
-                                 const double a_lambda_buff, const double m_lambda_buff);
+	void reset_buff_params(const double _x_lambda_buff, const double _v_lambda_buff, 
+                                 const double _a_lambda_buff, const double _m_lambda_buff);
 
      protected:
         int flags;
