@@ -46,6 +46,14 @@ namespace LAMMPS_NS {
                           const double* const _a_lambdas, const double* const _m_lambdas);
         void return_T_lambda(double& _T_lambda);
 
+	// To check by the fix_nh_constant_pH if there is a buffer in the fix constant pH
+        bool buffer_set;
+	// Functions to return the buffer parameters
+	void return_buffer_params(double& _x_lambda_buff, double& _v_lambda_buff, 
+                                  double& _a_lambda_buff, double& _m_lambda_buff, int& _N_buff) const;
+	void reset_buffer_params(const double x_lambda_buff,const double v_lambda_buff, 
+                                 const double a_lambda_buff, const double m_lambda_buff);
+
      protected:
 	// Sturcture files
         FILE *pHStructureFile;
@@ -94,6 +102,10 @@ namespace LAMMPS_NS {
         bool print_Udwp_flag;
         FILE *Udwp_fp;
         void print_Udwp();
+
+        // Parameters for the buffer
+	double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
+        int N_buff;
 
 	// Functions needed to communicate with fix adaptive protonation command
 	char * fix_adaptive_protonation_id;
