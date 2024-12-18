@@ -48,13 +48,6 @@
 using namespace LAMMPS_NS;
 using namespace FixConst;
 
-static constexpr double DELTAFLIP = 0.1;
-static constexpr double TILTMAX = 1.5;
-static constexpr double EPSILON = 1.0e-6;
-
-enum{NOBIAS,BIAS};
-enum{NONE,XYZ,XY,YZ,XZ};
-enum{ISO,ANISO,TRICLINIC};
 enum {LAMBDA_ANDERSEN,LAMBDA_BOSSI,LAMBDA_NOSEHOOVER};
 
 /* ----------------------------------------------------------------------
@@ -371,6 +364,20 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
 
     } else if (strcmp(arg[iarg],"fix_constant_pH_id") == 0) {
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
+       if (strcmp(arg[iarg+2],"andersen") == 0) {
+          lambda_thermostat_flag = LAMBDA_ANDERSEN;
+          t_andersen = utils::numeric(FLERR,arg[iarg+3],false,lmp);
+          iarg+=3;
+       }
+       else if (strcmp(arg[iarg+2],"bossi") == 0) {
+          lambda_thermostat_flag = LAMBDA_BOSSI;
+       }
+       else if (strcmp(arg[iarg+2],"nose-hoover") == 0) {
+          lambda_thermostat_flag = LAMBDA_NOSEHOOVER;
+          Q_lambda_nose_hoover = utils::numeric(FLERR,arg[iarg+3],false,lmp);
+          iarg+=3;
+       }
+          
        t_andersen = utils::numeric(FLERR,arg[iarg+2],false,lmp);
        iarg += 3;
        buffer_set = false;
@@ -625,7 +632,7 @@ void FixNHConstantPH::init()
   v_lambdas = new double[n_lambdas];
   a_lambdas = new double[n_lambdas];
   m_lambdas = new double[n_lambdas];
-  
+  lambda_thermostat_flag
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
   zeta = 0.0;
@@ -697,9 +704,6 @@ void FixNHConstantPH::nh_v_temp()
   bigint ntimestep = update->ntimestep;
   double kT = force->boltz * t_target;
   
-  bool andersen_flag = true;
-  bool bussi_flag = false;
-  bool nose_hoover_flag = false;
 
   // Lets extract the parameters from the fix_constant_pH again
   fix_constant_pH->return_nparams(n_lambdas);
@@ -715,7 +719,7 @@ void FixNHConstantPH::nh_v_temp()
   fix_constant_pH->return_T_lambda(t_lambda_current);
   
   
-  if (andersen_flag) {
+  if (lambda_thermostat_flag == LAMBDA_ANDERSEN) {
     double P = 1 - std::exp(-dt/t_andersen);
    
 
@@ -746,16 +750,14 @@ void FixNHConstantPH::nh_v_temp()
       // This needs to be implemented
       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  }
-  
-  if (bussi_flag) {
-     double tau_t = 1000;
+  } else if (lambda_thermostat_flag == LAMBDA_BOSSI) {
+     //tau_t_bussi should be 1000
      
      double scaling_factor = std::sqrt(t_lambda_target/t_lambda_current);
 
      if (which == NOBIAS) {
-        double friction = (t_lambda_current/t_lambda_target - 1.0) / tau_t;
-        zeta += friction * dt; 
+        double friction = (t_lambda_current/t_lambda_target - 1.0) / tau_t_bussi;
+        zeta_bussi += friction * dt; 
 
         // first, the lambdas
         for (int i = 0; i < n_lambdas; i++) {
@@ -775,9 +777,7 @@ void FixNHConstantPH::nh_v_temp()
         // This needs to be implemented
         error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
      }
-  }
-  
-  if (nose_hoover_flag) {  
+  } else if (lambda_thermostat_flag == LAMBDA_NOSEHOOVER) {  
      zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
 
      if (which == NOBIAS) {
