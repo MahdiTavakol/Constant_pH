@@ -72,6 +72,9 @@ namespace LAMMPS_NS {
 	double a, b, s, m, w, r, d, k, h;
 	double* HAs, * HBs;
 	double* Us, * dUs;
+
+	// Buffer potential parameters
+	double a_buff, b_buff, s_buff, m_buff, w_buff, r_buff, d_buff, k_buff, h_buff;
 	
 
         // Lambda arrays
@@ -104,8 +107,13 @@ namespace LAMMPS_NS {
         void print_Udwp();
 
         // Parameters for the buffer
-	double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
+	double lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff, H_lambda_buff;
         int N_buff;
+	int * molids_buff;
+
+        // Buffer potential
+        double U_buff, dU_buff;
+        double HA_buff, HB_buff;
 
 	// Functions needed to communicate with fix adaptive protonation command
 	char * fix_adaptive_protonation_id;
@@ -161,6 +169,7 @@ namespace LAMMPS_NS {
 	void init_GFF();
 	void calculate_GFFs();
 	void modify_qs(double *scales);
+        void modify_q_buffer(double scale);
 	void update_lmp();
         void compute_f_lambda_charge_interpolation();
 	double compute_epair();
