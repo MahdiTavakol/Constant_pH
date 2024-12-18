@@ -64,7 +64,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
        peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr),
        fix_adaptive_protonation(nullptr)
 {
-  if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
+  if (narg < 8) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
   if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
   // Reading the file that contains the charges before and after protonation/deprotonation
@@ -73,15 +73,13 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
       if (pHStructureFile == nullptr)
          error->all(FLERR,"Unable to open the file");
   }
-  // Hydronium ion hydrogen atoms
-  typeHW = utils::inumeric(FLERR,arg[5],false,lmp);
-  if (typeHW > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHW);
-  // For hydronium the initial charges are qO=-0.833, qH1=0.611, qH2=0.611, qH3=0.611 (based on TIP3P water model)
+  
+  
 
 	
-  pK = utils::numeric(FLERR, arg[6], false, lmp);
-  pH = utils::numeric(FLERR, arg[7], false, lmp);
-  T = utils::numeric(FLERR, arg[8], false, lmp);
+  pK = utils::numeric(FLERR, arg[5], false, lmp);
+  pH = utils::numeric(FLERR, arg[6], false, lmp);
+  T = utils::numeric(FLERR, arg[7], false, lmp);
   
 
 
@@ -91,7 +89,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   GFF_flag = false;
   print_Udwp_flag = false;
   n_lambdas = 1;
-  int iarg = 9;
+  int iarg = 8;
   while (iarg < narg) {
     if (strcmp(arg[iarg], "GFF") == 0)
     {
@@ -119,17 +117,19 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	}
     }
     else if (strcmp(arg[iarg],"buffer") == 0) {
-	flags =| BUFFER;
+	flags |= BUFFER;
 	if (narg < iarg+6) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
-	N_buffs = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	N_buff  = utils::numeric(FLERR,arg[iarg+1],false,lmp);
 	typeOWs = utils::numeric(FLERR,arg[iarg+2],false,lmp);
 	typeHWs = utils::numeric(FLERR,arg[iarg+3],false,lmp);
+	if (typeOWs > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeOWs);
+	if (typeHWs > atom->ntypes) error->all(FLERR,"Illegal fix constant_pH atom type {}",typeHWs);
 	qOWs = utils::numeric(FLERR,arg[iarg+4],false,lmp);
 	qHWs = utils::numeric(FLERR,arg[iarg+5],false,lmp);
 	iarg += 6;
     }
     else if (strcmp(arg[iarg],"Fix_adaptive_protonation") == 0) {
-	flags =| ADAPTIVE;
+	flags |= ADAPTIVE;
 	fix_adaptive_protonation_id = utils::strdup(arg[iarg+1]);
 	nevery_fix_adaptive = utils::numeric(FLERR,arg[iarg+2],false,lmp);
 	iarg+=3;
@@ -231,7 +231,7 @@ void FixConstantPH::setup(int /*vflag*/)
 
 
     // Checking if we have correct number of hydronium ions
-    if (flags & BUFFER) check_num_OWs_HWs();hould I constrain the lambda + N_buff*lambda_buff
+    if (flags & BUFFER) check_num_OWs_HWs();
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
@@ -353,7 +353,7 @@ void FixConstantPH::update_a_lambda()
    if (flags & BUFFER) {
 	double f_lambda_buff = -(HB_buff - HA_buff + kj2kcal*dU_buff);
 	this->a_lambda_buff = f_lambda_buff / m_lambda_buff; // the fix_nh_constant_pH itself takes care of units
-	this->H_lambda_buff = (1-lambda_buff)*HA_buff + lambda_buff *HB_buff kj2kcal*U_buff + (m_lambdas_buff/2.0)*(v_lambda_buff*v_lambda_buff);
+	this->H_lambda_buff = (1-lambda_buff)*HA_buff + lambda_buff *HB_buff + kj2kcal*U_buff + (m_lambda_buff/2.0)*(v_lambda_buff*v_lambda_buff);
    }
 }
 	
@@ -404,7 +404,7 @@ void FixConstantPH::compute_Hs()
    if (stage == 1)
    {
       modify_qs(lambdas); //should define a change_parameters(const double);
-      if (flags & BUFFER) modify_q_buffer(lambda_buff);
+      if (flags & BUFFER) modify_q_buff(lambda_buff);
       //update_lmp(); This update_lmp() might not work here since I am not sure about the correct values for the eflag and vflag variables... Anyway, the epsilon and charge values have been updated according to the pH value and lammps will do the rest
    }
 }
@@ -464,7 +464,7 @@ void FixConstantPH::reset_params(const double* const _x_lambdas, const double* c
    returns the buffer parameters
    ---------------------------------------------------------------------- */
 
-void FixConstantPH::return_buffer_params(double&  _x_lambda_buff, double& _v_lambda_buff, 
+void FixConstantPH::return_buff_params(double& _x_lambda_buff, double& _v_lambda_buff, 
                                          double& _a_lambda_buff, double& _m_lambda_buff, int& _N_buff) const
 {
     if (!(flags & BUFFER)) {
@@ -483,8 +483,8 @@ void FixConstantPH::return_buffer_params(double&  _x_lambda_buff, double& _v_lam
    the number of buffers
    ---------------------------------------------------------------------- */
 
-void FixConstantPH::reset_buffer_params(const double _x_lambda_buff, const double v_lambda_buff, 
-                                        const double _a_lambda_buff, const double m_lambda_buff) 
+void FixConstantPH::reset_buff_params(const double _x_lambda_buff, const double _v_lambda_buff, 
+                                        const double _a_lambda_buff, const double _m_lambda_buff) 
 {
     if (!(flags & BUFFER)) {
 	error->warning(FLERR,"There is no buffer in the fix constant pH so you should not have reached here");
@@ -861,7 +861,7 @@ void FixConstantPH::modify_qs(double* scales)
 	double HW_q_change = -q_changes[1]/static_cast<double>(num_HWs);
 
 	for (int i = 0; i < nlocal; i++) {
-            if (type[i] == typeHW) {
+            if (type[i] == typeHWs) {
 	       double q_init = q_orig[i];
 	       q[i] = q_init + HW_q_change; //The total charge should be neutral
 	       q_changes_local[2]++;
@@ -898,13 +898,14 @@ void FixConstantPH::modify_q_buff(const double scale)
 
 
     // update the charges
-    for (int j = 0; j < N_buffs; j++) {
+    for (int j = 0; j < N_buff; j++) {
     	for (int i = 0; i < nlocal; i++)
     	{
 	    int molid_i = atom->molecule[i];
-            if (type[i] == typeHW)
-            {
+            if (type[i] == typeHWs) {
 		 q[i] = (lambda_buff-qOWs) / 3.0;
+            } else if (type[i] == typeOWs) {
+                 q[i] = qOWs; // Just to assure if the charge of Oxygen atoms of the hydronium ions are correct!
             }
         }
     }
