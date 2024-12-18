@@ -404,8 +404,10 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
           if (!(lambda_integration_flags & BUFFER))
              error->one(FLERR,"Constrain total charge in absence of a buffer is not supported yet!");
           lambda_integration_flags |= CONSTRAIN;
-          total_charge = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-          iarg += 2;
+          mols_charge_change = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+          buff_charge_change = utils::numeric(FLERR,arg[iarg+2],false,lmp);
+          total_charge = utils::numeric(FLERR,arg[iarg+3],false,lmp);
+          iarg += 4;
        }
 
        // Here I cannot check if the constant_pH command has a buffer set as right now I have not set the fix_constant_pH pointer yet!!
