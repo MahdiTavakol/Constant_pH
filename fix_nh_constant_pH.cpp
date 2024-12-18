@@ -49,6 +49,11 @@ using namespace LAMMPS_NS;
 using namespace FixConst;
 
 enum {LAMBDA_ANDERSEN,LAMBDA_BOSSI,LAMBDA_NOSEHOOVER};
+enum { 
+       NONE=0,
+       BUFFER=1<<0, 
+       CONSTRAIN=1<<1
+     };
 
 /* ----------------------------------------------------------------------
    NVT,NPH,NPT integrators for improved Nose-Hoover equations of motion
@@ -364,32 +369,36 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
 
     } else if (strcmp(arg[iarg],"fix_constant_pH_id") == 0) {
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
-       if (strcmp(arg[iarg+2],"andersen") == 0) {
-          lambda_thermostat_flag = LAMBDA_ANDERSEN;
+       if (strcmp(arg[iarg+2],"none") == 0) {
+          lambda_thermostat_type = NONE;
+          iarg+=2;
+       }
+       else if (strcmp(arg[iarg+2],"andersen") == 0) {
+          lambda_thermostat_type = LAMBDA_ANDERSEN;
           t_andersen = utils::numeric(FLERR,arg[iarg+3],false,lmp);
           iarg+=3;
        }
        else if (strcmp(arg[iarg+2],"bossi") == 0) {
-          lambda_thermostat_flag = LAMBDA_BOSSI;
+          lambda_thermostat_type = LAMBDA_BOSSI;
+          iarg+=2;
        }
        else if (strcmp(arg[iarg+2],"nose-hoover") == 0) {
-          lambda_thermostat_flag = LAMBDA_NOSEHOOVER;
+          lambda_thermostat_type = LAMBDA_NOSEHOOVER;
           Q_lambda_nose_hoover = utils::numeric(FLERR,arg[iarg+3],false,lmp);
           iarg+=3;
        }
-          
-       t_andersen = utils::numeric(FLERR,arg[iarg+2],false,lmp);
-       iarg += 3;
-       buffer_set = false;
-       cons_total_lambda = false;
+       if (strcmp(arg[iarg],"buffer") {
+          lambda_integration_flags |= BUFFER;
+          iarg += 1;
+       }
        if  (strcmp(arg[iarg],"constrain_total_charge") {
+          if (!(lambda_integration_flags & BUFFER))
+             error->one(FLERR,"Constrain total charge in absence of a buffer is not supported yet!");
+          lambda_integration_flags |= CONSTRAIN;
           total_charge = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-          cons_total_lambda = true;
           iarg += 2;
        }
-       if (strcmp(arg[iarg],"buffer") {
-          buffer_set = true;
-       }
+
        // Here I cannot check if the constant_pH command has a buffer set as right now I have not set the fix_constant_pH pointer yet!!
     } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
   }
@@ -632,13 +641,12 @@ void FixNHConstantPH::init()
   v_lambdas = new double[n_lambdas];
   a_lambdas = new double[n_lambdas];
   m_lambdas = new double[n_lambdas];
-  lambda_thermostat_flag
+
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
-  zeta = 0.0;
   
   
-  Q_lambda_nose_hoover = 10.0;
+  zeta_bussi = 0.0;
   zeta_nose_hoover = 0.0;
 }
 
@@ -659,7 +667,7 @@ void FixNHConstantPH::nve_v()
      v_lambdas[i] += dtf * a_lambdas[i];
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
-  if (buffer_set) {
+  if (lambda_integration_flags & BUFFER) {
      fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      v_lambda_buff += dtf * a_lambda_buff;
      fix_constant_pH->reset_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
@@ -681,10 +689,10 @@ void FixNHConstantPH::nve_x()
   for (int i = 0; i < n_lambdas; i++)
      x_lambdas[i] += dtv * v_lambdas[i];
 
-  if (buffer_set) {
+  if (lambda_integration_flags & BUFFER) {
      fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      x_lambda_buff += dtv * v_lambda_buff;
-     if (cons_total_lambda) contrain_lambdas();
+     if (lambda_integration_flags & CONSTRAIN) contrain_lambdas();
      fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
   }
    
@@ -710,7 +718,7 @@ void FixNHConstantPH::nh_v_temp()
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
   // and the buffer if present
-  if (buffer_set)
+  if (lambda_integration_flags & BUFFER)
      fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
 
   // Temperature
@@ -719,7 +727,7 @@ void FixNHConstantPH::nh_v_temp()
   fix_constant_pH->return_T_lambda(t_lambda_current);
   
   
-  if (lambda_thermostat_flag == LAMBDA_ANDERSEN) {
+  if (lambda_thermostat_type == LAMBDA_ANDERSEN) {
     double P = 1 - std::exp(-dt/t_andersen);
    
 
@@ -750,7 +758,7 @@ void FixNHConstantPH::nh_v_temp()
       // This needs to be implemented
       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  } else if (lambda_thermostat_flag == LAMBDA_BOSSI) {
+  } else if (lambda_thermostat_type == LAMBDA_BOSSI) {
      //tau_t_bussi should be 1000
      
      double scaling_factor = std::sqrt(t_lambda_target/t_lambda_current);
@@ -777,7 +785,7 @@ void FixNHConstantPH::nh_v_temp()
         // This needs to be implemented
         error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
      }
-  } else if (lambda_thermostat_flag == LAMBDA_NOSEHOOVER) {  
+  } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER) {  
      zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
 
      if (which == NOBIAS) {
@@ -802,7 +810,7 @@ void FixNHConstantPH::nh_v_temp()
   
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
-  if (buffer_set) fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+  if (lambda_integration_flags & BUFFER) fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
 }
 
 /* ---------------------------------------------------------------------
