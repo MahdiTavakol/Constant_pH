@@ -46,8 +46,7 @@ namespace LAMMPS_NS {
                           const double* const _a_lambdas, const double* const _m_lambdas);
         void return_T_lambda(double& _T_lambda);
 
-	// To check by the fix_nh_constant_pH if there is a buffer in the fix constant pH
-        bool buffer_set;
+
 	// Functions to return the buffer parameters
 	void return_buffer_params(double& _x_lambda_buff, double& _v_lambda_buff, 
                                   double& _a_lambda_buff, double& _m_lambda_buff, int& _N_buff) const;
@@ -55,6 +54,7 @@ namespace LAMMPS_NS {
                                  const double a_lambda_buff, const double m_lambda_buff);
 
      protected:
+        int flags;
 	// Sturcture files
         FILE *pHStructureFile;
 
@@ -66,7 +66,6 @@ namespace LAMMPS_NS {
 
 
 	// Input variables for constant values
-	int typeHW;
 	double pK, pH, T;
 
 	double a, b, s, m, w, r, d, k, h;
@@ -86,10 +85,7 @@ namespace LAMMPS_NS {
         // The protonable groups
         int *protonable_molecule_ids;
          
-
-	// Protonation and hydronium group parameters
-	double qHs, qHWs;
-	int num_HWs, num_prots;
+	
 
 	// The smoothing function 
 	double * fs, * dfs;
@@ -109,7 +105,11 @@ namespace LAMMPS_NS {
         // Parameters for the buffer
 	double lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff, H_lambda_buff;
         int N_buff;
-	int * molids_buff;
+
+	// Hydrogen and Oxygens types of the hydronium ions
+	int typeHWs, typeOWs;
+	double qHWs, qOWs;
+        int num_HWs, num_OWs;
 
         // Buffer potential
         double U_buff, dU_buff;
@@ -145,7 +145,7 @@ namespace LAMMPS_NS {
 
         template<int stage>
 	void compute_Hs();
-        void calculate_num_prot_num_HWs();
+        void check_num_OWs_HWs();
         void read_pH_structure_files();
         void restore_epsilon();
 	void reset_lambdas();
@@ -169,7 +169,7 @@ namespace LAMMPS_NS {
 	void init_GFF();
 	void calculate_GFFs();
 	void modify_qs(double *scales);
-        void modify_q_buffer(double scale);
+        void modify_q_buff(const double scale);
 	void update_lmp();
         void compute_f_lambda_charge_interpolation();
 	double compute_epair();
