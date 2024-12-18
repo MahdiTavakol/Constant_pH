@@ -378,7 +378,7 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
           cons_total_lambda = true;
           iarg += 2;
        }
-
+       // Check if the constant_pH command has the N_buff and mass_buff set.
     } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
   }
 
