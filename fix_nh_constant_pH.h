@@ -50,12 +50,14 @@ class FixNHConstantPH : public FixNH {
   double T_lambda;
   int n_lambdas;
 
+  // Do I have a buffer here and if so what are its parameters
+  bool buffer_set;
+  double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
+  int N_buff;
 
   // Should I constrain the lambda + N_buff*lambda_buff
   bool cons_total_lambda;
   double total_charge;
-  double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
-  int N_buff;
 
   // Parameter for thermostat of the lambda variables
   double t_andersen;
