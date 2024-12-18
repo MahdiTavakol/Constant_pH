@@ -59,11 +59,17 @@ class FixNHConstantPH : public FixNH {
   bool cons_total_lambda;
   double total_charge;
 
-  // Parameter for thermostat of the lambda variables
+  // The style of the thermostat for the lambdas
+  int lambda_thermostat_flag;
+
+  // Parameter for Andersen thermostat
   double t_andersen;
-  double zeta;
+
+  // Parameter for Bussi thermostat
+  double tau_t_bussi;
+  double zeta_bussi;
   
-  // Parameters for the Nose-Hoover thermostat
+  // Parameters for Nose-Hoover thermostat
   double Q_lambda_nose_hoover;
   double zeta_nose_hoover;
 
