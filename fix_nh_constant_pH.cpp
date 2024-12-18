@@ -372,13 +372,17 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
        t_andersen = utils::numeric(FLERR,arg[iarg+2],false,lmp);
        iarg += 3;
+       buffer_set = false;
        cons_total_lambda = false;
        if  (strcmp(arg[iarg],"constrain_total_charge") {
           total_charge = utils::numeric(FLERR,arg[iarg+1],false,lmp);
           cons_total_lambda = true;
           iarg += 2;
        }
-       // Check if the constant_pH command has the N_buff and mass_buff set.
+       if (strcmp(arg[iarg],"buffer") {
+          buffer_set = true;
+       }
+       // Here I cannot check if the constant_pH command has a buffer set as right now I have not set the fix_constant_pH pointer yet!!
     } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
   }
 
@@ -646,6 +650,12 @@ void FixNHConstantPH::nve_v()
   for (int i = 0; i < n_lambdas; i++)
      v_lambdas[i] += dtf * a_lambdas[i];
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+  if (buffer_set) {
+     fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     v_lambda_buff += dtf * a_lambda_buff;
+     fix_constant_pH->reset_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -663,8 +673,135 @@ void FixNHConstantPH::nve_x()
   for (int i = 0; i < n_lambdas; i++)
      x_lambdas[i] += dtv * v_lambdas[i];
 
-  if (cons_total_lambda) contrain_lambdas();
+  if (buffer_set) {
+     fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     x_lambda_buff += dtv * v_lambda_buff;
+     if (cons_total_lambda) contrain_lambdas();
+     fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+  }
+   
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+}
+
+/* ----------------------------------------------------------------------
+   perform half-step thermostat scaling of velocities
+   ---------------------------------------------------------------------- */
+
+void FixNHConstantPH::nh_v_temp()
+{
+  FixNH::nh_v_temp();
+
+  // The timestep, the current step and the kT of course! 
+  double dt = update->dt;
+  bigint ntimestep = update->ntimestep;
+  double kT = force->boltz * t_target;
+  
+  bool andersen_flag = true;
+  bool bussi_flag = false;
+  bool nose_hoover_flag = false;
+
+  // Lets extract the parameters from the fix_constant_pH again
+  fix_constant_pH->return_nparams(n_lambdas);
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+  // and the buffer if present
+  if (buffer_set)
+     fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+
+  // Temperature
+  double t_lambda_current;
+  double t_lambda_target = t_target;
+  fix_constant_pH->return_T_lambda(t_lambda_current);
+  
+  
+  if (andersen_flag) {
+    double P = 1 - std::exp(-dt/t_andersen);
+   
+
+    if (which == NOBIAS) {
+      // Dealing with lambdas
+      for (int i = 0; i < n_lambdas; i++) {
+        double r = static_cast<double>(rand()) / RAND_MAX;
+        if (r < P) {
+           double mean = 0.0;
+           double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
+           v_lambdas[i] = random_normal(mean, sigma);
+        }
+        if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
+           v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
+      }
+      // Dealing with the buffer
+      if (buffer_set) {
+         double r = static_cast<double>(rand())/ RAND_MAX;
+         if (r < P) {
+            double mean = 0.0;
+            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
+            v_lambda_buff = random_normal(mean,sigma);
+         }
+         if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+            v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lamba_buff);
+      }
+    } else if (which == BIAS) {
+      // This needs to be implemented
+      error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+    }
+  }
+  
+  if (bussi_flag) {
+     double tau_t = 1000;
+     
+     double scaling_factor = std::sqrt(t_lambda_target/t_lambda_current);
+
+     if (which == NOBIAS) {
+        double friction = (t_lambda_current/t_lambda_target - 1.0) / tau_t;
+        zeta += friction * dt; 
+
+        // first, the lambdas
+        for (int i = 0; i < n_lambdas; i++) {
+           v_lambdas[i] *= scaling_factor;
+           //v_lambdas[i] *= exp(-zeta*dt);
+           if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
+              v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
+        }
+        // and then the buffer 
+        if (buffer_set) {
+           v_lambda_buff *= scaling_factor;
+           // v_lambda_buff *= exp(-zeta*dt);
+           if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lamba_buff);
+        }
+     } else if (which == BIAS) {
+        // This needs to be implemented
+        error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+     }
+  }
+  
+  if (nose_hoover_flag) {  
+     zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
+
+     if (which == NOBIAS) {
+        // first the lambdas
+        for (int i = 0; i < n_lambdas; i++) {
+           v_lambdas[i] *= std::exp(-zeta_nose_hoover * dt);
+           if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
+              v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
+        }
+        // and then the buffer
+        if (buffer_set) {
+           v_lambda_buff *= std::exp(-zeta_nose_hoober  * dt);
+           if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lamba_buff);
+        }
+     } else if (which == BIAS) {
+        // This needs to be implemented
+        error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+     }
+  }
+  
+  
+  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+  if (buffer_set) fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
 }
 
 /* ---------------------------------------------------------------------
@@ -687,8 +824,6 @@ void FixNHConstantPH::contrain_lambdas()
    double domega; 
 
 
-   fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
-
    for (int i = 0; i < n_lambdas; i++) {
       sigma_lambda += x_lambdas[i];
       sigma_mass_inverse += (1.0/m_lambdas[i]);
@@ -701,8 +836,6 @@ void FixNHConstantPH::contrain_lambdas()
 
    x_lambda_buff += static_cast<double>(N_buff) * domega / mass_buff;
 
-   // the nve_x() does the reset_params for the reset of lambdas;
-   fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff,N_buff);
 }
 
 /* ----------------------------------------------------------------------
@@ -714,94 +847,6 @@ double FixNHConstantPH::random_normal(double mean, double stddev)
   static std::mt19937 generator(std::random_device{}());
   std::normal_distribution<double> distribution(mean, stddev);
   return distribution(generator);
-}
-
-/* ----------------------------------------------------------------------
-   perform half-step thermostat scaling of velocities
-   ---------------------------------------------------------------------- */
-
-void FixNHConstantPH::nh_v_temp()
-{
-  FixNH::nh_v_temp();
-  
-  bool andersen_flag = true;
-  bool bussi_flag = false;
-  bool nose_hoover_flag = false;
-  
-  
-  if (andersen_flag) {
-    bigint ntimestep = update->ntimestep;
-
-    //double t_andersen = 500;
-    double dt = update->dt;
-    double kT = force->boltz * t_target;
-    double t_lambda_current;
-    double P = 1 - std::exp(-dt/t_andersen);
-   
-    /*if (ntimestep % 1000) {
-      for (int i = 0; i < n_lambdas; i++)
-        v_lambdas[i] = 0.0;
-    }*/
-  
-    fix_constant_pH->return_nparams(n_lambdas);
-    fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-
-    if (which == NOBIAS) {
-      for (int i = 0; i < n_lambdas; i++) {
-        double r = static_cast<double>(rand()) / RAND_MAX;
-        fix_constant_pH->return_T_lambda(t_lambda_current);
-        if (r < P) {
-           double mean = 0.0;
-           double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
-           v_lambdas[i] = random_normal(mean, sigma);
-        }
-        if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
-           v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
-      }
-    } else if (which == BIAS) {
-      // This needs to be implemented
-      error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
-    }
-  }
-  
-  if (bussi_flag) {
-     double tau_t = 1000;
-     double dt = update->dt;
-     double t_lambda_current;
-     double t_lambda_target = t_target;
-     fix_constant_pH->return_T_lambda(t_lambda_current);
-
-     
-     double scaling_factor = std::sqrt(t_lambda_target/t_lambda_current);
-
-     if (which == NOBIAS) {
-        double friction = (t_lambda_current/t_lambda_target - 1) / tau_t;
-        zeta += friction * dt; 
-        for (int i = 0; i < n_lambdas; i++) {
-           v_lambdas[i] *= scaling_factor;
-           //v_lambdas[i] *= exp(-zeta*dt);
-        }
-     }
-  }
-  
-  if (nose_hoover_flag) {
-     double dt = update->dt;
-     double t_lambda_current;
-     double t_lambda_target = t_target;
-     
-     fix_constant_pH->return_T_lambda(t_lambda_current);
-     fix_constant_pH->return_nparams(n_lambdas);
-     fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-  
-  
-     zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
-     
-     for (int i = 0; i < n_lambdas; i++)
-        v_lambdas[i] *= std::exp(-zeta_nose_hoover * dt);
-  }
-  
-  
-  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
 /* ----------------------------------------------------------------------
