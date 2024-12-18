@@ -41,6 +41,7 @@ class FixNHConstantPH : public FixNH {
   void nve_v() override;
   void nh_v_temp() override;
   double random_normal(double mean, double stddev);
+  void contrain_lambdas();
 
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
@@ -48,6 +49,13 @@ class FixNHConstantPH : public FixNH {
   double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
   double T_lambda;
   int n_lambdas;
+
+
+  // Should I constrain the lambda + N_buff*lambda_buff
+  bool cons_total_lambda;
+  double total_charge;
+  double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
+  int N_buff;
 
   // Parameter for thermostat of the lambda variables
   double t_andersen;
