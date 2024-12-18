@@ -59,8 +59,8 @@ class FixNHConstantPH : public FixNH {
   // The style of the thermostat for the lambdas
   int lambda_thermostat_type;
 
-  // Total charge for the system
-  double total_charge;
+  // Changes in the charge
+  double mols_charge_change, buff_charge_change, total_charge;
 
   // Parameter for Andersen thermostat
   double t_andersen;
