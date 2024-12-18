@@ -48,9 +48,18 @@
 using namespace LAMMPS_NS;
 using namespace FixConst;
 
+static constexpr double DELTAFLIP = 0.1;
+static constexpr double TILTMAX = 1.5;
+static constexpr double EPSILON = 1.0e-6;
+
+enum{NOBIAS,BIAS};
+enum{NONE,XYZ,XY,YZ,XZ};
+enum{ISO,ANISO,TRICLINIC};
+
+// enums for the lambda integration
 enum {LAMBDA_ANDERSEN,LAMBDA_BOSSI,LAMBDA_NOSEHOOVER};
 enum { 
-       NONE=0,
+       NONE_LAMBDA=0,
        BUFFER=1<<0, 
        CONSTRAIN=1<<1
      };
@@ -368,9 +377,9 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
       iarg += 2;
 
     } else if (strcmp(arg[iarg],"fix_constant_pH_id") == 0) {
+       lambda_thermostat_type = NONE_LAMBDA;
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
        if (strcmp(arg[iarg+2],"none") == 0) {
-          lambda_thermostat_type = NONE;
           iarg+=2;
        }
        else if (strcmp(arg[iarg+2],"andersen") == 0) {
@@ -387,11 +396,11 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
           Q_lambda_nose_hoover = utils::numeric(FLERR,arg[iarg+3],false,lmp);
           iarg+=3;
        }
-       if (strcmp(arg[iarg],"buffer") {
+       if (strcmp(arg[iarg],"buffer") == 0) {
           lambda_integration_flags |= BUFFER;
           iarg += 1;
        }
-       if  (strcmp(arg[iarg],"constrain_total_charge") {
+       if (strcmp(arg[iarg],"constrain_total_charge") == 0) {
           if (!(lambda_integration_flags & BUFFER))
              error->one(FLERR,"Constrain total charge in absence of a buffer is not supported yet!");
           lambda_integration_flags |= CONSTRAIN;
@@ -668,9 +677,9 @@ void FixNHConstantPH::nve_v()
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
   if (lambda_integration_flags & BUFFER) {
-     fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      v_lambda_buff += dtf * a_lambda_buff;
-     fix_constant_pH->reset_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+     fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
   }
 }
 
@@ -690,7 +699,7 @@ void FixNHConstantPH::nve_x()
      x_lambdas[i] += dtv * v_lambdas[i];
 
   if (lambda_integration_flags & BUFFER) {
-     fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      x_lambda_buff += dtv * v_lambda_buff;
      if (lambda_integration_flags & CONSTRAIN) contrain_lambdas();
      fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
@@ -719,7 +728,7 @@ void FixNHConstantPH::nh_v_temp()
 
   // and the buffer if present
   if (lambda_integration_flags & BUFFER)
-     fix_constant_pH->return_buffer_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
 
   // Temperature
   double t_lambda_current;
@@ -744,15 +753,15 @@ void FixNHConstantPH::nh_v_temp()
            v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
       }
       // Dealing with the buffer
-      if (buffer_set) {
+      if (lambda_integration_flags & BUFFER) {
          double r = static_cast<double>(rand())/ RAND_MAX;
          if (r < P) {
             double mean = 0.0;
-            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
+            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambda_buff))/1000.0;
             v_lambda_buff = random_normal(mean,sigma);
          }
          if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
-            v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lamba_buff);
+            v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
       }
     } else if (which == BIAS) {
       // This needs to be implemented
@@ -775,11 +784,11 @@ void FixNHConstantPH::nh_v_temp()
               v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
         }
         // and then the buffer 
-        if (buffer_set) {
+        if (lambda_integration_flags & BUFFER) {
            v_lambda_buff *= scaling_factor;
            // v_lambda_buff *= exp(-zeta*dt);
            if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
-              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lamba_buff);
+              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
         }
      } else if (which == BIAS) {
         // This needs to be implemented
@@ -796,10 +805,10 @@ void FixNHConstantPH::nh_v_temp()
               v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
         }
         // and then the buffer
-        if (buffer_set) {
-           v_lambda_buff *= std::exp(-zeta_nose_hoober  * dt);
+        if (lambda_integration_flags & BUFFER) {
+           v_lambda_buff *= std::exp(-zeta_nose_hoover * dt);
            if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
-              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lamba_buff);
+              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
         }
      } else if (which == BIAS) {
         // This needs to be implemented
@@ -838,12 +847,12 @@ void FixNHConstantPH::contrain_lambdas()
       sigma_mass_inverse += (1.0/m_lambdas[i]);
    }
 
-   domega = -(sigma_lambda+N_buff*lambda_buff-total_charge) / (sigma_mass_inverse + (static_cast<double>(N_buff)/mass_buff));
+   domega = -(sigma_lambda+N_buff*x_lambda_buff-total_charge) / (sigma_mass_inverse + (static_cast<double>(N_buff)/m_lambda_buff));
 
    for (int i = 0; i < n_lambdas; i++)
       x_lambdas[i] += (domega /m_lambdas[i]);
 
-   x_lambda_buff += static_cast<double>(N_buff) * domega / mass_buff;
+   x_lambda_buff += static_cast<double>(N_buff) * domega / m_lambda_buff;
 
 }
 
@@ -869,4 +878,3 @@ double FixNHConstantPH::memory_usage()
   if (irregular) bytes += irregular->memory_usage();
   return bytes;
 }
-
