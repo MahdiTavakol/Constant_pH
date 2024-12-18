@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.05.15----------------- */
+/* ---------- v0.05.16----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
@@ -630,7 +630,70 @@ void FixAdaptiveProtonation::remove_hydrogens(const int i, int _numHs_2_del, con
    int & p_num_angle = atom->num_angle[p_local_index];
 
    // Updating the topology for the P atom removing the angle involving the Hydrogen atoms
-   for (int k = 0; k < p_num_angle; k++)
+   for (int k = 0; k < p_num_angle; k++)/* ----------------------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+/* ---------- v0.05.15----------------- */
+// Please remove unnecessary includes 
+#include "fix_adaptive_protonation.h"
+
+#include "atom.h"
+#include "atom_masks.h"
+#include "domain.h"
+#include "error.h"
+#include "input.h"
+#include "math_const.h"
+#include "memory.h"
+#include "comm.h"
+#include "modify.h"
+#include "region.h"
+#include "neigh_list.h"
+#include "neighbor.h"
+#include "output.h"
+#include "respa.h"
+#include "update.h"
+#include "variable.h"
+
+
+#include "force.h"
+#include "pair.h"
+#include "improper.h"
+#include "dihedral.h"
+#include "kspace.h"
+#include "angle.h"
+#include "bond.h"
+#include "atom.h"
+#include "group.h"
+
+#include "thermo.h"
+#include <cmath>
+#include <cstring>
+#include <stdio.h>
+
+using namespace LAMMPS_NS;
+using namespace FixConst;
+using namespace MathConst;
+
+enum { NONE, CONSTANT, EQUAL, ATOM };
+
+/* --------------------------------------------------------------------------------------- */
+
+FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) :
+   Fix(lmp, narg, arg), typePstr(nullptr), typeOstr(nullptr), typeHstr(nullptr),
+   typeOHstr(nullptr), typePOHstr(nullptr)
+{
+   if (narg < 11) utils::missing_cmd_args(FLERR, "fix AdaptiveProtonation", error);
+
+
    {
       if (atom->angle_atom1[p_local_index][k] == atom->tag[hAtoms[0]] ||
           atom->angle_atom3[p_local_index][k] == atom->tag[hAtoms[0]] ||
