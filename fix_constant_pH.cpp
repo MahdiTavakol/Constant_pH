@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.05.17----- */
+/* ---v0.05.15----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -247,6 +247,15 @@ void FixConstantPH::setup(int /*vflag*/)
 
     nmax = atom->nmax;
     allocate_storage();
+    
+    /* As it is hypothesized that the initial values for 
+       lambdas are zero the initial value for the lambda_buff
+       should be one so there is enough protons to be exchanged
+       between the lambdas and buffer due to the contraint on
+       the lambas[0] + ... + lambdas[n] + lambda_buff
+    */
+    
+    if (flags && BUFFER) lambda_buff = 1.0;
 
 }
 
@@ -1009,70 +1018,7 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
    int natoms = atom->natoms;
    double * energy_local = new double[n_lambdas];
    double * energy = new double[n_lambdas];
-   double * n_lambda_atoms = new double[// clang-format off
-/* ----------------------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://www.lammps.org/, Sandia National Laboratories
-   LAMMPS development team: developers@lammps.org
-
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
-   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
-   the GNU General Public License.
-
-   See the README file in the top-level LAMMPS directory.
-------------------------------------------------------------------------- */
-/* ---v0.05.15----- */
-
-#define DEBUG
-#ifdef DEBUG
-#include <iostream>
-#endif
-#include <random>
-
-#include "fix.h"
-#include "fix_constant_pH.h"
-
-#include "atom.h"
-#include "atom_masks.h"
-#include "error.h"
-
-#include "force.h"
-#include "group.h"
-#include "memory.h"
-#include "pair.h"
-#include "timer.h"
-#include "comm.h"
-#include "kspace.h"
-#include "update.h"
-#include "math_const.h"
-#include "modify.h"
-
-#include <cstring>
-#include <string>
-#include <map>
-
-using namespace LAMMPS_NS;
-using namespace FixConst;
-using namespace MathConst;
-
-enum { 
-       NONE=0,
-       BUFFER=1<<0, 
-       ADAPTIVE=1<<1
-     };
-
-static constexpr double tol = 1e-5;
-/* ---------------------------------------------------------------------- */
-
-FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, arg), 
-       lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr), H_lambdas(nullptr),
-       protonable(nullptr), typePerProtMol(nullptr), pH1qs(nullptr), pH2qs(nullptr),
-       HAs(nullptr), HBs(nullptr), GFF_lambdas(nullptr), molids(nullptr),
-       fs(nullptr), dfs(nullptr), Us(nullptr), dUs(nullptr),
-       GFF(nullptr),
-       q_orig(nullptr), f_orig(nullptr),
-n_lambdas];
+   double * n_lambda_atoms = new double[n_lambdas];
 
    for (int i = 0; i < n_lambdas; i++) {
       for (int j = 0; j < n_lambda_atoms[i]; j++) {
