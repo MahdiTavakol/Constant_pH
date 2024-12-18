@@ -51,16 +51,16 @@ class FixNHConstantPH : public FixNH {
   int n_lambdas;
 
   // Do I have a buffer here and if so what are its parameters
-  bool buffer_set;
   double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
   int N_buff;
 
-  // Should I constrain the lambda + N_buff*lambda_buff
-  bool cons_total_lambda;
-  double total_charge;
-
+  // Integration flags for lambda, should I constrain total charge and also is there any buffer
+  int lambda_integration_flags;
   // The style of the thermostat for the lambdas
   int lambda_thermostat_type;
+
+  // Total charge for the system
+  double total_charge;
 
   // Parameter for Andersen thermostat
   double t_andersen;
