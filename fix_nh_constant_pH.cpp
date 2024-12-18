@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.04.06
+   v0.05.19
 ------------------------------------------------------------------------- */
 
 #include "fix_constant_pH.h"
@@ -849,12 +849,14 @@ void FixNHConstantPH::contrain_lambdas()
       sigma_mass_inverse += (1.0/m_lambdas[i]);
    }
 
-   domega = -(sigma_lambda+N_buff*x_lambda_buff-total_charge) / (sigma_mass_inverse + (static_cast<double>(N_buff)/m_lambda_buff));
+   mols_charge_change, buff_charge_change, total_charge;
+   domega = -(mols_charge_change*sigma_lambda+buff_charge_change*N_buff*x_lambda_buff-total_charge)\ 
+      / (mols_charge_change*sigma_mass_inverse + (static_cast<double>(N_buff*N_buff)*buff_charge_change*buff_charge_change/m_lambda_buff));
 
    for (int i = 0; i < n_lambdas; i++)
-      x_lambdas[i] += (domega /m_lambdas[i]);
+      x_lambdas[i] += (domega * mols_charge_change /m_lambdas[i]);
 
-   x_lambda_buff += static_cast<double>(N_buff) * domega / m_lambda_buff;
+   x_lambda_buff += static_cast<double>(N_buff) * buff_charge_change * domega / m_lambda_buff;
 
 }
 
