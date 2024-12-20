@@ -54,15 +54,17 @@ enum {
 static constexpr double tol = 1e-5;
 /* ---------------------------------------------------------------------- */
 
-FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, arg), 
+FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, arg),
+       pHStructureFile(nullptr), 
+       pH1qs(nullptr), pH2qs(nullptr), typePerProtMol(nullptr), protonable(nullptr),
+       HAs(nullptr), HBs(nullptr), Us(nullptr), dUs(nullptr),
        lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr), H_lambdas(nullptr),
-       protonable(nullptr), typePerProtMol(nullptr), pH1qs(nullptr), pH2qs(nullptr),
-       HAs(nullptr), HBs(nullptr), GFF_lambdas(nullptr), molids(nullptr),
-       fs(nullptr), dfs(nullptr), Us(nullptr), dUs(nullptr),
-       GFF(nullptr),
-       q_orig(nullptr), f_orig(nullptr),
-       peatom_orig(nullptr), pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr),
-       fix_adaptive_protonation(nullptr)
+       molids(nullptr),
+       fs(nullptr), dfs(nullptr),
+       fp(nullptr), GFF(nullptr), GFF_lambdas(nullptr),
+       Udwp_fp(nullptr), fix_adaptive_protonation_id(nullptr),
+       fix_gpu(nullptr), q_orig(nullptr), f_orig(nullptr),
+       peatom_orig(nullptr), pvatom_orig(nullptr),keatom_orig(nullptr), kvatom_orig(nullptr)
 {
   if (narg < 8) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
@@ -152,31 +154,24 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 
 FixConstantPH::~FixConstantPH()
 {
-   if (lambdas)   memory->destroy(lambdas);
-   if (v_lambdas) memory->destroy(v_lambdas);
-   if (a_lambdas) memory->destroy(a_lambdas);
-   if (m_lambdas) memory->destroy(m_lambdas);
-   if (H_lambdas) memory->destroy(H_lambdas);
-   if (protonable) memory->destroy(protonable);
-   if (typePerProtMol) memory->destroy(typePerProtMol);
+   if (pHStructureFile && comm->me == 0) fclose(pHStructureFile); // I have already closed it.. This is here just to assure it is closed
    if (pH1qs) memory->destroy(pH1qs);
    if (pH2qs) memory->destroy(pH2qs);
-   if (HAs) memory->destroy(HAs);
-   if (HBs) memory->destroy(HBs);
-   if (GFF_lambdas) memory->destroy(GFF_lambdas);
-   if (molids) memory->destroy(molids);
-   if (fs) memory->destroy(fs);
-   if (dfs) memory->destroy(dfs);
-   if (Us) memory->destroy(Us);
-   if (dUs) memory->destroy(dUs);
-
-   if (GFF) memory->destroy(GFF);
-   
-
-   deallocate_storage();
+   if (typePerProtMol) memory->destroy(typePerProtMol);
+   if (protonable) memory->destroy(protonable);
 
    if (fp && (comm->me == 0)) fclose(fp);
+   if (GFF) memory->destroy(GFF);
    if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
+   if (fix_adaptive_protonation_id) delete [] fix_adaptive_protontion_id; // Since it is allocated with lmp->utils->strdup, it must be deallocated with delete [] 
+
+
+
+   // deallocate the memories with size dependent on the n_lambda	
+   delete_lambdas();
+
+   // deallocate memories whose size is dependent on natoms
+   deallocate_storage();   
 }
 
 /* ----------------------------------------------------------------------
@@ -235,8 +230,8 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
-	memory->create(molids,n_lambdas,"constant_pH:lambdas");
-    reset_lambdas();
+
+    set_lambdas();
        
     if (GFF_flag)
 	init_GFF();
@@ -255,7 +250,7 @@ void FixConstantPH::setup(int /*vflag*/)
        the lambas[0] + ... + lambdas[n] + lambda_buff
     */
     
-    if (flags && BUFFER) lambda_buff = 1.0;
+    if (flags && BUFFER) lambda_buff = 1.0;typePerProtMol
 
 }
 
@@ -271,7 +266,8 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
        fix_adaptive_protonation->get_n_protonable(n_protonable);
        if (n_protonable != this->n_lambdas) {
 	   this->n_lambdas = n_protonable;
-           reset_lambdas();
+	   delete_lambdas();
+           set_lambdas();
 	   fix_adaptive_protonation->get_protonable_molids(molids);
        }
    }
@@ -288,11 +284,11 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 }
 
 /* ----------------------------------------------------------------------
-   This function resets the molids structure and reallocates the dynamically allocated memories for
-   constant pH whenever the n_lambdas change
+   This function deallocates the storage for memories whose sizes are 
+   dependent on the n_lambdas
    ----------------------------------------------------------------------  */
 
-void FixConstantPH::reset_lambdas()
+void FixConstantPH::delete_lambdas()
 {
    if (lambdas) memory->destroy(lambdas);
    if (v_lambdas) memory->destroy(v_lambdas);
@@ -309,7 +305,14 @@ void FixConstantPH::reset_lambdas()
    if (dUs) memory->destroy(dUs);
 
    if (molids) memory->destroy(molids);
-	
+}
+
+/* ----------------------------------------------------------------------
+   This function allocates the storage for memories whose sizes are 
+   dependent on the n_lambdas
+   ----------------------------------------------------------------------  */
+
+void FixConstantPH::set_lambdas() {
    memory->create(lambdas,n_lambdas,"constant_pH:lambdas");
    memory->create(v_lambdas,n_lambdas,"constant_pH:v_lambdas");
    memory->create(a_lambdas,n_lambdas,"constant_pH:a_lambdas");
@@ -324,15 +327,17 @@ void FixConstantPH::reset_lambdas()
    memory->create(Us,n_lambdas,"constant_pH:Us");
    memory->create(dUs,n_lambdas,"constant_pH:dUs");
 
-   memory->create(molids,n_lambdas,"constant_pH:molids");
+   if (flags & ADAPTIVE) memory->create(molids,n_lambdas,"constant_pH:molids");
 
    for (int i = 0; i < n_lambdas; i++) {
       lambdas[i] = 0.0;
       v_lambdas[i] = 0.0;
       a_lambdas[i] = 0.0;
       m_lambdas[i] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
+      H_lambdas[i] = 0.0;
       GFF_lambdas[i] = 0.0;
-      molids[i] = 0.0;
+      if (flags & ADAPTIVE)
+         molids[i] = 0.0;
    } 
 
    // This would not work in the initialize section as the m_lambda has not been set yet!
@@ -711,8 +716,8 @@ void FixConstantPH::allocate_storage()
      and nghost atoms.
   */
   int nlocal = atom->nmax; 
-  memory->create(f_orig, nlocal, 3, "constant_pH:f_orig");
   memory->create(q_orig, nlocal, "constant_pH:q_orig");
+  memory->create(f_orig, nlocal, 3, "constant_pH:f_orig");
   memory->create(peatom_orig, nlocal, "constant_pH:peatom_orig");
   memory->create(pvatom_orig, nlocal, 6, "constant_pH:pvatom_orig");
   if (force->kspace) {
@@ -738,7 +743,7 @@ void FixConstantPH::deallocate_storage()
   if (keatom_orig) memory->destroy(keatom_orig);
   if (kvatom_orig) memory->destroy(kvatom_orig);
 
-  f_orig = nullptr;
+  q_orig = f_orig = nullptr;
   peatom_orig = keatom_orig = nullptr;
   pvatom_orig = kvatom_orig = nullptr;
 }
@@ -1043,9 +1048,9 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
       double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
       a_lambdas[i] = 4.184*0.0001*force_i / m_lambdas[i]; 
    }
-   
-   delete [] energy;
+
    delete [] energy_local;
+   delete [] energy;
    delete [] n_lambda_atoms;     
 }
 
