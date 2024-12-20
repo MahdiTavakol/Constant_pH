@@ -653,7 +653,6 @@ void FixNHConstantPH::init()
   memory->create(v_lambdas,n_lambdas,"nh_constant_pH:v_lambdas");
   memory->create(a_lambdas,n_lambdas,"nh_constant_pH:a_lambdas");
   memory->create(m_lambdas,n_lambdas,"nh_constant_pH:m_lambdas");
-  memory->create(H_lambdas,n_lambdas,"nh_constant_pH:H_lambdas");
 
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
