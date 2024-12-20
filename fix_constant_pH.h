@@ -82,8 +82,6 @@ namespace LAMMPS_NS {
         int * molids;
         int n_lambdas;
 
-        // The protonable groups
-        int *protonable_molecule_ids;
          
 	
 
@@ -148,7 +146,8 @@ namespace LAMMPS_NS {
         void check_num_OWs_HWs();
         void read_pH_structure_files();
         void restore_epsilon();
-	void reset_lambdas();
+	void delete_lambdas();
+	void set_lambdas();
 	void calculate_dq();
 	void calculate_dfs();
 	void calculate_dUs();
