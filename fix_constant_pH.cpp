@@ -154,16 +154,23 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 
 FixConstantPH::~FixConstantPH()
 {
+   // Closing files if they are open. 
    if (pHStructureFile && comm->me == 0) fclose(pHStructureFile); // I have already closed it.. This is here just to assure it is closed
+   if (fp && (comm->me == 0)) fclose(fp);
+   if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
+
+   // deallocate char* variables
+   if (fix_adaptive_protonation_id) delete [] fix_adaptive_protontion_id; // Since it is allocated with lmp->utils->strdup, it must be deallocated with delete [] 
+
+   // deallocating the variables whose size depend on the ntypes and as the ntypes does not change during the simulation there is no need for reallocation of them
    if (pH1qs) memory->destroy(pH1qs);
    if (pH2qs) memory->destroy(pH2qs);
    if (typePerProtMol) memory->destroy(typePerProtMol);
    if (protonable) memory->destroy(protonable);
-
-   if (fp && (comm->me == 0)) fclose(fp);
    if (GFF) memory->destroy(GFF);
-   if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
-   if (fix_adaptive_protonation_id) delete [] fix_adaptive_protontion_id; // Since it is allocated with lmp->utils->strdup, it must be deallocated with delete [] 
+
+   
+   
 
 
 
