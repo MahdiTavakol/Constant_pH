@@ -69,7 +69,8 @@ enum {
  ---------------------------------------------------------------------- */
 
 FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
-    FixNH(lmp, narg-3, arg), fix_constant_pH_id(nullptr),
+    FixNH(lmp, narg-3, arg), 
+    fix_constant_pH(nullptr), fix_constant_pH_id(nullptr), 
     x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg < 4) utils::missing_cmd_args(FLERR, std::string("fix ") + style, error);
@@ -634,10 +635,10 @@ FixNHConstantPH::~FixNHConstantPH()
 {
   FixNH::~FixNH();
   if (fix_constant_pH_id) delete [] fix_constant_pH_id;
-  if (x_lambdas) delete [] x_lambdas;
-  if (v_lambdas) delete [] v_lambdas;
-  if (a_lambdas) delete [] a_lambdas;
-  if (m_lambdas) delete [] m_lambdas; 
+  if (x_lambdas) memory->destroy(x_lambdas);
+  if (v_lambdas) memory->destroy(v_lambdas);
+  if (a_lambdas) memory->destroy(a_lambdas);
+  if (m_lambdas) memory->destroy(m_lambdas); 
 }
 
 /* ---------------------------------------------------------------------- */
@@ -648,10 +649,11 @@ void FixNHConstantPH::init()
   fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
   fix_constant_pH->return_nparams(n_lambdas);
    
-  x_lambdas = new double[n_lambdas];
-  v_lambdas = new double[n_lambdas];
-  a_lambdas = new double[n_lambdas];
-  m_lambdas = new double[n_lambdas];
+  memory->create(x_lambdas,n_lambdas,"nh_constant_pH:x_lambdas");
+  memory->create(v_lambdas,n_lambdas,"nh_constant_pH:v_lambdas");
+  memory->create(a_lambdas,n_lambdas,"nh_constant_pH:a_lambdas");
+  memory->create(m_lambdas,n_lambdas,"nh_constant_pH:m_lambdas");
+  memory->create(H_lambdas,n_lambdas,"nh_constant_pH:H_lambdas");
 
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
