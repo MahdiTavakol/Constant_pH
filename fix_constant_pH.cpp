@@ -63,7 +63,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
        fs(nullptr), dfs(nullptr),
        fp(nullptr), GFF(nullptr), GFF_lambdas(nullptr),
        Udwp_fp(nullptr), fix_adaptive_protonation_id(nullptr),
-       fix_gpu(nullptr), q_orig(nullptr), f_orig(nullptr),
+       fixgpu(nullptr), q_orig(nullptr), f_orig(nullptr),
        peatom_orig(nullptr), pvatom_orig(nullptr),keatom_orig(nullptr), kvatom_orig(nullptr)
 {
   if (narg < 8) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
@@ -160,7 +160,7 @@ FixConstantPH::~FixConstantPH()
    if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
 
    // deallocate char* variables
-   if (fix_adaptive_protonation_id) delete [] fix_adaptive_protontion_id; // Since it is allocated with lmp->utils->strdup, it must be deallocated with delete [] 
+   if (fix_adaptive_protonation_id) delete [] fix_adaptive_protonation_id; // Since it is allocated with lmp->utils->strdup, it must be deallocated with delete [] 
 
    // deallocating the variables whose size depend on the ntypes and as the ntypes does not change during the simulation there is no need for reallocation of them
    if (pH1qs) memory->destroy(pH1qs);
@@ -259,7 +259,7 @@ void FixConstantPH::setup(int /*vflag*/)
        the lambas[0] + ... + lambdas[n] + lambda_buff
     */
     
-    if (flags && BUFFER) lambda_buff = 1.0;typePerProtMol
+    if (flags && BUFFER) lambda_buff = 1.0;
 
 }
 
@@ -752,7 +752,8 @@ void FixConstantPH::deallocate_storage()
   if (keatom_orig) memory->destroy(keatom_orig);
   if (kvatom_orig) memory->destroy(kvatom_orig);
 
-  q_orig = f_orig = nullptr;
+  q_orig = nullptr;
+  f_orig = nullptr;
   peatom_orig = keatom_orig = nullptr;
   pvatom_orig = kvatom_orig = nullptr;
 }
