@@ -379,6 +379,7 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
 
     } else if (strcmp(arg[iarg],"fix_constant_pH_id") == 0) {
        lambda_thermostat_type = NONE_LAMBDA;
+       lambda_integration_flags = 0;
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
        if (strcmp(arg[iarg+2],"none") == 0) {
           iarg+=2;
