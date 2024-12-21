@@ -270,15 +270,18 @@ void FixConstantPH::setup(int /*vflag*/)
 
 void FixConstantPH::initial_integrate(int /*vflag*/)
 {
-   if (!(update->ntimestep % nevery_fix_adaptive) && (flags & ADAPTIVE)) {
-       int n_protonable;
-       fix_adaptive_protonation->get_n_protonable(n_protonable);
-       if (n_protonable != this->n_lambdas) {
-	   this->n_lambdas = n_protonable;
-	   delete_lambdas();
-           set_lambdas();
-	   fix_adaptive_protonation->get_protonable_molids(molids);
-       }
+   if (flags & ADAPTIVE) {
+      if (!(update->ntimestep % nevery_fix_adaptive))
+      {
+         int n_protonable;
+         fix_adaptive_protonation->get_n_protonable(n_protonable);
+         if (n_protonable != this->n_lambdas) {
+            this->n_lambdas = n_protonable;
+            delete_lambdas();
+            set_lambdas();
+            fix_adaptive_protonation->get_protonable_molids(molids);
+         }       
+      }
    }
    compute_Hs<-1>();
    calculate_dfs();
