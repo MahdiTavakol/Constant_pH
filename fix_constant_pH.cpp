@@ -88,6 +88,14 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   qOWs = -0.834;
   qHWs = 0.278;
 
+  /* Unset all the flags
+     it is an important step since
+     in C++ it is not guaranteed that
+     the default value of an int to be
+     zero 
+     */
+  flags = 0;
+
   GFF_flag = false;
   print_Udwp_flag = false;
   n_lambdas = 1;
