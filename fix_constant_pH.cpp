@@ -198,8 +198,10 @@ int FixConstantPH::setmask()
    
 void FixConstantPH::init()
 {
-   fix_adaptive_protonation = static_cast<FixAdaptiveProtonation*>(modify->get_fix_by_id(fix_adaptive_protonation_id));
-   fix_adaptive_protonation->get_n_protonable(n_lambdas);
+   if (flags & ADAPTIVE) {
+      fix_adaptive_protonation = static_cast<FixAdaptiveProtonation*>(modify->get_fix_by_id(fix_adaptive_protonation_id));
+      fix_adaptive_protonation->get_n_protonable(n_lambdas);
+   }
 }
 
 /* ---------------------------------------------------------------------- */
