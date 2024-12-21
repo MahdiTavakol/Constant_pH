@@ -20,7 +20,6 @@
    Constant pH support added by: Mahdi Tavakol (Oxford)
    v0.05.19
 ------------------------------------------------------------------------- */
-
 #include "fix_constant_pH.h"
 #include "fix_nh_constant_pH.h"
 
@@ -69,7 +68,7 @@ enum {
  ---------------------------------------------------------------------- */
 
 FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
-    FixNH(lmp, narg-3, arg), 
+    FixNH(lmp, narg-4, arg), 
     fix_constant_pH(nullptr), fix_constant_pH_id(nullptr), 
     x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
@@ -381,23 +380,26 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
        lambda_thermostat_type = NONE_LAMBDA;
        lambda_integration_flags = 0;
        fix_constant_pH_id = utils::strdup(arg[iarg+1]);
-       if (strcmp(arg[iarg+2],"none") == 0) {
-          iarg+=2;
+       iarg += 2;
+       
+       if (strcmp(arg[iarg],"none") == 0) {
+          iarg++;
        }
-       else if (strcmp(arg[iarg+2],"andersen") == 0) {
+       else if (strcmp(arg[iarg],"andersen") == 0) {
           lambda_thermostat_type = LAMBDA_ANDERSEN;
-          t_andersen = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-          iarg+=3;
-       }
-       else if (strcmp(arg[iarg+2],"bossi") == 0) {
-          lambda_thermostat_type = LAMBDA_BOSSI;
+          t_andersen = utils::numeric(FLERR,arg[iarg+1],false,lmp);
           iarg+=2;
        }
-       else if (strcmp(arg[iarg+2],"nose-hoover") == 0) {
-          lambda_thermostat_type = LAMBDA_NOSEHOOVER;
-          Q_lambda_nose_hoover = utils::numeric(FLERR,arg[iarg+3],false,lmp);
-          iarg+=3;
+       else if (strcmp(arg[iarg],"bossi") == 0) {
+          lambda_thermostat_type = LAMBDA_BOSSI;
+          iarg++;
        }
+       else if (strcmp(arg[iarg],"nose-hoover") == 0) {
+          lambda_thermostat_type = LAMBDA_NOSEHOOVER;
+          Q_lambda_nose_hoover = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+          iarg+=2;
+       }
+       /*
        if (strcmp(arg[iarg],"buffer") == 0) {
           lambda_integration_flags |= BUFFER;
           iarg += 1;
@@ -410,7 +412,7 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
           buff_charge_change = utils::numeric(FLERR,arg[iarg+2],false,lmp);
           total_charge = utils::numeric(FLERR,arg[iarg+3],false,lmp);
           iarg += 4;
-       }
+       }*/
 
        // Here I cannot check if the constant_pH command has a buffer set as right now I have not set the fix_constant_pH pointer yet!!
     } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
@@ -647,8 +649,11 @@ FixNHConstantPH::~FixNHConstantPH()
 void FixNHConstantPH::init()
 {
   FixNH::init();
+
+  
   fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
   fix_constant_pH->return_nparams(n_lambdas);
+
    
   memory->create(x_lambdas,n_lambdas,"nh_constant_pH:x_lambdas");
   memory->create(v_lambdas,n_lambdas,"nh_constant_pH:v_lambdas");
@@ -657,8 +662,6 @@ void FixNHConstantPH::init()
 
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
-  
-  
   zeta_bussi = 0.0;
   zeta_nose_hoover = 0.0;
 }
@@ -672,10 +675,10 @@ void FixNHConstantPH::nve_v()
   FixNH::nve_v();
   
   bigint ntimestep = update->ntimestep;
-  
+
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-  
+
   for (int i = 0; i < n_lambdas; i++)
      v_lambdas[i] += dtf * a_lambdas[i];
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
@@ -694,14 +697,11 @@ void FixNHConstantPH::nve_v()
 void FixNHConstantPH::nve_x()
 {
   FixNH::nve_x();
-  
   bigint ntimestep = update->ntimestep;
-  
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
   for (int i = 0; i < n_lambdas; i++)
      x_lambdas[i] += dtv * v_lambdas[i];
-
   if (lambda_integration_flags & BUFFER) {
      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      x_lambda_buff += dtv * v_lambda_buff;
@@ -719,12 +719,10 @@ void FixNHConstantPH::nve_x()
 void FixNHConstantPH::nh_v_temp()
 {
   FixNH::nh_v_temp();
-
   // The timestep, the current step and the kT of course! 
   double dt = update->dt;
   bigint ntimestep = update->ntimestep;
   double kT = force->boltz * t_target;
-  
 
   // Lets extract the parameters from the fix_constant_pH again
   fix_constant_pH->return_nparams(n_lambdas);
@@ -738,7 +736,6 @@ void FixNHConstantPH::nh_v_temp()
   double t_lambda_current;
   double t_lambda_target = t_target;
   fix_constant_pH->return_T_lambda(t_lambda_current);
-  
   
   if (lambda_thermostat_type == LAMBDA_ANDERSEN) {
     double P = 1 - std::exp(-dt/t_andersen);
@@ -844,7 +841,6 @@ void FixNHConstantPH::contrain_lambdas()
    double sigma_lambda = 0.0;
    double sigma_mass_inverse  = 0.0;
    double domega; 
-
 
    for (int i = 0; i < n_lambdas; i++) {
       sigma_lambda += x_lambdas[i];
