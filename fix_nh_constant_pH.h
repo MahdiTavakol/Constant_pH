@@ -43,6 +43,7 @@ class FixNHConstantPH : public FixNH {
   void nh_v_temp() override;
   double random_normal(double mean, double stddev);
   void contrain_lambdas();
+  void compute_q_total();
 
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
