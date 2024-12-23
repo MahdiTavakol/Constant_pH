@@ -333,7 +333,7 @@ void FixNHConstantPH::contrain_lambdas()
       sigma_mass_inverse += (1.0/m_lambdas[i]);
    }
 
-   mols_charge_change, buff_charge_change, total_charge;
+
    domega = -(mols_charge_change*sigma_lambda+buff_charge_change*N_buff*x_lambda_buff-total_charge)\ 
       / (mols_charge_change*sigma_mass_inverse + (static_cast<double>(N_buff*N_buff)*buff_charge_change*buff_charge_change/m_lambda_buff));
 
