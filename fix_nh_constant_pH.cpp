@@ -191,7 +191,7 @@ void FixNHConstantPH::nve_x()
   if (lambda_integration_flags & BUFFER) {
      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      x_lambda_buff += dtv * v_lambda_buff;
-     if (lambda_integration_flags & CONSTRAIN) contrain_lambdas();
+     if (lambda_integration_flags & CONSTRAIN) constrain_lambdas();
      fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
   }
    
@@ -322,7 +322,7 @@ void FixNHConstantPH::nh_v_temp()
    
    --------------------------------------------------------------------- */
 
-void FixNHConstantPH::contrain_lambdas()
+void FixNHConstantPH::constrain_lambdas()
 {
    double sigma_lambda = 0.0;
    double sigma_mass_inverse  = 0.0;
@@ -345,8 +345,28 @@ void FixNHConstantPH::contrain_lambdas()
 }
 
 /* ----------------------------------------------------------------------
+   checking the total system charge after applying the constraint on the total charge
+   ---------------------------------------------------------------------- */
+
+void FixNHConstantPH::compute_q_total()
+{
+   double * q = atom->q;
+   double nlocal = atom->nlocal;
+   double q_local = 0.0;
+   double tolerance = 0.000001; //0.001;
+
+   for (int i = 0; i <nlocal; i++)
+       q_local += q[i];
+
+    MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
+
+    if ((q_total >= tolerance || q_total <= -tolerance) && comm->me == 0)
+    	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {} from {}",q_total,comm->me);
+}
+
+/* ----------------------------------------------------------------------
    random number generator
-   -----------------------------------------------------------------------*/
+   ---------------------------------------------------------------------- */
 
 double FixNHConstantPH::random_normal(double mean, double stddev)
 {
