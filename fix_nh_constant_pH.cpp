@@ -99,11 +99,7 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
        iarg+=2;
     } else if (strcmp(arg[iarg],"buffer") == 0) {
        lambda_integration_flags |= BUFFER;
-       N_buff = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-       iarg+=2;
-       if (iarg + N_buff > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} update", style), error);
-       for (int i = 0; i < N_buff; i++)
-          = utils::numeric(FLERR,arg[iarg++],false,lmp);
+       iarg++;
     } else if (strcmp(arg[iarg],"constrain_total_charge") == 0) {
        if (!(lambda_integration_flags & BUFFER))
           error->one(FLERR,"Constrain total charge in absence of a buffer is not supported yet!");
