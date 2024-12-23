@@ -373,10 +373,7 @@ FixNH::FixNH(LAMMPS *lmp, int narg, char **arg) :
     } else if (strcmp(arg[iarg],"lambda_nose-hoover") == 0) {
       iarg+=2;
     } else if (strcmp(arg[iarg],"buffer") == 0) {
-      int N_buff = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-      iarg+=2;
-      if (iarg + N_buff > narg) utils::missing_cmd_args(FLERR, fmt::format("fix {} update", style), error); 
-      iarg+=N_buff;
+      iarg++;
     } else if (strcmp(arg[iarg],"constrain_total_charge") == 0) {
       iarg+=4;
     } else error->all(FLERR,"Unknown fix {} keyword: {}", style, arg[iarg]);
