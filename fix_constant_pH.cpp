@@ -469,6 +469,28 @@ void FixConstantPH::return_params(double* const _x_lambdas, double* const _v_lam
 }
 
 /* ---------------------------------------------------------------------
+    This function sets the value of qs based on the value of lambdas()
+    and lambda_buffs() calculated by the nve_x() fuction of the 
+    fix_nh_constant_pH. Accordingly, this function should be called from
+    the last line of the nve_x() fuction.
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::reset_qs()
+{
+    modify_qs(lambdas);
+    modify_q_buff(lambda_buff);
+
+    /* This should be here just for debugging
+       since it used MPI_Allreduce to calculate
+       the total charge it has some overhead not 
+       advised in the production run
+    */
+    if (1) {
+        compute_q_total();
+    }
+}
+
+/* ---------------------------------------------------------------------
     This one just returns the value of T_lambda
    --------------------------------------------------------------------- */
    
