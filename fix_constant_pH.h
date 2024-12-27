@@ -28,6 +28,7 @@ FixStyle(constant_pH,FixConstantPH);
 namespace LAMMPS_NS {
 
   class FixConstantPH: public Fix {
+     friend class FixNHConstantPH;
      public:
 	FixConstantPH(class LAMMPS*, int, char**);
 	~FixConstantPH() override;
@@ -44,7 +45,6 @@ namespace LAMMPS_NS {
                            double* const _a_lambdas, double* const _m_lambdas) const;
         void reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
                           const double* const _a_lambdas, const double* const _m_lambdas);
-	void reset_qs();
         void return_T_lambda(double& _T_lambda);
 
 
@@ -53,6 +53,9 @@ namespace LAMMPS_NS {
                                   double& _a_lambda_buff, double& _m_lambda_buff, int& _N_buff) const;
 	void reset_buff_params(const double _x_lambda_buff, const double _v_lambda_buff, 
                                  const double _a_lambda_buff, const double _m_lambda_buff);
+           
+        // Function to set the charges based on the lambdas and lambda_buff values
+        void reset_qs();
 
      protected:
         int flags;
@@ -121,7 +124,7 @@ namespace LAMMPS_NS {
 
         // The q_total used to calculate the HW charges
         double q_total;
-        void compute_q_total();
+        double compute_q_total();
         void check_q_total();
 
 
@@ -142,7 +145,6 @@ namespace LAMMPS_NS {
 	double *keatom_orig, **kvatom_orig;
 
 
-        template<int stage>
 	void compute_Hs();
         void check_num_OWs_HWs();
         void read_pH_structure_files();
