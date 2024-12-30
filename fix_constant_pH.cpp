@@ -158,7 +158,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   
   
    array_flag = 1;
-   size_array_rows = 10;
+   size_array_rows = 11;
    size_array_cols = n_lambdas;
 
 }
@@ -202,6 +202,7 @@ int FixConstantPH::setmask()
 {
    int mask = 0;
    mask |= INITIAL_INTEGRATE; // Calculates the a_lambda
+   mask |= POST_FORCE; // Updates the a_lambda before the second step of the velocity verlet
    return mask;	
 }
 
@@ -303,6 +304,18 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
          }       
       }
    }
+   compute_Hs();
+   calculate_dfs();
+   calculate_dUs();
+   update_a_lambda();
+}
+
+/* ----------------------------------------------------------------------
+   The second step of the integration 
+   ----------------------------------------------------------------------  */
+   
+void FixConstantPH::post_force(int /*vflag*/)
+{
    compute_Hs();
    calculate_dfs();
    calculate_dUs();
@@ -475,7 +488,7 @@ void FixConstantPH::reset_qs()
 {
     modify_qs(lambdas);
     
-    //if (flags & BUFFER) modify_q_buff(lambda_buff);
+    if (flags & BUFFER) modify_q_buff(lambda_buff);
         
     /* This should be here just for debugging
        since it used MPI_Allreduce to calculate
@@ -1208,26 +1221,74 @@ double FixConstantPH::compute_array(int i, int j)
    switch(i)
    {
       case 0:
-        return HAs[j];
+        if (j < n_lambdas)
+           return HAs[j];
+        else if (j == n_lambdas)
+           return HA_buff;
+        else
+           return -1.0;
       case 1:
-        return HBs[j];
+        if (j < n_lambdas)
+           return HBs[j];
+        else if (j == n_lambdas)
+           return HB_buff;
+        else
+           return -1.0;
       case 2:
-        return dfs[j]*kT*log(10)*(pK-pH);
+        if (j < n_lambdas)
+           return dfs[j]*kT*log(10)*(pK-pH);
+        else if (j == n_lambdas)
+           return 0.0;
+        else
+           return -1.0;
       case 3:
-        return kj2kcal*dUs[j];
+        if (j < n_lambdas)
+           return kj2kcal*dUs[j];
+        else if (j == n_lambdas)
+           return dU_buff;
+        else
+           return -1.0;
       case 4:
-        return GFF_lambdas[j];
+        if (j < n_lambdas)
+           return GFF_lambdas[j];
+        else if (j == n_lambdas)
+           return 0.0;
+        else
+           return -1.0;
       case 5:
-        return lambdas[j];
+        if (j < n_lambdas)
+           return lambdas[j];
+        else if (j == n_lambdas)
+           return lambda_buff;
+        else
+           return -1.0;
       case 6:
-        return v_lambdas[j];
+        if (j < n_lambdas)
+           return v_lambdas[j];
+        else if (j == n_lambdas)
+           return v_lambda_buff;
+        else
+           return -1.0;
       case 7:
-        return a_lambdas[j];
+        if (j < n_lambdas)
+           return a_lambdas[j];
+        else if (j == n_lambdas)
+           return a_lambda_buff;
+        else
+           return -1.0;
       case 8:
         calculate_T_lambda();
         return T_lambda;
       case 9:
-        return H_lambdas[j];
+        if (j < n_lambdas)
+           return H_lambdas[j];
+        else if (j == n_lambdas)
+           return H_lambda_buff;
+        else
+           return -1.0;
+      case 10:
+        double q_total = compute_q_total();
+        return q_total;
    }
    return 0.0;
 }
