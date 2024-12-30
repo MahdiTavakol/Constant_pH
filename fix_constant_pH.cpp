@@ -443,11 +443,11 @@ void FixConstantPH::compute_Hs()
       temp_lambda_buff = 0.0;
       modify_q_buff(temp_lambda_buff);
       update_lmp();
-      HA_buff = compute_epair();
+      HA_buff = compute_epair()/N_buff; // Because we have changed N_buff molecules and we just want HB_buff-HA-buff due to that.
       backup_restore_qfev<-1>();
       temp_lambda_buff = 1.0;
       modify_q_buff(temp_lambda_buff);
-      HB_buff = compute_epair();
+      HB_buff = compute_epair()/N_buff;
       backup_restore_qfev<-1>();
    }
 }
@@ -1160,7 +1160,7 @@ void FixConstantPH::calculate_T_lambda()
     for (int j = 0; j < n_lambdas; j++)
 	T_lambda += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*1e7 / (4184*0.0019872041);
     if (flags & BUFFER)
-	T_lambda += 0.5*m_lambda_buff*v_lambda_buff*v_lambda_buff*1e7 / (4184*0.0019872041);
+	T_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*1e7 / (4184*0.0019872041);
 }
 
    
