@@ -159,7 +159,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   
    array_flag = 1;
    size_array_rows = 11;
-   size_array_cols = n_lambdas;
+   size_array_cols = n_lambdas+1;
 
 }
 
