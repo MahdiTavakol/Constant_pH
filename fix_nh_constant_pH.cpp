@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.05.25
+   v0.05.19
 ------------------------------------------------------------------------- */
 #include <iostream>
 
@@ -58,7 +58,7 @@ enum{NONE,XYZ,XY,YZ,XZ};
 enum{ISO,ANISO,TRICLINIC};
 
 // enums for the lambda integration
-enum {LAMBDA_ANDERSEN,LAMBDA_BOSSI,LAMBDA_NOSEHOOVER};
+enum {LAMBDA_NONE,LAMBDA_ANDERSEN,LAMBDA_BOSSI,LAMBDA_NOSEHOOVER};
 enum { 
        NONE_LAMBDA=0,
        BUFFER=1<<0, 
