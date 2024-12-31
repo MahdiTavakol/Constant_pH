@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.05.19
+   v0.05.25
 ------------------------------------------------------------------------- */
 #include <iostream>
 
@@ -215,6 +215,8 @@ void FixNHConstantPH::nh_v_temp()
   double dt = update->dt;
   bigint ntimestep = update->ntimestep;
   double kT = force->boltz * t_target;
+  // remove the center of mass velocity
+  double v_cm = 0.0;
 
   // Lets extract the parameters from the fix_constant_pH again
   fix_constant_pH->return_nparams(n_lambdas);
@@ -309,6 +311,21 @@ void FixNHConstantPH::nh_v_temp()
      }
   }
   
+  for (int i = 0; i < n_lambdas; i++) {
+     v_cm += v_lambdas[i]*mols_charge_change;
+  }
+  
+  if (lambda_integration_flags & BUFFER) {
+     v_cm += N_buff * v_lambda_buff * buff_charge_change;
+     v_cm /= (static_cast<double>(n_lambdas)*mols_charge_change + static_cast<double>(N_buff)*buff_charge_change);
+  }
+  else
+     v_cm /= (static_cast<double>(n_lambdas)*mols_charge_change);
+     
+  for (int i = 0; i < n_lambdas; i++)
+     v_lambdas[i] -= v_cm;
+  if (lambda_integration_flags & BUFFER)
+     v_lambda_buff -= v_cm; 
   
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
