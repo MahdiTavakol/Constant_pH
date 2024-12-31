@@ -158,7 +158,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   
   
    array_flag = 1;
-   size_array_rows = 11;
+   size_array_rows = 12;
    size_array_cols = n_lambdas+1;
 
 }
@@ -404,7 +404,7 @@ void FixConstantPH::update_a_lambda()
    }
 
    if (flags & BUFFER) {
-	double f_lambda_buff = -(HB_buff - HA_buff + kj2kcal*dU_buff);
+	double f_lambda_buff = -(0.0*HB_buff - 0.0*HA_buff + kj2kcal*dU_buff);
 	this->a_lambda_buff = f_lambda_buff / m_lambda_buff; // the fix_nh_constant_pH itself takes care of units
 	this->H_lambda_buff = (1-lambda_buff)*HA_buff + lambda_buff *HB_buff + kj2kcal*U_buff + (m_lambda_buff/2.0)*(v_lambda_buff*v_lambda_buff);
    }
@@ -1179,8 +1179,7 @@ double FixConstantPH::compute_q_total()
    MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
       
    
-   //if (std::abs(q_total) > tolerance && comm->me == 0)
-   if (comm->me == 0)
+   if (std::abs(q_total) > tolerance && comm->me == 0)
       error->warning(FLERR,"q_total in fix constant-pH is non-zero: {} from {}",q_total,comm->me);
       
    return q_total;
@@ -1221,6 +1220,7 @@ double FixConstantPH::compute_array(int i, int j)
    switch(i)
    {
       case 0:
+        // 1
         if (j < n_lambdas)
            return HAs[j];
         else if (j == n_lambdas)
@@ -1228,6 +1228,7 @@ double FixConstantPH::compute_array(int i, int j)
         else
            return -1.0;
       case 1:
+        // 2
         if (j < n_lambdas)
            return HBs[j];
         else if (j == n_lambdas)
@@ -1235,6 +1236,7 @@ double FixConstantPH::compute_array(int i, int j)
         else
            return -1.0;
       case 2:
+        // 3
         if (j < n_lambdas)
            return dfs[j]*kT*log(10)*(pK-pH);
         else if (j == n_lambdas)
@@ -1242,6 +1244,7 @@ double FixConstantPH::compute_array(int i, int j)
         else
            return -1.0;
       case 3:
+        // 4
         if (j < n_lambdas)
            return kj2kcal*dUs[j];
         else if (j == n_lambdas)
@@ -1249,6 +1252,7 @@ double FixConstantPH::compute_array(int i, int j)
         else
            return -1.0;
       case 4:
+        // 5
         if (j < n_lambdas)
            return GFF_lambdas[j];
         else if (j == n_lambdas)
@@ -1256,6 +1260,7 @@ double FixConstantPH::compute_array(int i, int j)
         else
            return -1.0;
       case 5:
+        // 6
         if (j < n_lambdas)
            return lambdas[j];
         else if (j == n_lambdas)
@@ -1263,6 +1268,7 @@ double FixConstantPH::compute_array(int i, int j)
         else
            return -1.0;
       case 6:
+        // 7
         if (j < n_lambdas)
            return v_lambdas[j];
         else if (j == n_lambdas)
@@ -1270,6 +1276,7 @@ double FixConstantPH::compute_array(int i, int j)
         else
            return -1.0;
       case 7:
+        // 8
         if (j < n_lambdas)
            return a_lambdas[j];
         else if (j == n_lambdas)
@@ -1277,17 +1284,20 @@ double FixConstantPH::compute_array(int i, int j)
         else
            return -1.0;
       case 8:
+        // 9
         calculate_T_lambda();
         return T_lambda;
       case 9:
+        // 10
         if (j < n_lambdas)
            return H_lambdas[j];
         else if (j == n_lambdas)
-           return H_lambda_buff;
+           return N_buff*H_lambda_buff;
         else
            return -1.0;
       case 10:
-        double q_total = compute_q_total();
+        // 11
+        compute_q_total();
         return q_total;
    }
    return 0.0;
