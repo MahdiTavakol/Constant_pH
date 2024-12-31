@@ -190,21 +190,18 @@ void FixNHConstantPH::nve_x()
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
   for (int i = 0; i < n_lambdas; i++)
      x_lambdas[i] += dtv * v_lambdas[i];
-  if (lambda_integration_flags & BUFFER) {
-     fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
-     x_lambda_buff += dtv * v_lambda_buff;
-     if (lambda_integration_flags & CONSTRAIN) constrain_lambdas<1 >();
-     fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
-  }
-   
+     
+  // Resets the parameters for x_lambdas to be used in the constrain
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
   // This function sets the charges (qs) in the system based on the current value of x_lambdas and x_lambda_buffs
-  fix_constant_pH->reset_qs();
-  
-  // Just to check the total charge again
-  double q_total_3 = fix_constant_pH->compute_q_total();
-  if (comm->me == 0) std::cout << "q_total_3 == " << q_total_3 << std::endl;
+  fix_constant_pH->reset_qs();     
+     
+  if (lambda_integration_flags & BUFFER) {
+     fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     x_lambda_buff += dtv * v_lambda_buff;
+     if (lambda_integration_flags & CONSTRAIN) constrain_lambdas<2>();
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -342,8 +339,7 @@ void FixNHConstantPH::constrain_lambdas()
    double sigma_mass_inverse;
    double N_buff_double = static_cast<double>(N_buff);
    
-   double q_total_1; // based on the simga_lambdas
-   double q_total_2; // based on the q_total calculated from atoms
+
    
    int cycle = 0;
    
@@ -352,6 +348,10 @@ void FixNHConstantPH::constrain_lambdas()
    while(true) {
       sigma_lambda = 0.0;
       sigma_mass_inverse = 0.0;
+      
+      fix_constant_pH->return_nparams(n_lambdas);
+      fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
       
       
       for (int i = 0; i < n_lambdas; i++) {
@@ -368,35 +368,25 @@ void FixNHConstantPH::constrain_lambdas()
          q_total = compute_q_total();
       else error->one(FLERR,"You should never have reached here!!!");
 
-         
+
+      if (std::abs(q_total) < etol || cycle++ > 100) {
+         break;
+      }
+      
       domega = -q_total \ 
          / (mols_charge_change*mols_charge_change*sigma_mass_inverse + (N_buff_double*buff_charge_change*buff_charge_change/m_lambda_buff));
 
       omega += domega;
-
-      if (std::abs(q_total) < etol || cycle++ > 1000) {
-         q_total_1 = mols_charge_change*sigma_lambda+buff_charge_change*N_buff_double*x_lambda_buff-total_charge;
-         q_total_2 = compute_q_total();
-         if (comm->me == 0) error->warning(FLERR,"q_total_1=={},q_total_2=={}",q_total_1,q_total_2);
-         fix_constant_pH->reset_qs();
-         break;
-      }
       
       for (int i = 0; i < n_lambdas; i++)
          x_lambdas[i] += (omega * mols_charge_change / m_lambdas[i]);
 
       x_lambda_buff += buff_charge_change * omega / m_lambda_buff;
       
-      if (mode == 2) {
-      	 fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-      	 fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
-      	 fix_constant_pH->reset_qs();
-      }
-   }
-   
-   
-   //if (comm->me == 0 && (std::abs(q_total_1) > etol || std::abs(q_total_2) > etol )) error->warning(FLERR,"q_total_1=={},q_total_2=={}",q_total_1,q_total_2);
-   if (comm->me == 0) std::cout << "q_total_1 == " << q_total_1 << " q_total_2 == " << q_total_2 << " "; 
+      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+      fix_constant_pH->reset_qs();
+   }   
 }
 
 /* ----------------------------------------------------------------------
