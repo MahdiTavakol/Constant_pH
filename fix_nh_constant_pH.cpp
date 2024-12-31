@@ -58,7 +58,7 @@ enum{NONE,XYZ,XY,YZ,XZ};
 enum{ISO,ANISO,TRICLINIC};
 
 // enums for the lambda integration
-enum {LAMBDA_NONE,LAMBDA_ANDERSEN,LAMBDA_BOSSI,LAMBDA_NOSEHOOVER};
+enum {LAMBDA_NONE,LAMBDA_ANDERSEN,LAMBDA_BUSSI,LAMBDA_NOSEHOOVER};
 enum { 
        NONE_LAMBDA=0,
        BUFFER=1<<0, 
@@ -93,8 +93,9 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
        t_andersen = utils::numeric(FLERR,arg[iarg+1],false,lmp);
        iarg+=2;
     } else if (strcmp(arg[iarg],"lambda_bussi") == 0) {
-       lambda_thermostat_type = LAMBDA_BOSSI;
-       iarg++;
+       lambda_thermostat_type = LAMBDA_BUSSI;
+       tau_t_bussi = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+       iarg+=2;
     } else if (strcmp(arg[iarg],"lambda_nose-hoover") == 0) {
        lambda_thermostat_type = LAMBDA_NOSEHOOVER;
        Q_lambda_nose_hoover = utils::numeric(FLERR,arg[iarg+1],false,lmp);
@@ -155,7 +156,6 @@ void FixNHConstantPH::init()
 
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
-  zeta_bussi = 0.0;
   zeta_nose_hoover = 0.0;
 }
 
@@ -267,33 +267,37 @@ void FixNHConstantPH::nh_v_temp()
       // This needs to be implemented
       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  } else if (lambda_thermostat_type == LAMBDA_BOSSI) {
-     //tau_t_bussi should be 1000
+  } else if (lambda_thermostat_type == LAMBDA_BUSSI) {
+    //tau_t_bussi should be 1000
      
-     double scaling_factor = std::sqrt(t_lambda_target/t_lambda_current);
+    // Random number generation setup
+    std::mt19937 rng(std::random_device{}());
+    std::normal_distribution<> dist(0.0, 1.0);
 
-     if (which == NOBIAS) {
-        double friction = (t_lambda_current/t_lambda_target - 1.0) / tau_t_bussi;
-        zeta_bussi += friction * dt; 
+    // Calculate the Bussi scaling factor
+    zeta_bussi = std::sqrt(1.0 + (dt / tau_t_bussi) * (t_lambda_target / t_lambda_current - 1.0));
+    double noise_factor = std::sqrt(t_lambda_target * (1.0 - zeta_bussi * zeta_bussi));
 
-        // first, the lambdas
-        for (int i = 0; i < n_lambdas; i++) {
-           v_lambdas[i] *= scaling_factor;
-           //v_lambdas[i] *= exp(-zeta*dt);
-           if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
-              v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
-        }
-        // and then the buffer 
-        if (lambda_integration_flags & BUFFER) {
-           v_lambda_buff *= scaling_factor;
-           // v_lambda_buff *= exp(-zeta*dt);
-           if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
-              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
-        }
-     } else if (which == BIAS) {
-        // This needs to be implemented
-        error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
-     }
+    if (which == NOBIAS) {
+
+       // first, the lambdas
+       for (int i = 0; i < n_lambdas; i++) {
+          v_lambdas[i] *= zeta_bussi;
+          v_lambdas[i] += dist(rng) * noise_factor;
+          if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
+             v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
+       }
+       // and then the buffer 
+       if (lambda_integration_flags & BUFFER) {
+          v_lambda_buff *= zeta_bussi;
+          v_lambda_buff += dist(rng) * noise_factor;
+          if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+             v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
+       }
+    } else if (which == BIAS) {
+       // This needs to be implemented
+       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+    }
   } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER) {  
      zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
 
