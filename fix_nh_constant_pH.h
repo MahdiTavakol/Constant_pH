@@ -51,6 +51,7 @@ class FixNHConstantPH : public FixNH {
   double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
   double T_lambda;
   int n_lambdas;
+  int lambda_every;
 
   // Do I have a buffer here and if so what are its parameters
   double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
