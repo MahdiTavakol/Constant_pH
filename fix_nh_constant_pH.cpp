@@ -237,7 +237,7 @@ void FixNHConstantPH::nh_v_temp()
   fix_constant_pH->return_T_lambda(t_lambda_current);
   
   if (lambda_thermostat_type == LAMBDA_ANDERSEN) {
-    double P = -dt/t_andersen);
+    double P = dt/t_andersen);
    
 
     if (which == NOBIAS) {
