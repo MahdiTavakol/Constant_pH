@@ -222,6 +222,8 @@ void FixNHConstantPH::nh_v_temp()
   double kT = force->boltz * t_target;
   // remove the center of mass velocity
   double v_cm = 0.0;
+  // unit conversion
+  double mvv2e = force->mvv2e;
 
   // Lets extract the parameters from the fix_constant_pH again
   fix_constant_pH->return_nparams(n_lambdas);
@@ -252,7 +254,7 @@ void FixNHConstantPH::nh_v_temp()
         double r = static_cast<double>(rand()) / RAND_MAX;
         if (r < P) {
            double mean = 0.0;
-           double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
+           double sigma = std::sqrt(kT/(m_lambdas[i]*mvv2e));
            v_lambdas[i] = random_normal(mean, sigma);
         }
         if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
@@ -260,14 +262,14 @@ void FixNHConstantPH::nh_v_temp()
       }
       // Dealing with the buffer
       if (lambda_integration_flags & BUFFER) {
-         double r = static_cast<double>(rand())/ RAND_MAX;
-         if (r < P) {
-            double mean = 0.0;
-            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambda_buff))/1000.0;
-            v_lambda_buff = random_normal(mean,sigma);
-         }
-         if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
-            v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
+        double r = static_cast<double>(rand())/ RAND_MAX;
+        if (r < P) {
+           double mean = 0.0;
+           double sigma = std::sqrt(kT/(m_lambda_buff*mvv2e));
+           v_lambda_buff = random_normal(mean,sigma);
+        }
+        if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+           v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
       }
     } else if (which == BIAS) {
       // This needs to be implemented
