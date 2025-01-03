@@ -49,7 +49,8 @@ enum {
        NONE=0,
        BUFFER=1<<0, 
        ADAPTIVE=1<<1,
-       ZEROCHARGE=1<<2
+       ZEROCHARGE=1<<2,
+       CONSTRAIN=1<<3
      };
 
 static constexpr double tol = 1e-5;
@@ -144,6 +145,10 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	fix_adaptive_protonation_id = utils::strdup(arg[iarg+1]);
 	nevery_fix_adaptive = utils::numeric(FLERR,arg[iarg+2],false,lmp);
 	iarg+=3;
+    }
+    else if (strcmp(arg[iarg],"constrain") == 0) {
+        flags |= CONSTRAIN;
+        iarg++;
     }
     else if (strcmp(arg[iarg],"zero_total_charge") == 0) {
         flags |= ZEROCHARGE;
@@ -1111,14 +1116,14 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     double kT = force->boltz * _T_lambda;
     double ke_lambdas = 0.0;
     double ke_lambdas_target = 0.5*n_lambdas*kT; // Not sure about this part.
-    if (flags && BUFFER) ke_lambdas_target += 0.5*N_buff*kT;
+    if (flags & BUFFER) ke_lambdas_target += 0.5*N_buff*kT;
     for (int j = 0; j < n_lambdas; j++) {
 	double stddev = std::sqrt(kT/m_lambdas[j]);
 	v_lambdas[j] = distribution(rng);
 	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j];
 	v_lambdas[j] *= std::sqrt(4184/10.0)/1000.0; // A/fs
     }
-    if (flags && BUFFER) {
+    if (flags & BUFFER) {
         double stddev = std::sqrt(kT/m_lambda_buff);
         v_lambda_buff = distribution(rng);
 	ke_lambdas += 0.5*m_lambda_buff*v_lambda_buff*v_lambda_buff;
@@ -1128,16 +1133,16 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 
     for (int j = 0; j < n_lambdas; j++)
 	v_lambdas[j] *= scaling_factor;
-    if (flags && BUFFER)
+    if (flags & BUFFER)
         v_lambda_buff *= scaling_factor;
 
     double v_cm = 0.0;
     for (int j = 0; j < n_lambdas; j++)
 	v_cm += v_lambdas[j];
-    if (flags && BUFFER)
+    if (flags & BUFFER)
         v_cm += N_buff*v_lambda_buff;
     double n_cm = static_cast<double>(n_lambdas);
-    if (flags && BUFFER) n_cm += static_cast<double>(N_buff);
+    if (flags & BUFFER) n_cm += static_cast<double>(N_buff);
     v_cm /= static_cast<double>(n_cm);
     for (int j = 0; j < n_lambdas; j++)
 	v_lambdas[j] -= v_cm;
@@ -1147,11 +1152,21 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 
 void FixConstantPH::calculate_T_lambda()
 {
-    T_lambda = 0.0;
-    for (int j = 0; j < n_lambdas; j++)
-	T_lambda += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*1e7 / (4184*0.0019872041);
+    double KE_lambda = 0.0;
+    double k = force->boltz;
+    
+    double Nf = static_cast<double>(n_lambdas);
     if (flags & BUFFER)
-	T_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*1e7 / (4184*0.0019872041);
+    	Nf += static_cast<double>(N_buff);
+    if (flags & CONSTRAIN)
+    	Nf -= 1.0;
+    	
+    for (int j = 0; j < n_lambdas; j++)
+        KE_lambda += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j];
+    if (flags & BUFFER)
+        KE_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff;
+    
+    T_lambda = 2*KE_lambda / (Nf * k);
 }
 
    
