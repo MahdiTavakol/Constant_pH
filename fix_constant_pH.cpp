@@ -1154,6 +1154,7 @@ void FixConstantPH::calculate_T_lambda()
 {
     double KE_lambda = 0.0;
     double k = force->boltz;
+    double mvv2e = force->mvv2e;
     
     double Nf = static_cast<double>(n_lambdas);
     if (flags & BUFFER)
@@ -1162,9 +1163,9 @@ void FixConstantPH::calculate_T_lambda()
     	Nf -= 1.0;
     	
     for (int j = 0; j < n_lambdas; j++)
-        KE_lambda += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j];
+        KE_lambda += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*mvv2e;
     if (flags & BUFFER)
-        KE_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff;
+        KE_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
     
     T_lambda = 2*KE_lambda / (Nf * k);
 }
