@@ -238,6 +238,7 @@ void FixNHConstantPH::nh_v_temp()
   
   if (lambda_integration_flags & CONSTRAIN)
      Nf_lambdas -= 1.0;
+     
 
   // Temperature
   double t_lambda_current;
@@ -288,7 +289,7 @@ void FixNHConstantPH::nh_v_temp()
     double r1 = dist(rng);
     double sum_r2 = 0;
     
-    for (int j = 0; j < Nf_lambdas; j++) {
+    for (int j = 1; j < Nf_lambdas; j++) {
        double r = dist(rng);
        sum_r2 += r*r;
     }
