@@ -368,8 +368,8 @@ FixNH::FixNH(LAMMPS *lmp, int narg, char **arg) :
       iarg += 2;
     } else if (strcmp(arg[iarg],"lambda_andersen") == 0) {
       iarg+=2;
-    } else if (strcmp(arg[iarg],"lambda_bussi") == 0) {
-      iarg++;
+    } else if (strcmp(arg[iarg],"lambda_bossi") == 0) {
+      iarg+=2;
     } else if (strcmp(arg[iarg],"lambda_nose-hoover") == 0) {
       iarg+=2;
     } else if (strcmp(arg[iarg],"buffer") == 0) {
