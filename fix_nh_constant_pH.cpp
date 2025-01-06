@@ -130,7 +130,6 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
 
 FixNHConstantPH::~FixNHConstantPH()
 {
-  FixNH::~FixNH();
   if (fix_constant_pH_id) delete [] fix_constant_pH_id;
   if (x_lambdas) memory->destroy(x_lambdas);
   if (v_lambdas) memory->destroy(v_lambdas);
@@ -252,7 +251,7 @@ void FixNHConstantPH::nh_v_temp()
     if (which == NOBIAS) {
       // Dealing with lambdas
       for (int i = 0; i < n_lambdas; i++) {
-        double r = static_cast<double>(rand()) / RAND_MAX;
+        double r = static_cast<double>(rand())/ RAND_MAX;
         if (r < P) {
            double mean = 0.0;
            double sigma = std::sqrt(kT/(m_lambdas[i]*mvv2e));
@@ -279,18 +278,15 @@ void FixNHConstantPH::nh_v_temp()
   } else if (lambda_thermostat_type == LAMBDA_BUSSI) {
     //tau_t_bussi should be 1000
      
-    // Random number generation setup
-    std::mt19937 rng(std::random_device{}());
-    std::normal_distribution<> dist(0.0, 1.0);
 
     // Calculate the Bussi scaling factor
     zeta_bussi = std::exp(-dt/tau_t_bussi);
     
-    double r1 = dist(rng);
+    double r1 = random_normal(0,1);
     double sum_r2 = 0;
     
     for (int j = 1; j < Nf_lambdas; j++) {
-       double r = dist(rng);
+       double r = random_normal(0,1);
        sum_r2 += r*r;
     }
     
@@ -306,13 +302,13 @@ void FixNHConstantPH::nh_v_temp()
        for (int i = 0; i < n_lambdas; i++) {
           v_lambdas[i] *= alpha_bussi;
           if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
-             v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
+            v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
        }
        // and then the buffer 
        if (lambda_integration_flags & BUFFER) {
           v_lambda_buff *= alpha_bussi;
           if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
-             v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
+            v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
        }
     } else if (which == BIAS) {
        // This needs to be implemented
