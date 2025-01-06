@@ -1,4 +1,5 @@
-/* -*- c++ -*- ----------------------------------------------------------
+// clang-format off
+/* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
    LAMMPS development team: developers@lammps.org
@@ -12,72 +13,463 @@
 ------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
-   Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.15
+   Contributing authors: Mark Stevens (SNL), Aidan Thompson (SNL)
 ------------------------------------------------------------------------- */
 
-#ifndef LMP_FIX_NH_CONSTANT_PH_H
-#define LMP_FIX_NH_CONSTANT_PH_H
+/* ----------------------------------------------------------------------
+   Constant pH support added by: Mahdi Tavakol (Oxford)
+   v0.05.19
+------------------------------------------------------------------------- */
+#include <iostream>
 
-#include <ctime>
-
-#include "fix.h"    // IWYU pragma: export
 #include "fix_constant_pH.h"
-#include "fix_nh.h"
+#include "fix_nh_constant_pH.h"
 
 
-namespace LAMMPS_NS {
+#include "atom.h"
+#include "comm.h"
+#include "compute.h"
+#include "domain.h"
+#include "error.h"
+#include "fix_deform.h"
+#include "force.h"
+#include "group.h"
+#include "irregular.h"
+#include "kspace.h"
+#include "memory.h"
+#include "modify.h"
+#include "neighbor.h"
+#include "respa.h"
+#include "update.h"
 
-class FixNHConstantPH : public FixNH {
- public:
-  FixNHConstantPH(class LAMMPS *, int, char **);
-  ~FixNHConstantPH() override;
-  void init() override;
-  double memory_usage() override;
+#include <cmath>
+#include <cstring>
+#include <random>
 
- protected:
+using namespace LAMMPS_NS;
+using namespace FixConst;
 
-  void nve_x() override;
-  void nve_v() override;
-  void nh_v_temp() override;
-  double random_normal(double mean, double stddev);
-  template <int mode>
-  void constrain_lambdas();
-  double compute_q_total();
+static constexpr double DELTAFLIP = 0.1;
+static constexpr double TILTMAX = 1.5;
+static constexpr double EPSILON = 1.0e-6;
 
-  // lambda variables from the fix constant pH  
-  FixConstantPH *fix_constant_pH;
-  char *fix_constant_pH_id;
-  double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
-  double T_lambda;
-  int n_lambdas;
-  int lambda_every;
+enum{NOBIAS,BIAS};
+enum{NONE,XYZ,XY,YZ,XZ};
+enum{ISO,ANISO,TRICLINIC};
 
-  // Do I have a buffer here and if so what are its parameters
-  double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
-  int N_buff;
+// enums for the lambda integration
+enum {LAMBDA_NONE,LAMBDA_ANDERSEN,LAMBDA_BUSSI,LAMBDA_NOSEHOOVER};
+enum { 
+       NONE_LAMBDA=0,
+       BUFFER=1<<0, 
+       CONSTRAIN=1<<1
+     };
 
-  // Integration flags for lambda, should I constrain total charge and also is there any buffer
-  int lambda_integration_flags;
-  // The style of the thermostat for the lambdas
-  int lambda_thermostat_type;
+/* ----------------------------------------------------------------------
+   NVT,NPH,NPT integrators for improved Nose-Hoover equations of motion
+ ---------------------------------------------------------------------- */
 
-  // Changes in the charge
-  double mols_charge_change, buff_charge_change, total_charge;
-
-  // Parameter for Andersen thermostat
-  double t_andersen;
-
-  // Parameter for Bussi thermostat
-  double tau_t_bussi;
-  double zeta_bussi;
+FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
+    FixNH(lmp, narg, arg), 
+    fix_constant_pH(nullptr), fix_constant_pH_id(nullptr), 
+    x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
+{
+  if (narg < 5) utils::missing_cmd_args(FLERR, std::string("fix ") + style, error);
   
-  // Parameters for Nose-Hoover thermostat
-  double Q_lambda_nose_hoover;
-  double zeta_nose_hoover;
+  lambda_thermostat_type = NONE_LAMBDA;
+  lambda_integration_flags = 0;
+  
 
-};
+  int iarg = 3;
 
-}    // namespace LAMMPS_NS
+  while (iarg < narg) {
+    if (strcmp(arg[iarg],"fix_constant_pH_id") == 0) {
+       lambda_thermostat_type = NONE_LAMBDA;
+       lambda_integration_flags = 0;
+       fix_constant_pH_id = utils::strdup(arg[iarg+1]);
+       iarg += 2;
+    } else if (strcmp(arg[iarg],"lambda_andersen") == 0) {
+       lambda_thermostat_type = LAMBDA_ANDERSEN;
+       t_andersen = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+       iarg+=2;
+    } else if (strcmp(arg[iarg],"lambda_bussi") == 0) {
+       lambda_thermostat_type = LAMBDA_BUSSI;
+       tau_t_bussi = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+       iarg+=2;
+    } else if (strcmp(arg[iarg],"lambda_nose-hoover") == 0) {
+       lambda_thermostat_type = LAMBDA_NOSEHOOVER;
+       Q_lambda_nose_hoover = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+       iarg+=2;
+    } else if (strcmp(arg[iarg],"buffer") == 0) {
+       lambda_integration_flags |= BUFFER;
+       iarg++;
+    } else if (strcmp(arg[iarg],"constrain_total_charge") == 0) {
+       if (!(lambda_integration_flags & BUFFER))
+          error->one(FLERR,"Constrain total charge in absence of a buffer is not supported yet!");
+       lambda_integration_flags |= CONSTRAIN;
+       mols_charge_change = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+       buff_charge_change = utils::numeric(FLERR,arg[iarg+2],false,lmp);
+       total_charge = utils::numeric(FLERR,arg[iarg+3],false,lmp);
+       iarg += 4;
+    } else if (strcmp(arg[iarg],"lambda_every") == 0) {
+       lambda_every = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+       if (lambda_every <= 0)
+          error->one(FLERR,"The lambda_every parameter must be positive");
+       iarg+=2; 
+    } else {
+       // skip to next argument; argument check for unknown keywords is done in FixNH
+       ++iarg;
+    }
+  }
 
-#endif
+  if (fix_constant_pH_id == nullptr) error->all(FLERR, "Invalid fix_nh constant_pH");
+
+}
+
+/* ---------------------------------------------------------------------- */
+
+FixNHConstantPH::~FixNHConstantPH()
+{
+  FixNH::~FixNH();
+  if (fix_constant_pH_id) delete [] fix_constant_pH_id;
+  if (x_lambdas) memory->destroy(x_lambdas);
+  if (v_lambdas) memory->destroy(v_lambdas);
+  if (a_lambdas) memory->destroy(a_lambdas);
+  if (m_lambdas) memory->destroy(m_lambdas); 
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixNHConstantPH::init()
+{
+  FixNH::init();
+
+  
+  fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
+  fix_constant_pH->return_nparams(n_lambdas);
+
+   
+  memory->create(x_lambdas,n_lambdas,"nh_constant_pH:x_lambdas");
+  memory->create(v_lambdas,n_lambdas,"nh_constant_pH:v_lambdas");
+  memory->create(a_lambdas,n_lambdas,"nh_constant_pH:a_lambdas");
+  memory->create(m_lambdas,n_lambdas,"nh_constant_pH:m_lambdas");
+
+  std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+  zeta_nose_hoover = 0.0;
+}
+
+/* ----------------------------------------------------------------------
+   perform half-step update of velocities
+-----------------------------------------------------------------------*/
+
+void FixNHConstantPH::nve_v()
+{
+  FixNH::nve_v();
+  
+  bigint ntimestep = update->ntimestep;
+
+  fix_constant_pH->return_nparams(n_lambdas);
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+  for (int i = 0; i < n_lambdas; i++)
+     v_lambdas[i] += dtf * a_lambdas[i];
+  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+  if (lambda_integration_flags & BUFFER) {
+     fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     v_lambda_buff += dtf * a_lambda_buff;
+     fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   perform full-step update of positions
+-----------------------------------------------------------------------*/
+
+void FixNHConstantPH::nve_x()
+{
+  FixNH::nve_x();
+  bigint ntimestep = update->ntimestep;
+  fix_constant_pH->return_nparams(n_lambdas);
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  for (int i = 0; i < n_lambdas; i++)
+     x_lambdas[i] += dtv * v_lambdas[i];
+     
+  // Resets the parameters for x_lambdas to be used in the constrain
+  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+  // This function sets the charges (qs) in the system based on the current value of x_lambdas and x_lambda_buffs
+  fix_constant_pH->reset_qs();     
+     
+  if (lambda_integration_flags & BUFFER) {
+     fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     x_lambda_buff += dtv * v_lambda_buff;
+     if (lambda_integration_flags & CONSTRAIN) constrain_lambdas<2>();
+  }
+}
+
+/* ----------------------------------------------------------------------
+   perform half-step thermostat scaling of velocities
+   ---------------------------------------------------------------------- */
+
+void FixNHConstantPH::nh_v_temp()
+{
+  FixNH::nh_v_temp();
+  // The timestep, the current step and the kT of course! 
+  double dt = update->dt;
+  bigint ntimestep = update->ntimestep;
+  double kT = force->boltz * t_target;
+  // remove the center of mass velocity
+  double v_cm = 0.0;
+  // unit conversion
+  double mvv2e = force->mvv2e;
+
+  // Lets extract the parameters from the fix_constant_pH again
+  fix_constant_pH->return_nparams(n_lambdas);
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  
+  // and the buffer if present
+  if (lambda_integration_flags & BUFFER)
+     fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     
+  // The number of degrees of freedom
+  double Nf_lambdas = static_cast<double>(n_lambdas+N_buff);
+  
+  if (lambda_integration_flags & CONSTRAIN)
+     Nf_lambdas -= 1.0;
+     
+
+  // Temperature
+  double t_lambda_current;
+  double t_lambda_target = t_target;
+  fix_constant_pH->return_T_lambda(t_lambda_current);
+  
+  if (lambda_thermostat_type == LAMBDA_ANDERSEN) {
+    double P = dt/t_andersen;
+   
+
+    if (which == NOBIAS) {
+      // Dealing with lambdas
+      for (int i = 0; i < n_lambdas; i++) {
+        double r = static_cast<double>(rand())/ RAND_MAX;
+        if (r < P) {
+           double mean = 0.0;
+           double sigma = std::sqrt(kT/(m_lambdas[i]*mvv2e));
+           v_lambdas[i] = random_normal(mean, sigma);
+        }
+        if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
+           v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
+      }
+      // Dealing with the buffer
+      if (lambda_integration_flags & BUFFER) {
+        double r = static_cast<double>(rand())/ RAND_MAX;
+        if (r < P) {
+           double mean = 0.0;
+           double sigma = std::sqrt(kT/(m_lambda_buff*mvv2e));
+           v_lambda_buff = random_normal(mean,sigma);
+        }
+        if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+           v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
+      }
+    } else if (which == BIAS) {
+      // This needs to be implemented
+      error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+    }
+  } else if (lambda_thermostat_type == LAMBDA_BUSSI) {
+    //tau_t_bussi should be 1000
+     
+
+    // Calculate the Bussi scaling factor
+    zeta_bussi = std::exp(-dt/tau_t_bussi);
+    
+    double r1 = random_normal(0,1);
+    double sum_r2 = 0;
+    
+    for (int j = 1; j < Nf_lambdas; j++) {
+       double r = random_normal(0,1);
+       sum_r2 += r*r;
+    }
+    
+    double t_lambda_new = t_lambda_current;
+    t_lambda_new +=  (1-zeta_bussi)*(t_lambda_target*(r1*r1+sum_r2)/Nf_lambdas-t_lambda_current);
+    t_lambda_new += 2*r1*std::sqrt((t_lambda_target*t_lambda_current/Nf_lambdas)*(1-zeta_bussi)*zeta_bussi);
+    double alpha_bussi = std::sqrt(t_lambda_new / t_lambda_current);
+    
+
+    if (which == NOBIAS) {
+
+       // first, the lambdas
+       for (int i = 0; i < n_lambdas; i++) {
+          v_lambdas[i] *= alpha_bussi;
+          if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
+            v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
+       }
+       // and then the buffer 
+       if (lambda_integration_flags & BUFFER) {
+          v_lambda_buff *= alpha_bussi;
+          if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+            v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
+       }
+    } else if (which == BIAS) {
+       // This needs to be implemented
+       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+    }
+  } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER) {  
+     zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
+
+     if (which == NOBIAS) {
+        // first the lambdas
+        for (int i = 0; i < n_lambdas; i++) {
+           v_lambdas[i] *= std::exp(-zeta_nose_hoover * dt);
+           if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
+              v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
+        }
+        // and then the buffer
+        if (lambda_integration_flags & BUFFER) {
+           v_lambda_buff *= std::exp(-zeta_nose_hoover * dt);
+           if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
+        }
+     } else if (which == BIAS) {
+        // This needs to be implemented
+        error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
+     }
+  }
+  
+  for (int i = 0; i < n_lambdas; i++) {
+     v_cm += v_lambdas[i]*mols_charge_change;
+  }
+  
+  if (lambda_integration_flags & BUFFER) {
+     v_cm += N_buff * v_lambda_buff * buff_charge_change;
+     v_cm /= (static_cast<double>(n_lambdas)*mols_charge_change + static_cast<double>(N_buff)*buff_charge_change);
+  }
+  else
+     v_cm /= (static_cast<double>(n_lambdas)*mols_charge_change);
+     
+  for (int i = 0; i < n_lambdas; i++)
+     v_lambdas[i] -= v_cm;
+  if (lambda_integration_flags & BUFFER)
+     v_lambda_buff -= v_cm; 
+  
+  fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+  if (lambda_integration_flags & BUFFER) fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+}
+
+/* ---------------------------------------------------------------------
+   applies the shake algorithm to the sum of the lambdas 
+
+   It adds a  constraint according to the Donnine et al JCTC 2016 
+   equation (13).
+
+   The constraint equations were taken from the Tuckerman statistical mechanics
+   book 2nd edition pages 106.
+
+   Just one step of the shake iteration is enough as the constraint is very simple.
+   
+   --------------------------------------------------------------------- */
+   
+template <int mode>
+void FixNHConstantPH::constrain_lambdas()
+{
+   double omega = 0.0;
+   double domega;
+   double etol = 1e-6;
+   double q_total;
+   double sigma_lambda;
+   double sigma_mass_inverse;
+   double N_buff_double = static_cast<double>(N_buff);
+   
+
+   
+   int cycle = 0;
+   
+   /* The while(true) loop was used on purpose so that even when the loop termination condition
+      is satisfied the q_total is calculated for the last time with final values of lambdas */
+   while(true) {
+      sigma_lambda = 0.0;
+      sigma_mass_inverse = 0.0;
+      
+      fix_constant_pH->return_nparams(n_lambdas);
+      fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+      
+      
+      for (int i = 0; i < n_lambdas; i++) {
+         sigma_lambda += x_lambdas[i];
+         if (m_lambdas[i] == 0) error->all(FLERR,"m_lambdas[{}] is zero in fix_nh_constant_pH",i);
+         sigma_mass_inverse += (1.0/m_lambdas[i]);
+      }
+
+      if (m_lambda_buff == 0) error->all(FLERR,"Buffer mass is zero in fix_nh_constant_pH");
+      
+      if (mode == 1)
+         q_total = mols_charge_change*sigma_lambda+buff_charge_change*N_buff_double*x_lambda_buff-total_charge;
+      else if (mode == 2) 
+         q_total = compute_q_total();
+      else error->one(FLERR,"You should never have reached here!!!");
+
+
+      if (std::abs(q_total) < etol || cycle++ > 100) {
+         break;
+      }
+      
+      domega = -q_total \ 
+         / (mols_charge_change*mols_charge_change*sigma_mass_inverse + (N_buff_double*buff_charge_change*buff_charge_change/m_lambda_buff));
+
+      omega += domega;
+      
+      for (int i = 0; i < n_lambdas; i++)
+         x_lambdas[i] += (omega * mols_charge_change / m_lambdas[i]);
+
+      x_lambda_buff += buff_charge_change * omega / m_lambda_buff;
+      
+      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+      fix_constant_pH->reset_qs();
+   }   
+}
+
+/* ----------------------------------------------------------------------
+   computes the q_total to be used in the constrain_lambdas() function
+   ---------------------------------------------------------------------- */
+double FixNHConstantPH::compute_q_total()
+{
+   double * q = atom->q;
+   double nlocal = atom->nlocal;
+   double q_local = 0.0;
+   double q_total = 0.0;
+   double tolerance = 1e-6; //0.001;
+
+   for (int i = 0; i <nlocal; i++)
+      q_local += q[i];
+
+   MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
+   
+   return q_total;
+}
+
+/* ----------------------------------------------------------------------
+   random number generator
+   ---------------------------------------------------------------------- */
+
+double FixNHConstantPH::random_normal(double mean, double stddev)
+{
+  static std::mt19937 generator(std::random_device{}());
+  std::normal_distribution<double> distribution(mean, stddev);
+  return distribution(generator);
+}
+
+/* ----------------------------------------------------------------------
+   memory usage
+------------------------------------------------------------------------- */
+
+double FixNHConstantPH::memory_usage()
+{
+  double bytes = 0.0;
+  bytes += 4.0*n_lambdas*sizeof(double); // x_lambdas, v_lambdas, a_lambdas and m_lambdas
+  if (irregular) bytes += irregular->memory_usage();
+  return bytes;
+}
