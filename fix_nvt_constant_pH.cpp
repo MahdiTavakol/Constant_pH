@@ -29,7 +29,7 @@ FixNVTConstantPH::FixNVTConstantPH(LAMMPS *lmp, int narg, char **arg) : FixNHCon
   if (pstat_flag) error->all(FLERR, "Pressure control can not be used with fix nvt/constant_pH");
 
   // create a new compute temp style
-  id = fix-ID + temp
+  // id = fix-ID + temp
 
   id_temp = utils::strdup(std::string(id) + "_temp");
   modify->add_compute(fmt::format("{} {} temp", id_temp, group->names[igroup]));
