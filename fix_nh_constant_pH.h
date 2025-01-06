@@ -252,7 +252,7 @@ void FixNHConstantPH::nh_v_temp()
     if (which == NOBIAS) {
       // Dealing with lambdas
       for (int i = 0; i < n_lambdas; i++) {
-        double r = random_normal(0,1);
+        double r = static_cast<double>(rand())/ RAND_MAX;
         if (r < P) {
            double mean = 0.0;
            double sigma = std::sqrt(kT/(m_lambdas[i]*mvv2e));
