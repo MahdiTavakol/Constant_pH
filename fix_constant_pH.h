@@ -29,6 +29,7 @@ namespace LAMMPS_NS {
 
   class FixConstantPH: public Fix {
      friend class FixNHConstantPH;
+     friend class ComputeGFF;
      public:
 	FixConstantPH(class LAMMPS*, int, char**);
 	~FixConstantPH() override;
