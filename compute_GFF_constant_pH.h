@@ -20,6 +20,8 @@ ComputeStyle(constant_pH/GFF,ComputeGFFConstantPH);
 #ifndef COMPUTE_GFF_CONSTANT_PH_H
 #define COMPUTE_GFF_CONSTANT_PH_H
 
+#include "fix_constant_pH.h"
+
 #include "compute.h"
 #include "pair.h"
 
