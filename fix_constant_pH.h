@@ -41,23 +41,7 @@ namespace LAMMPS_NS {
         double compute_array(int, int) override;
 	double memory_usage() override;
 
-        // Functions for accessing or reseting the lambda dynamics parameters
-        void return_nparams(int& _n_params) const;
-        void return_params(double* const _x_lambdas, double* const _v_lambdas, 
-                           double* const _a_lambdas, double* const _m_lambdas) const;
-        void reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
-                          const double* const _a_lambdas, const double* const _m_lambdas);
-        void return_T_lambda(double& _T_lambda);
 
-
-	// Functions to return the buffer parameters
-	void return_buff_params(double& _x_lambda_buff, double& _v_lambda_buff, 
-                                  double& _a_lambda_buff, double& _m_lambda_buff, int& _N_buff) const;
-	void reset_buff_params(const double _x_lambda_buff, const double _v_lambda_buff, 
-                                 const double _a_lambda_buff, const double _m_lambda_buff);
-           
-        // Function to set the charges based on the lambdas and lambda_buff values
-        void reset_qs();
 
      protected:
         int flags;
@@ -148,6 +132,26 @@ namespace LAMMPS_NS {
  	double energy_orig;
  	double kvirial_orig[6];
 	double *keatom_orig, **kvatom_orig;
+
+
+        // Functions for accessing or reseting the lambda dynamics parameters
+        void return_nparams(int& _n_params) const;
+        void return_params(double* const _x_lambdas, double* const _v_lambdas, 
+                           double* const _a_lambdas, double* const _m_lambdas) const;
+        void reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
+                          const double* const _a_lambdas, const double* const _m_lambdas);
+        void return_H_lambdas(double* _H_lambdas) const;
+        void return_T_lambda(double& _T_lambda);
+
+
+	// Functions to return the buffer parameters
+	void return_buff_params(double& _x_lambda_buff, double& _v_lambda_buff, 
+                                  double& _a_lambda_buff, double& _m_lambda_buff, int& _N_buff) const;
+	void reset_buff_params(const double _x_lambda_buff, const double _v_lambda_buff, 
+                                 const double _a_lambda_buff, const double _m_lambda_buff);
+           
+        // Function to set the charges based on the lambdas and lambda_buff values
+        void reset_qs();
 
 
 	void compute_Hs();
