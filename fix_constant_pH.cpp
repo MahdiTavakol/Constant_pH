@@ -514,6 +514,16 @@ void FixConstantPH::reset_qs()
 }
 
 /* ---------------------------------------------------------------------
+    This function returns the H_lambdas
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::return_H_lambdas(double* _H_lambdas) const
+{
+    for (int i = 0; i < n_lambdas; i++)
+        _H_lambdas[i] = H_lambdas[i]; 
+}
+
+/* ---------------------------------------------------------------------
     This one just returns the value of T_lambda
    --------------------------------------------------------------------- */
    
