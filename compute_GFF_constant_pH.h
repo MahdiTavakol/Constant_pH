@@ -37,82 +37,34 @@ class ComputeGFFConstantPH : public Compute {
   
   
  private:
-  // Sturcture files
-  FILE *pHStructureFile;
 
   // dlambda for the calculation of dU/dlambda
   double lambda, dlambda;
 
-
-
-  // Atom types and charges that change due to protonation
-  int pHnTypes;
-  double *pH1qs, *pH2qs;
-  int * typePerProtMol;
-  int * protonable;
-
-  // Charge difference between structure 1 and structure 2
-  double dq;
-
-
-  // The protonium hydrogen atoms
-  int typeHW;
-  int num_HWs;
-  double qHWs;
+  // lambda variables from the fix constant pH  
+  FixConstantPH *fix_constant_pH;
+  char *fix_constant_pH_id;
+  double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
+  double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
+  double T_lambda;
+  int n_lambdas;
+  int N_buff;
+  int lambda_every;
 
   class Fix *fixgpu;
 
-  // HA ==> H(lambda-dlambda), HB ==> H(lambda+dlambda), HC ==> H(lambda), dH_dLambda ==> (HB-HA)/(2*dlambda)
-  double HA, HB, HC, dH_dLambda;
+  /* HA and HB are for the thermodynamic integration and they should not be confused with the HA and HB
+   * in the fix constant pH command.
+   * HAs[i] ==> H[lambda_i](lambda-dlambda), HBs[i] ==> H[lambda_i](lambda+dlambda), 
+   * HCs[i] ==> H[lambda_i](lambda), dH_dLambda ==> (HB-HA)/(2*dlambda)
+   */
+   
+  double *HAs, *HBs, *HCs, *dH_dLambda;
   
-  // _org is for value of parameters before the update_lmp() with modified parameters act on them
-  double *q_orig;
-  double **f_orig;
-  double eng_vdwl_orig, eng_coul_orig;
-  double pvirial_orig[6];
-  double *peatom_orig, **pvatom_orig;
-  double energy_orig;
-  double kvirial_orig[6];
-  double *keatom_orig, **kvatom_orig;
-
-  int nmax;
-  bigint natoms;
 
   // Energy of each atom computed for states A and B
   double *energy_peratom;
-  
-  
-  
 
-  void allocate_storage();
-  void deallocate_storage();
-
-  template  <int direction>
-  static void forward_reverse_copy(double &,double &);
-  template  <int direction>
-  static void forward_reverse_copy(double* ,double* , int );
-  template  <int direction>
-  static void forward_reverse_copy(double** ,double** , int , int );
-  template <int direction>
-  void backup_restore_qfev();
-  
-  
-  // Reading the charges for the deprotonated and protonated states
-  void read_pH_structure_files();
-  // Compute the HA, HB, HC and dH_dLambda values
-  void compute_Hs();
-  // Modifying the lambda value
-  void modify_lambda(const double& scale);
-  // Recalculating the energy values
-  void update_lmp();
-  // Calculating the total pair energy of the system
-  double compute_epair();
-  // The change in the q as a result of protonation
-  void calculate_dq();
-  // Checking if we have enough HW atoms to neutralize the system
-  void check_num_HWs();
-  // Debugging the total charge of the system
-  void compute_q_total();
 };
 
 }    // namespace LAMMPS_NS
