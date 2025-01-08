@@ -42,27 +42,19 @@ ComputeGFFConstantPH::ComputeGFFConstantPH(LAMMPS* lmp, int narg, char** arg) : 
    dlambda = utils::numeric(FLERR,arg[4],false,lmp);
    if (dlambda < 0) error->all(FLERR,"Illegal compute GFF constant pH dlambda value {}", dlambda);
 
-
-   peflag = 1;
-   peatomflag = 1;
-   peratom_flag = 1;
-   comm_reverse = 1;
     
     
-   scalar_flag = 0;
-   vector_flag = 1;
-   size_vector = 4;
-   peratom_flag = 1; // I need to have per atom energies tallied. 
+   array_flag = 1;
+   size_array_cols = 4;
+   size_array_rows_variable = 1;
     
    extvector = 0;
 
-   vector = new double[size_vector];
 }
 
 /* ---------------------------------------------------------------------------- */
 ComputeGFFConstantPH::~ComputeGFFConstantPH()
 {
-   delete [] vector;
    if (fix_constant_pH_id) delete [] fix_constant_pH_id;
    deallocate_storage();
 }
@@ -83,7 +75,7 @@ void ComputeGFFConstantPH::setup()
 }
 
 /* --------------------------------------------------------------------- */
-void ComputeGFFConstantPH::compute_vector()
+void ComputeGFFConstantPH::compute_array()
 {
    // Checking if there is enough space in our arrays for all the lambas
    double n_params;
@@ -97,9 +89,13 @@ void ComputeGFFConstantPH::compute_vector()
    // Calculating the HA, HB, HC and dH_dLambda
    for (int i = 0; i < n_lambda; i++) {
       fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-
-	   
       std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
+
+      
+      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      fix_constant_pH->calculate_H_once();
+      fix_constant_pH->return_H_lambdas(HCs);
+	   
       x_lambdas[i] = lambda - dlambda;
       fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
@@ -110,18 +106,14 @@ void ComputeGFFConstantPH::compute_vector()
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HBs);
 
-      x_lambdas[i] = lambda;
-      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-      fix_constant_pH->calculate_H_once();
-      fix_constant_pH->return_H_lambdas(HCs);
 
-      dH_dLambdas[i] = (HBs[i] - HAs[i])/(2*dlambda);
+      for (int j = 0; j < n_lambdas; j++) {
+         array[j][0] = HAs[j];
+	 array[j][1] = HBs[j];
+	 array[j][2] = HCs[j];
+	 array[j][0] = (HBs[j]-HAs[j])/(2*dlambda);
+      }
    }
-   
-   vector[0] = HAs;
-   vector[1] = HBs;
-   vector[2] = HCs;
-   vector[3] = dH_dLambdas;
 }
 
 /* ----------------------------------------------------------------------
@@ -131,6 +123,8 @@ void ComputeGFFConstantPH::compute_vector()
 
 void ComputeGFFConstantPH::allocate_storage()
 {
+  memory->create(array,nlambdas,4,"compute_GFF_constant_pH:array");
+	
   memory->create(x_lambdas, nlambdas, 1, "compute_GFF_constant_pH:x_lambdas");
   memory->create(v_lambdas, nlambdas, 1, "compute_GFF_constant_pH:v_lambdas");
   memory->create(a_lambdas, nlambdas, 1, "compute_GFF_constant_pH:a_lambdas");
@@ -140,13 +134,14 @@ void ComputeGFFConstantPH::allocate_storage()
   memory->create(HAs, nlambdas, 1, "compute_GFF_constant_pH:HAs");
   memory->create(HBs, nlambdas, 1, "compute_GFF_constant_pH:HBs");
   memory->create(HCs, nlambdas, 1, "compute_GFF_constant_pH:HCs");
-  memory->create(dH_dLambda, nlambdas, 1, "compute_GFF_constant_pH:dH_dLambda");
 }
 
 /* ---------------------------------------------------------------------- */
 
 void ComputeGFFConstantPH::deallocate_storage()
 {
+  if (array) memory->destroy(array);
+	
   if (x_lambdas) memory->destory(x_lambdas);
   if (v_lambdas) memory->destory(v_lambdas);
   if (a_lambdas) memory->destory(a_lambdas);
@@ -156,9 +151,9 @@ void ComputeGFFConstantPH::deallocate_storage()
   if (HAs) memory->destroy(HAs);
   if (HBs) memory->destroy(HBs);
   if (HCs) memory->destroy(HCs);
-  if (dH_dLambda) memory->destroy(dH_dLambda);
 
-  
+  array = nullptr;
+
   x_lambdas = nullptr;
   v_lambdas = nullptr;
   a_lambdas = nullptr;
@@ -168,6 +163,4 @@ void ComputeGFFConstantPH::deallocate_storage()
   HAs = nullptr;
   HBs = nullptr;
   HCs = nullptr; 
-  dH_dLambda = nullptr;
 }
-
