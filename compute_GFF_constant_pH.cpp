@@ -65,7 +65,7 @@ void ComputeGFFConstantPH::init()
   fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
   fix_constant_pH->return_nparams(n_lambdas);
 
-  allocated_storage();
+  allocate_storage();
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -78,7 +78,7 @@ void ComputeGFFConstantPH::setup()
 void ComputeGFFConstantPH::compute_array()
 {
    // Checking if there is enough space in our arrays for all the lambas
-   double n_params;
+   int n_params;
    fix_constant_pH->return_nparams(n_params);
    if (n_lambdas < n_params) {
       n_lambdas = n_params;
@@ -87,7 +87,7 @@ void ComputeGFFConstantPH::compute_array()
    }
 	
    // Calculating the HA, HB, HC and dH_dLambda
-   for (int i = 0; i < n_lambda; i++) {
+   for (int i = 0; i < n_lambdas; i++) {
       fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
 
@@ -99,7 +99,7 @@ void ComputeGFFConstantPH::compute_array()
       x_lambdas[i] = lambda - dlambda;
       fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
-      fix_constant_pH->return_H_lambas(HAs);
+      fix_constant_pH->return_H_lambdas(HAs);
 
       x_lambdas[i] = lambda + dlambda;
       fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
@@ -123,17 +123,17 @@ void ComputeGFFConstantPH::compute_array()
 
 void ComputeGFFConstantPH::allocate_storage()
 {
-  memory->create(array,nlambdas,4,"compute_GFF_constant_pH:array");
+  memory->create(array,n_lambdas,4,"compute_GFF_constant_pH:array");
 	
-  memory->create(x_lambdas, nlambdas, 1, "compute_GFF_constant_pH:x_lambdas");
-  memory->create(v_lambdas, nlambdas, 1, "compute_GFF_constant_pH:v_lambdas");
-  memory->create(a_lambdas, nlambdas, 1, "compute_GFF_constant_pH:a_lambdas");
-  memory->create(m_lambdas, nlambdas, 1, "compute_GFF_constant_pH:m_lambdas");
-  memory->create(H_lambdas, nlambdas, 1, "compute_GFF_constant_pH:H_lambdas");
+  memory->create(x_lambdas, n_lambdas, "compute_GFF_constant_pH:x_lambdas");
+  memory->create(v_lambdas, n_lambdas, "compute_GFF_constant_pH:v_lambdas");
+  memory->create(a_lambdas, n_lambdas, "compute_GFF_constant_pH:a_lambdas");
+  memory->create(m_lambdas, n_lambdas, "compute_GFF_constant_pH:m_lambdas");
+  memory->create(H_lambdas, n_lambdas, "compute_GFF_constant_pH:H_lambdas");
 	
-  memory->create(HAs, nlambdas, 1, "compute_GFF_constant_pH:HAs");
-  memory->create(HBs, nlambdas, 1, "compute_GFF_constant_pH:HBs");
-  memory->create(HCs, nlambdas, 1, "compute_GFF_constant_pH:HCs");
+  memory->create(HAs, n_lambdas, "compute_GFF_constant_pH:HAs");
+  memory->create(HBs, n_lambdas, "compute_GFF_constant_pH:HBs");
+  memory->create(HCs, n_lambdas, "compute_GFF_constant_pH:HCs");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -142,11 +142,11 @@ void ComputeGFFConstantPH::deallocate_storage()
 {
   if (array) memory->destroy(array);
 	
-  if (x_lambdas) memory->destory(x_lambdas);
-  if (v_lambdas) memory->destory(v_lambdas);
-  if (a_lambdas) memory->destory(a_lambdas);
-  if (m_lambdas) memory->destory(m_lambdas);
-  if (H_lambdas) memory->destory(H_lambdas);
+  if (x_lambdas) memory->destroy(x_lambdas);
+  if (v_lambdas) memory->destroy(v_lambdas);
+  if (a_lambdas) memory->destroy(a_lambdas);
+  if (m_lambdas) memory->destroy(m_lambdas);
+  if (H_lambdas) memory->destroy(H_lambdas);
 	
   if (HAs) memory->destroy(HAs);
   if (HBs) memory->destroy(HBs);
