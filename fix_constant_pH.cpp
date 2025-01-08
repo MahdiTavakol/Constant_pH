@@ -396,7 +396,7 @@ void FixConstantPH::set_lambdas() {
 void FixConstantPH::update_a_lambda()
 {
    if (GFF_flag) calculate_GFFs();
-   double NA = 6.022*1e23;
+   double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
 
@@ -407,14 +407,14 @@ void FixConstantPH::update_a_lambda()
 	double  f_lambda = -(HBs[i]-HAs[i] - dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // The df sign should be positive if the lambda = 0 is for the protonated state 
 	this->a_lambdas[i] = f_lambda /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
 	// I am not sure about the sign of the f*kT*log(10)*(pK-pH)
-        this->H_lambdas[i] = (1-lambdas[i])*HAs[i] + lambdas[i]*HBs[i] - fs[i]*kT*log(10*(pK-pH)) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i]); // This might not be needed. May be I need to tally this into energies.
+        this->H_lambdas[i] = (1-lambdas[i])*HAs[i] + lambdas[i]*HBs[i] - fs[i]*kT*log(10)*(pK-pH) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i])*mvv2e; // This might not be needed. May be I need to tally this into energies.
         // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
    }
 
    if (flags & BUFFER) {
 	double f_lambda_buff = -(kj2kcal*dU_buff);
 	this->a_lambda_buff = f_lambda_buff / m_lambda_buff; // the fix_nh_constant_pH itself takes care of units
-	this->H_lambda_buff = kj2kcal*U_buff + N_buff*(m_lambda_buff/2.0)*(v_lambda_buff*v_lambda_buff);
+	this->H_lambda_buff = kj2kcal*U_buff + N_buff*(m_lambda_buff/2.0)*(v_lambda_buff*v_lambda_buff)*mvv2e;
    }
 }
 	
