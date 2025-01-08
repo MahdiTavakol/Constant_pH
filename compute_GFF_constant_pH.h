@@ -39,9 +39,11 @@ class ComputeGFFConstantPH : public Compute {
   
   
  private:
-
+  // flags
+  int flags; 
+  
   // dlambda for the calculation of dU/dlambda
-  double lambda, dlambda;
+  double lambda, dlambda, lambda_buff;
 
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
