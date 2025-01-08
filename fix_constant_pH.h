@@ -1,3 +1,4 @@
+
  /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
@@ -30,6 +31,7 @@ namespace LAMMPS_NS {
   class FixConstantPH: public Fix {
      friend class FixNHConstantPH;
      friend class ComputeGFFConstantPH;
+     friend class ComputeTempConstantPH;
      public:
 	FixConstantPH(class LAMMPS*, int, char**);
 	~FixConstantPH() override;
