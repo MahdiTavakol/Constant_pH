@@ -43,13 +43,14 @@ enum {
 ComputeGFFConstantPH::ComputeGFFConstantPH(LAMMPS* lmp, int narg, char** arg) : Compute(lmp, narg, arg), 
        fix_constant_pH_id(nullptr)
 {
-   if (narg < 5) error->all(FLERR, "Illegal number of arguments in compute constant_pH/GFF");
+   if (narg < 6) error->all(FLERR, "Illegal number of arguments in compute constant_pH/GFF");
    fix_constant_pH_id = utils::strdup(arg[3]);
-   lambda = utils::numeric(FLERR,arg[4],false,lmp);
-   dlambda = utils::numeric(FLERR,arg[5],false,lmp);
+   n_lambdas = utils::numeric(FLERR,arg[4],false,lmp);
+   lambda = utils::numeric(FLERR,arg[5],false,lmp);
+   dlambda = utils::numeric(FLERR,arg[6],false,lmp);
    if (dlambda < 0) error->all(FLERR,"Illegal compute constant_pH/GFF dlambda value {}", dlambda);
    
-   int iarg = 6;
+   int iarg = 7;
    
    while (iarg < narg) {
       if (strcmp(arg[iarg],"buffer") == 0) {
@@ -160,19 +161,16 @@ void ComputeGFFConstantPH::compute_array()
       fix_constant_pH->reset_params(x_lambdas, v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HCs);
-      fix_constant_pH->return_params(x_lambdas,v_lambdas,HCs,m_lambdas);
       
       std::fill(x_lambdas,x_lambdas+n_lambdas,lambda-dlambda);
       fix_constant_pH->reset_params(x_lambdas, v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HAs);
-      fix_constant_pH->return_params(x_lambdas,v_lambdas,HAs,m_lambdas);
       
       std::fill(x_lambdas,x_lambdas+n_lambdas,lambda+dlambda);
       fix_constant_pH->reset_params(x_lambdas, v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HBs);
-      fix_constant_pH->return_params(x_lambdas,v_lambdas,HBs,m_lambdas);
       
       std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
       fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
