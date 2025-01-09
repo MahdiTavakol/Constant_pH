@@ -66,8 +66,8 @@ ComputeGFFConstantPH::ComputeGFFConstantPH(LAMMPS* lmp, int narg, char** arg) : 
     
     
    array_flag = 1;
-   size_array_cols = 4;
-   size_array_rows_variable = 1;
+   size_array_rows = 4;
+   size_array_cols = n_lambdas + 1;
     
    extvector = 0;
 
@@ -138,15 +138,12 @@ void ComputeGFFConstantPH::compute_array()
          fix_constant_pH->return_H_lambdas(HBs);
          
          x_lambdas[i] = lambda;
-         fix_constant_pH->reset_params(x_lambds,v_lambdas,a_lambdas,m_lambdas);
-
-
-         for (int j = 0; j < n_lambdas; j++) {
-            array[j][0] = HAs[j];
-            array[j][1] = HBs[j];
-	    array[j][2] = HCs[j];
-	    array[j][0] = (HBs[j]-HAs[j])/(2*dlambda);
-         }
+         fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+         
+         array[0][i] = HAs[i];
+         array[1][i] = HBs[i];
+         array[2][i] = HCs[i];
+         array[3][i] = (HBs[i]-HAs[i])/(2*dlambda);
       }
    }
    else {
@@ -180,11 +177,12 @@ void ComputeGFFConstantPH::compute_array()
       std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
       fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       
+      array[0] = HAs;
+      array[1] = HBs;
+      array[2] = HCs;
+      
       for (int j = 0; j < n_lambdas; j++) {
-         array[j][0] = HAs[j];
-         array[j][1] = HBs[j];
-         array[j][2] = HCs[j];
-         array[j][3] = (HBs[j]-HAs[j])/(2*dlambda);
+         array[3][j] = (HBs[j]-HAs[j])/(2*dlambda);
       }      
    }
 }
