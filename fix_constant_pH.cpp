@@ -447,13 +447,13 @@ void FixConstantPH::compute_Hs()
    // computing the HA and HB for each lambda
    for (int j = 0; j < n_lambdas; j++) {
       std::fill(lambdas_j,lambdas_j+n_lambdas,0.0);
-      lambdas_j[j] = 0.0;
-      modify_qs(lambdas_j);
+      double lambda_j = 0.0;
+      modify_qs(lambda_j,j);
       update_lmp();
       HAs[j] = compute_epair();
       backup_restore_qfev<-1>();
-      lambdas_j[j] = 1.0;
-      modify_qs(lambdas_j);
+      lambda_j = 1.0;
+      modify_qs(lambda_j,j);
       update_lmp();
       HBs[j] = compute_epair();
       backup_restore_qfev<-1>();
@@ -908,6 +908,68 @@ void FixConstantPH::backup_restore_qfev()
 }
 
 /* --------------------------------------------------------------
+   modify just q of one lambda
+   -------------------------------------------------------------- */
+   
+void FixConstantPH::modify_qs(double scale, int j)
+{
+    int nlocal = atom->nlocal;
+    int * mask = atom->mask;
+    int * type = atom->type;
+    int ntypes = atom->ntypes;
+    double * q = atom->q;
+
+
+    double * q_changes_local = new double[4]{0.0,0.0,0.0,0.0};
+    double * q_changes = new double[4]{0.0,0.0,0.0,0.0};
+    
+    
+    for (int i = 0; i < nlocal; i++) {
+        int molid_i = atom->molecule[i];
+        if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
+        {
+            double q_init = q_orig[i];
+            q[i] = pH1qs[type[i]] + scale[j] * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+	    q_changes_local[0]++;
+	    q_changes_local[1] += (q[i] - q_init);
+        }
+    }
+
+
+    /* If the buffer is set the modify_q_buffer modifies the charge of the buffer 
+       and the constraint in the fix_nh_constant_pH would constrain the total charge.
+       So, nothing lefts to do here! */
+    if (!(flags & BUFFER) || (flags & ZEROCHARGE)) {
+    	MPI_Allreduce(q_changes_local,q_changes,2,MPI_DOUBLE,MPI_SUM,world);
+	double HW_q_change = -q_changes[1]/static_cast<double>(num_HWs);
+	
+	
+
+	for (int i = 0; i < nlocal; i++) {
+            if (type[i] == typeHWs) {
+	       double q_init = q_orig[i];
+	       q[i] = q_init + HW_q_change; //The total charge should be neutral
+	       q_changes_local[2]++;
+	       q_changes_local[3] += (q[i] - q_init);
+           }
+        }
+
+        /* The purpose of this part this is just to debug the total charge.
+           So, in the final version of the code this part should be 
+           commented out!
+        */
+        /*if (update->ntimestep % nevery == 0) {
+    	      MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    	     if (comm->me == 0) error->warning(FLERR,"protonable q change = {}, HW q change = {}, protonable charge change = {}, HW charge change = {}",q_changes[0],q_changes[2],q_changes[1],q_changes[3]);
+        }
+        compute_q_total();*/
+    }
+    
+    delete [] q_changes_local;
+    delete [] q_changes;
+}
+
+/* --------------------------------------------------------------
    modify the q of the lambdas
    -------------------------------------------------------------- */
    
@@ -918,7 +980,6 @@ void FixConstantPH::modify_qs(double* scales)
     int * type = atom->type;
     int ntypes = atom->ntypes;
     double * q = atom->q;
-    double sigma_lambdas = 0.0;
 
 
     double * q_changes_local = new double[4]{0.0,0.0,0.0,0.0};
@@ -926,7 +987,6 @@ void FixConstantPH::modify_qs(double* scales)
 
     // update the charges
     for (int j = 0; j < n_lambdas; j++) {
-        sigma_lambdas += lambdas[j];
     	for (int i = 0; i < nlocal; i++)
     	{
 	    int molid_i = atom->molecule[i];
