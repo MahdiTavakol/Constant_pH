@@ -107,41 +107,85 @@ void ComputeGFFConstantPH::compute_array()
       allocate_storage();
    }
 	
-   // Calculating the HA, HB, HC and dH_dLambda
-   for (int i = 0; i < n_lambdas; i++) {
+	
+   if (0) {
+      // Calculating the HA, HB, HC and dH_dLambda
+      for (int i = 0; i < n_lambdas; i++) {
+         fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+         std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
+      
+         if (flags & BUFFER) {
+            double lambda_buff_temp, v_lambda_buff_temp, a_lambda_buff_temp, m_lambda_buff_temp;
+            int N_lambda_buff_temp;
+            fix_constant_pH->return_buff_params(lambda_buff_temp, v_lambda_buff_temp,a_lambda_buff_temp,m_lambda_buff_temp,N_lambda_buff_temp);
+            fix_constant_pH->reset_buff_params(lambda_buff,v_lambda_buff_temp,a_lambda_buff_temp,m_lambda_buff_temp);
+         }
+         
+
+      
+         fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+         fix_constant_pH->calculate_H_once();
+         fix_constant_pH->return_H_lambdas(HCs);
+	   
+         x_lambdas[i] = lambda - dlambda;
+         fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+         fix_constant_pH->calculate_H_once();
+         fix_constant_pH->return_H_lambdas(HAs);
+
+         x_lambdas[i] = lambda + dlambda;
+         fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+         fix_constant_pH->calculate_H_once();
+         fix_constant_pH->return_H_lambdas(HBs);
+         
+         x_lambdas[i] = lambda;
+         fix_constant_pH->reset_params(x_lambds,v_lambdas,a_lambdas,m_lambdas);
+
+
+         for (int j = 0; j < n_lambdas; j++) {
+            array[j][0] = HAs[j];
+            array[j][1] = HBs[j];
+	    array[j][2] = HCs[j];
+	    array[j][0] = (HBs[j]-HAs[j])/(2*dlambda);
+         }
+      }
+   }
+   else {
       fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
       
       if (flags & BUFFER) {
          double lambda_buff_temp, v_lambda_buff_temp, a_lambda_buff_temp, m_lambda_buff_temp;
          int N_lambda_buff_temp;
-         fix_constant_pH->return_buff_params(lambda_buff_temp, v_lambda_buff_temp,a_lambda_buff_temp,m_lambda_buff_temp,N_lambda_buff_temp);
+         fix_constant_pH->return_buff_params(lambda_buff_temp,v_lambda_buff_temp,a_lambda_buff_temp,m_lambda_buff_temp,N_lambda_buff_temp);
          fix_constant_pH->reset_buff_params(lambda_buff,v_lambda_buff_temp,a_lambda_buff_temp,m_lambda_buff_temp);
       }
-         
-
       
-      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      fix_constant_pH->reset_params(x_lambdas, v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HCs);
-	   
-      x_lambdas[i] = lambda - dlambda;
-      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      fix_constant_pH->return_params(x_lambdas,v_lambdas,HCs,m_lambdas);
+      
+      std::fill(x_lambdas,x_lambdas+n_lambdas,lambda-dlambda);
+      fix_constant_pH->reset_params(x_lambdas, v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HAs);
-
-      x_lambdas[i] = lambda + dlambda;
-      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      fix_constant_pH->return_params(x_lambdas,v_lambdas,HAs,m_lambdas);
+      
+      std::fill(x_lambdas,x_lambdas+n_lambdas,lambda+dlambda);
+      fix_constant_pH->reset_params(x_lambdas, v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HBs);
-
-
+      fix_constant_pH->return_params(x_lambdas,v_lambdas,HBs,m_lambdas);
+      
+      std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
+      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      
       for (int j = 0; j < n_lambdas; j++) {
          array[j][0] = HAs[j];
-	 array[j][1] = HBs[j];
-	 array[j][2] = HCs[j];
-	 array[j][0] = (HBs[j]-HAs[j])/(2*dlambda);
-      }
+         array[j][1] = HBs[j];
+         array[j][2] = HCs[j];
+         array[j][3] = (HBs[j]-HAs[j])/(2*dlambda);
+      }      
    }
 }
 
