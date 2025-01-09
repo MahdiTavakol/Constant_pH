@@ -450,16 +450,13 @@ void FixConstantPH::compute_Hs()
       lambdas_j[j] = 0.0;
       update_lmp();
       HAs[j] = compute_epair();
-      HAs[j] = 0;
       backup_restore_qfev<-1>();
       lambdas_j[j] = 1.0;
       modify_qs(lambdas_j);
       update_lmp();
       HBs[j] = compute_epair();
-      HBs[j] = 0;
       backup_restore_qfev<-1>();
    }
-
 }
 
 /* ----------------------------------------------------------------------
