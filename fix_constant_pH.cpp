@@ -12,7 +12,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.05.20----- */
+/* ---v0.05.46----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -640,8 +640,9 @@ void FixConstantPH::read_pH_structure_files()
           pH2qs[type] = std::stod(token);
        }
        fclose(pHStructureFile);
-       pHStructureFile = nullptr;
    }
+   
+   pHStructureFile = nullptr;
    
    MPI_Bcast(protonable,ntypes+1,MPI_INT,0,world);
    MPI_Bcast(typePerProtMol,ntypes+1,MPI_INT,0,world);
@@ -764,13 +765,16 @@ void FixConstantPH::print_Udwp()
     lambda_Udwp = -0.5;
     double dlambda_Udwp = 2.0/(double)n_points;
 
-    fprintf(Udwp_fp,"Lambda,U,dU\n");
-    for (int i = 0; i <= n_points; i++) {
-	calculate_dU(lambda_Udwp,U_Udwp,dU_Udwp);
-        fprintf(Udwp_fp,"%f,%f,%f\n",lambda_Udwp,U_Udwp,dU_Udwp);
-	lambda_Udwp += dlambda_Udwp;
+    if (comm->me == 0) {
+        fprintf(Udwp_fp,"Lambda,U,dU\n");
+        for (int i = 0; i <= n_points; i++) {
+	    calculate_dU(lambda_Udwp,U_Udwp,dU_Udwp);
+            fprintf(Udwp_fp,"%f,%f,%f\n",lambda_Udwp,U_Udwp,dU_Udwp);
+	    lambda_Udwp += dlambda_Udwp;
+        }
+        fclose(Udwp_fp);
     }
-    fclose(Udwp_fp);
+    Udwp_fp = nullptr;
 }
 
 /* ----------------------------------------------------------------------
@@ -929,7 +933,7 @@ void FixConstantPH::modify_qs(double scale, int j)
         if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
         {
             double q_init = q_orig[i];
-            q[i] = pH1qs[type[i]] + scale[j] * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
 	    q_changes_local[0]++;
 	    q_changes_local[1] += (q[i] - q_init);
         }
@@ -1139,6 +1143,7 @@ void FixConstantPH::init_GFF()
       i++;   
    }	
    if (fp && (comm->me == 0)) fclose(fp);
+   fp = nullptr;
 }
 
 /* ----------------------------------------------------------------------
