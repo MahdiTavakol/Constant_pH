@@ -12,7 +12,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.06.01----- */
+/* ---v0.06.02----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -226,13 +226,13 @@ void FixConstantPH::setup(int /*vflag*/)
    // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
     w = 200;
     s = 0.3;
-    h = 4;
-    k = 2.553;
-    a = 0.03401;
-    b = 0.005238;
+    h = 7.0;
+    k = 4.417; //2.553;
+    a = 0.04208; //0.03401;
+    b = 0.002957; //0.005238;
     r = 16.458; 
     m = 0.1507;
-    d = 2.0;
+    d = 3.5; //2.0; //The height of the barrier is 2*d
 
     // default values for the buffer potential with h = 0 from Donnin J Chem Theory Comput 2016 - Table S2
     w_buff = 200;
