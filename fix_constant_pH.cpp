@@ -448,6 +448,7 @@ void FixConstantPH::compute_Hs()
    for (int j = 0; j < n_lambdas; j++) {
       std::fill(lambdas_j,lambdas_j+n_lambdas,0.0);
       lambdas_j[j] = 0.0;
+      modify_qs(lambdas_j);
       update_lmp();
       HAs[j] = compute_epair();
       backup_restore_qfev<-1>();
