@@ -240,7 +240,7 @@ void FixConstantPH::setup(int /*vflag*/)
     b = 0.002957; //0.005238;
     r = 16.458; 
     m = 0.1507;
-    d = 25.0; //2.0; //The height of the barrier is 2*d
+    d = 15.0; //2.0; //The height of the barrier is 2*d
 
     // default values for the buffer potential with h = 0 from Donnin J Chem Theory Comput 2016 - Table S2
     w_buff = 200;
