@@ -12,7 +12,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.06.01----- */
+/* ---v0.07.00----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -129,6 +129,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	    iarg++;
 	}
     }
+    else if (strcmp(arg[iarg],"mu") == 0) {
+        if (narg < iarg+2) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
+        mu = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+        iarg += 2;
+        }
     else if (strcmp(arg[iarg],"buffer") == 0) {
 	flags |= BUFFER;
 	if (narg < iarg+6) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
@@ -1322,6 +1327,36 @@ double FixConstantPH::compute_array(int i, int j)
         if (j < n_lambdas)
            return HBs[j];
         else if (j == n_lambdas)
+           return N_buff*HB_buff;
+        else
+           return -1.0;
+      case 2:
+        // 3
+        if (j < n_lambdas)
+           return dfs[j]*kT*log(10)*(pK-pH);
+        else if (j == n_lambdas)
+           return 0.0;
+        else
+           return -1.0;
+      case 3:
+        // 4
+        if (j < n_lambdas)
+           return kj2kcal*dUs[j];
+        else if (j == n_lambdas)
+           return dU_buff;
+        else
+           return -1.0;
+      case 4:
+        // 5
+        if (j < n_lambdas)
+           return GFF_lambdas[j];
+        else if (j == n_lambdas)
+           return 0.0;
+        else
+           return -1.0;
+      case 5:
+        // 6
+        if (j < n_lambdas)
 // clang-format off
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
@@ -1385,36 +1420,6 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
        pH1qs(nullptr), pH2qs(nullptr), typePerProtMol(nullptr), protonable(nullptr),
        HAs(nullptr), HBs(nullptr), Us(nullptr), dUs(nullptr),
 
-           return N_buff*HB_buff;
-        else
-           return -1.0;
-      case 2:
-        // 3
-        if (j < n_lambdas)
-           return dfs[j]*kT*log(10)*(pK-pH);
-        else if (j == n_lambdas)
-           return 0.0;
-        else
-           return -1.0;
-      case 3:
-        // 4
-        if (j < n_lambdas)
-           return kj2kcal*dUs[j];
-        else if (j == n_lambdas)
-           return dU_buff;
-        else
-           return -1.0;
-      case 4:
-        // 5
-        if (j < n_lambdas)
-           return GFF_lambdas[j];
-        else if (j == n_lambdas)
-           return 0.0;
-        else
-           return -1.0;
-      case 5:
-        // 6
-        if (j < n_lambdas)
            return lambdas[j];
         else if (j == n_lambdas)
            return lambda_buff;
