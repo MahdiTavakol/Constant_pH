@@ -12,7 +12,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.07.00----- */
+/* ---v0.07.02----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -90,6 +90,9 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 
   qOWs = -0.834;
   qHWs = 0.278;
+  
+  // The default value for the mu
+  mu = 0.0;
 
   /* Unset all the flags
      it is an important step since
@@ -232,13 +235,12 @@ void FixConstantPH::setup(int /*vflag*/)
     w = 200;
     s = 0.3;
     h = 7.0;
-    k = 4.417; //2.553;
+    k = 2*4.417; //2.553;
     a = 0.04208; //0.03401;
     b = 0.002957; //0.005238;
     r = 16.458; 
     m = 0.1507;
-    d = 5.0; //2.0; //The height of the barrier is 2*d
-    mu = 0.001;
+    d = 7.5; //2.0; //The height of the barrier is 2*d
 
     // default values for the buffer potential with h = 0 from Donnin J Chem Theory Comput 2016 - Table S2
     w_buff = 200;
@@ -1357,69 +1359,6 @@ double FixConstantPH::compute_array(int i, int j)
       case 5:
         // 6
         if (j < n_lambdas)
-// clang-format off
-/* ----------------------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://www.lammps.org/, Sandia National Laboratories
-   LAMMPS development team: developers@lammps.org
-
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
-   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
-   the GNU General Public License.
-
-   See the README file in the top-level LAMMPS directory.
-------------------------------------------------------------------------- */
-/* ---v0.06.01----- */
-
-#define DEBUG
-#ifdef DEBUG
-#include <iostream>
-#endif
-#include <random>
-
-#include "fix.h"
-#include "fix_constant_pH.h"
-
-#include "atom.h"
-#include "atom_masks.h"
-#include "error.h"
-
-#include "force.h"
-#include "group.h"
-#include "memory.h"
-#include "pair.h"
-#include "timer.h"
-#include "comm.h"
-#include "kspace.h"
-#include "update.h"
-#include "math_const.h"
-#include "modify.h"
-
-#include <cstring>
-#include <string>
-#include <map>
-
-using namespace LAMMPS_NS;
-using namespace FixConst;
-using namespace MathConst;
-
-enum { 
-       NONE=0,
-       BUFFER=1<<0, 
-       ADAPTIVE=1<<1,
-       ZEROCHARGE=1<<2,
-       CONSTRAIN=1<<3
-     };
-
-static constexpr double tol = 1e-5;
-/* ---------------------------------------------------------------------- */
-
-FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, arg),
-       pHStructureFile(nullptr), 
-       pH1qs(nullptr), pH2qs(nullptr), typePerProtMol(nullptr), protonable(nullptr),
-       HAs(nullptr), HBs(nullptr), Us(nullptr), dUs(nullptr),
-
            return lambdas[j];
         else if (j == n_lambdas)
            return lambda_buff;
