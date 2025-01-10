@@ -63,6 +63,9 @@ namespace LAMMPS_NS {
 	double a, b, s, m, w, r, d, k, h;
 	double* HAs, * HBs;
 	double* Us, * dUs;
+	
+	// parameter for shifting the minima of the potential near lambda = 0 and lambda = 1
+	double mu;
 
 	// Buffer potential parameters
 	double a_buff, b_buff, s_buff, m_buff, w_buff, r_buff, d_buff, k_buff, h_buff;
