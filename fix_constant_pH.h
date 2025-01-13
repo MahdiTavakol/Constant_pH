@@ -73,10 +73,11 @@ namespace LAMMPS_NS {
 	
 
         // Lambda arrays
-        double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas, * H_lambdas;
+        double ** lambdas, ** v_lambdas, ** a_lambdas, * m_lambdas, * H_lambdas;
         double T_lambda;
         int * molids;
         int n_lambdas;
+        
         
         // Temp array to change lambdas in order to get HAs and HBs
         double * lambdas_j;
