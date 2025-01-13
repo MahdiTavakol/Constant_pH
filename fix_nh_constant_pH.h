@@ -48,7 +48,7 @@ class FixNHConstantPH : public FixNH {
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
   char *fix_constant_pH_id;
-  double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
+  double** x_lambdas, **v_lambdas, **a_lambdas, *m_lambdas;
   double T_lambda;
   int n_lambdas;
   int lambda_every;
