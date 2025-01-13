@@ -988,6 +988,8 @@ void FixConstantPH::modify_qs(double scale, int j)
         if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
         {
             double q_init = q_orig[i];
+	    int indx1 = static_cast<int>(round(lambdas[1]pHnTypes1-0.5));
+            int indx2 = static_cast<int>(round(lambdas[2]pHnTypes2-0.5));
             q[i] = pH1qs[type[i]][0] + scale * (pH2qs[type[i]][0] - pH1qs[type[i]][0]); // scale == 1 should be for the protonated state
 	    q_changes_local[0]++;
 	    q_changes_local[1] += (q[i] - q_init);
