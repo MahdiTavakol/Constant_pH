@@ -12,7 +12,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.07.04----- */
+/* ---v0.08.00----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -58,7 +58,7 @@ static constexpr double tol = 1e-5;
 /* ---------------------------------------------------------------------- */
 
 FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, arg),
-       pHStructureFile(nullptr), 
+       pHStructureFile1(nullptr), pHStructureFile2(nullptr),
        pH1qs(nullptr), pH2qs(nullptr), typePerProtMol(nullptr), protonable(nullptr),
        HAs(nullptr), HBs(nullptr), Us(nullptr), dUs(nullptr),
        lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr), H_lambdas(nullptr),
@@ -69,22 +69,25 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
        fixgpu(nullptr), q_orig(nullptr), f_orig(nullptr),
        peatom_orig(nullptr), pvatom_orig(nullptr),keatom_orig(nullptr), kvatom_orig(nullptr)
 {
-  if (narg < 8) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
+  if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
   if (nevery < 0) error->all(FLERR,"Illegal fix constant_pH every value {}", nevery);
   // Reading the file that contains the charges before and after protonation/deprotonation
   if (comm->me == 0) {
-      pHStructureFile = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
-      if (pHStructureFile == nullptr)
+      pHStructureFile1 = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
+      if (pHStructureFile1 == nullptr)
+         error->all(FLERR,"Unable to open the file");
+      pHStructureFile2 = fopen(arg[5],"r");
+      if (pHStructureFile2 == nullptr)
          error->all(FLERR,"Unable to open the file");
   }
   
   
 
 	
-  pK = utils::numeric(FLERR, arg[5], false, lmp);
-  pH = utils::numeric(FLERR, arg[6], false, lmp);
-  T = utils::numeric(FLERR, arg[7], false, lmp);
+  pK = utils::numeric(FLERR, arg[6], false, lmp);
+  pH = utils::numeric(FLERR, arg[7], false, lmp);
+  T = utils::numeric(FLERR, arg[8], false, lmp);
   
 
 
@@ -105,7 +108,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   GFF_flag = false;
   print_Udwp_flag = false;
   n_lambdas = 1;
-  int iarg = 8;
+  int iarg = 9;
   while (iarg < narg) {
     if (strcmp(arg[iarg], "GFF") == 0)
     {
@@ -593,9 +596,10 @@ void FixConstantPH::reset_buff_params(const double _x_lambda_buff, const double 
 void FixConstantPH::read_pH_structure_files()
 {
    /* File format
-    * Comment 
+    * Comment
+    * pHnStructures
     * pHnTypes
-    * type1,  number of type1 atoms in the protonable molecule, qBeforeProtonation, qAfterProtonation
+    * type1,  number of type1 atoms in the protonable molecule, qState1, qState2, qState3
     * ... 
     * ...  
     */
@@ -604,32 +608,65 @@ void FixConstantPH::read_pH_structure_files()
    int ntypes = atom->ntypes;
    memory->create(protonable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
    memory->create(typePerProtMol,ntypes+1,"constant_pH:typePerProtMol");
-   memory->create(pH1qs,ntypes+1,"constant_pH:pH1qs");
-   memory->create(pH2qs,ntypes+1,"constant_pH:pH2qs");
 
 
 
    char line[128];
    if (comm->me == 0)
    {
-       if (!pHStructureFile)
+       if (!pHStructureFile1 || !pHStructureFile2 )
            error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
-       fgets(line,sizeof(line),pHStructureFile);
-       fgets(line,sizeof(line),pHStructureFile);
-       line[strcspn(line,"\n")] = '\0';
 
+       // comment 
+       fgets(line,sizeof(line),pHStructureFile1);
+       fgets(line,sizeof(line),pHStructureFile2);
+
+       // pHnStructures
+       fgets(line,sizeof(line),pHStructureFile1);
+       line[strcspn(line,"\n")] = '\0';
+       char *token = strtok(line,",");   
+       pHnStructures1 = std::stoir(token);
+
+       // pHnStructures
+       fgets(line,sizeof(line),pHStructureFile2);
+       line[strcspn(line,"\n")] = '\0';
+       char *token = strtok(line,",");   
+       pHnStructures2 = std::stoir(token);
+
+       // check if both the pHnTypes1 == pHnTypes2
+   }
+
+   MPI_Bcast(&pHnStructures1,1,MPI_INT,0,world);
+   MPI_Bcast(&pHnStructures2,1,MPI_INT,0,world);
+
+   memory->create(pH1qs,ntypes+1,pHnStructures1, "constant_pH:pH1qs");
+   memory->create(pH2qs,ntypes+1,pHnStructures2, "constant_pH:pH2qs");
+
+   if (comm->me == 0) {
+       // pHnTypes
+       fgets(line,sizeof(line),pHStructureFile1);
+       line[strcspn(line,"\n")] = '\0';
        char *token = strtok(line,",");    
-       pHnTypes = std::stoi(token);
+       pHnTypes1 = std::stoi(token);
+
+       fgets(line,sizeof(line),pHStructureFile2);
+       line[strcspn(line,"\n")] = '\0';
+       char *token = strtok(line,",");    
+       pHnTypes2 = std::stoi(token);
+	
        for (int i = 1; i < ntypes+1; i++)
        {
 	   protonable[i] = 0;
 	   typePerProtMol[i] = 0;
-	   pH1qs[i] = 0.0;
-           pH2qs[i] = 0.0;
-       }   
-       for (int i = 0; i < pHnTypes; i++)
+	   for (int j = 0; j < pHnStructures1; j++)
+	       pH1qs[i][j] = 0.0;
+	   for (int j = 0; j < pHnStructures2; j++)
+	       pH2qs[i][j] = 0.0;
+       }  
+	   
+       for (int i = 0; i < pHnTypes1; i++)
        {
-	  if (fgets(line,sizeof(line),pHStructureFile) == nullptr)
+	  if (fgets(line,sizeof(line),pHStructureFile1) == nullptr)
 	       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
 	  line[strcspn(line,"\n")] = '\0';
 	  token = strtok(line,",");
@@ -637,20 +674,35 @@ void FixConstantPH::read_pH_structure_files()
 	  protonable[type] = 1;
 	  token = strtok(NULL,",");
 	  typePerProtMol[type] = std::stoi(token);
+	  for (int j = 0; j < pHnStructures1; j++) {
+	       token = strtok(NULL,",");
+	       pH1qs[type][j] = std::stod(token);  
+	  }
+
+	  if (fgets(line,sizeof(line),pHStructureFile2) == nullptr)
+	       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
+	  line[strcspn(line,"\n")] = '\0';
+	  token = strtok(line,",");
+	  int type = std::stoi(token);
+	  protonable[type] = 1;
 	  token = strtok(NULL,",");
-	  pH1qs[type] = std::stod(token);
-	  token = strtok(NULL,",");
-          pH2qs[type] = std::stod(token);
+	  typePerProtMol[type] = std::stoi(token);
+	  for (int j = 0; j < pHnStructures2; j++) {
+	       token = strtok(NULL,",");
+	       pH2qs[type][j] = std::stod(token);  
+	  }
        }
-       fclose(pHStructureFile);
+       fclose(pHStructureFile1);
+       fclose(pHStructureFile2);
    }
    
-   pHStructureFile = nullptr;
+   pHStructureFile1 = nullptr;
+   pHStructureFile2 = nullptr;
    
    MPI_Bcast(protonable,ntypes+1,MPI_INT,0,world);
    MPI_Bcast(typePerProtMol,ntypes+1,MPI_INT,0,world);
-   MPI_Bcast(pH1qs,ntypes+1,MPI_DOUBLE,0,world);
-   MPI_Bcast(pH2qs,ntypes+1,MPI_DOUBLE,0,world);
+   MPI_Bcast(pH1qs,(ntypes+1)*(pHnStructures1),MPI_DOUBLE,0,world);
+   MPI_Bcast(pH2qs,(ntypes+1)*(pHnStructures2),MPI_DOUBLE,0,world);
 }
 
 
@@ -936,7 +988,7 @@ void FixConstantPH::modify_qs(double scale, int j)
         if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
         {
             double q_init = q_orig[i];
-            q[i] = pH1qs[type[i]] + scale * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+            q[i] = pH1qs[type[i]][0] + scale * (pH2qs[type[i]][0] - pH1qs[type[i]][0]); // scale == 1 should be for the protonated state
 	    q_changes_local[0]++;
 	    q_changes_local[1] += (q[i] - q_init);
         }
@@ -1000,7 +1052,7 @@ void FixConstantPH::modify_qs(double* scales)
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
                  double q_init = q_orig[i];
-                 q[i] = pH1qs[type[i]] + scales[j] * (pH2qs[type[i]] - pH1qs[type[i]]); // scale == 1 should be for the protonated state
+                 q[i] = pH1qs[type[i]][0] + scales[j] * (pH2qs[type[i]][0] - pH1qs[type[i]][0]); // scale == 1 should be for the protonated state
 	         q_changes_local[0]++;
 	         q_changes_local[1] += (q[i] - q_init);
             }
