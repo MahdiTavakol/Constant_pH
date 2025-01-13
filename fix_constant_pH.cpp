@@ -413,9 +413,9 @@ void FixConstantPH::update_a_lambda()
 
    for (int i = 0; i < n_lambdas; i++) {
 	double  f_lambda = -(-dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // The df sign should be positive if the lambda = 0 is for the protonated state 
-	this->a_lambdas[i] = f_lambda /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
+	this->a_lambdas[i][0] = f_lambda /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
 	// I am not sure about the sign of the f*kT*log(10)*(pK-pH)
-        this->H_lambdas[i] = - fs[i]*kT*log(10)*(pK-pH) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i]*v_lambdas[i])*mvv2e; // This might not be needed. May be I need to tally this into energies.
+        this->H_lambdas[i] = - fs[i]*kT*log(10)*(pK-pH) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i][0]*v_lambdas[i][0])*mvv2e; // This might not be needed. May be I need to tally this into energies.
         // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
    }
 
@@ -744,8 +744,8 @@ void FixConstantPH::check_num_OWs_HWs()
 void FixConstantPH::calculate_dfs()
 {
    for (int j = 0; j < n_lambdas; j++) {
-	fs[j] = 1.0/(1+exp(-50*(lambdas[j]-0.5)));
-        dfs[j] = 50*exp(-50*(lambdas[j]-0.5))*(fs[j]*fs[j]);
+	fs[j] = 1.0/(1+exp(-50*(lambdas[j][0]-0.5)));
+        dfs[j] = 50*exp(-50*(lambdas[j][0]-0.5))*(fs[j]*fs[j]);
    }
 }
 
@@ -756,16 +756,16 @@ void FixConstantPH::calculate_dUs()
    double U1, U2, U3, U4, U5;
    double dU1, dU2, dU3, dU4, dU5;
    for (int j = 0; j < n_lambdas; j++) {
-        U1 = -k*exp(-(lambdas[j]-1.0-mu-b)*(lambdas[j]-1.0-mu-b)/(2.0*a*a));
-   	U2 = -k*exp(-(lambdas[j]+mu+b)*(lambdas[j]+mu+b)/(2.0*a*a));
-   	U3 = d*exp(-(lambdas[j]-0.5)*(lambdas[j]-0.5)/(2.0*s*s));
-   	U4 = 0.5*w*(1.0-erff(r*(lambdas[j]+m)));
-   	U5 = 0.5*w*(1.0+erff(r*(lambdas[j]-1.0-m)));
-   	dU1 = -((lambdas[j]-1.0-b)/(a*a))*U1;
-   	dU2 = -((lambdas[j]+b)/(a*a))*U2;
-   	dU3 = -((lambdas[j]-0.5)/(s*s))*U3;
-   	dU4 = -0.5*w*r*2*exp(-r*r*(lambdas[j]+m)*(lambdas[j]+m))/sqrt(M_PI);
-   	dU5 = 0.5*w*r*2*exp(-r*r*(lambdas[j]-1-m)*(lambdas[j]-1.0-m))/sqrt(M_PI);
+        U1 = -k*exp(-(lambdas[j][0]-1.0-mu-b)*(lambdas[j][0]-1.0-mu-b)/(2.0*a*a));
+   	U2 = -k*exp(-(lambdas[j][0]+mu+b)*(lambdas[j][0]+mu+b)/(2.0*a*a));
+   	U3 = d*exp(-(lambdas[j][0]-0.5)*(lambdas[j][0]-0.5)/(2.0*s*s));
+   	U4 = 0.5*w*(1.0-erff(r*(lambdas[j][0]+m)));
+   	U5 = 0.5*w*(1.0+erff(r*(lambdas[j][0]-1.0-m)));
+   	dU1 = -((lambdas[j][0]-1.0-b)/(a*a))*U1;
+   	dU2 = -((lambdas[j][0]+b)/(a*a))*U2;
+   	dU3 = -((lambdas[j][0]-0.5)/(s*s))*U3;
+   	dU4 = -0.5*w*r*2*exp(-r*r*(lambdas[j][0]+m)*(lambdas[j][0]+m))/sqrt(M_PI);
+   	dU5 = 0.5*w*r*2*exp(-r*r*(lambdas[j][0]-1-m)*(lambdas[j][0]-1.0-m))/sqrt(M_PI);
 
     	Us[j] =  U1 +  U2 +  U3 +  U4 +  U5;
    	dUs[j] = dU1 + dU2 + dU3 + dU4 + dU5;   
@@ -1032,7 +1032,7 @@ void FixConstantPH::modify_qs(double scale, int j)
    modify the q of the lambdas
    -------------------------------------------------------------- */
    
-void FixConstantPH::modify_qs(double* scales)
+void FixConstantPH::modify_qs(double** scales)
 {
     int nlocal = atom->nlocal;
     int * mask = atom->mask;
@@ -1052,7 +1052,9 @@ void FixConstantPH::modify_qs(double* scales)
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
                  double q_init = q_orig[i];
-                 q[i] = pH1qs[type[i]][0] + scales[j] * (pH2qs[type[i]][0] - pH1qs[type[i]][0]); // scale == 1 should be for the protonated state
+                 int indx1 = static_cast<int>(round(scales[1]pHnTypes1-0.5));
+		 int indx2 = static_cast<int>(round(scales[2]pHnTypes2-0.5));
+                 q[i] = pH1qs[type[i]][indx1] + scales[j][0] * (pH2qs[type[i]][indx2] - pH1qs[type[i]][indx1]); // scale == 1 should be for the protonated state
 	         q_changes_local[0]++;
 	         q_changes_local[1] += (q[i] - q_init);
             }
