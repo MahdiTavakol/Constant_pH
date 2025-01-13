@@ -187,7 +187,7 @@ namespace LAMMPS_NS {
 	void init_GFF();
 	void calculate_GFFs();
 	void modify_qs(double scale, int j);
-	void modify_qs(double *scales);
+	void modify_qs(double **scales);
         void modify_q_buff(const double scale);
 	void update_lmp();
         void compute_f_lambda_charge_interpolation();
