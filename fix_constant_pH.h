@@ -48,11 +48,12 @@ namespace LAMMPS_NS {
      protected:
         int flags;
 	// Sturcture files
-        FILE *pHStructureFile;
+        FILE *pHStructureFile1, *pHStructureFile2;
 
 	// Atom types and charges that change due to protonation
-        int pHnTypes;
-        double *pH1qs, *pH2qs;
+        int pHnStructures1, pHnStructures1;
+        int pHnTypes1, pHnTypes2;
+        double **pH1qs, **pH2qs;
         int * typePerProtMol;
         int * protonable;
 
