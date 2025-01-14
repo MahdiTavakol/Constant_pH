@@ -12,7 +12,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.00----- */
+/* ---v0.08.02----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -974,6 +974,8 @@ void FixConstantPH::backup_restore_qfev()
 
 /* --------------------------------------------------------------
    modify just q of one lambda
+   Warning: It selects the proper configurations for pH1 and pH2
+   based on lambadas[:][1] and lambdas[:][2]!
    -------------------------------------------------------------- */
    
 void FixConstantPH::modify_qs(double scale, int j)
@@ -994,9 +996,9 @@ void FixConstantPH::modify_qs(double scale, int j)
         if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
         {
             double q_init = q_orig[i];
-	    int indx1 = static_cast<int>(round(lambdas[1]pHnTypes1-0.5));
-            int indx2 = static_cast<int>(round(lambdas[2]pHnTypes2-0.5));
-            q[i] = pH1qs[type[i]][0] + scale * (pH2qs[type[i]][0] - pH1qs[type[i]][0]); // scale == 1 should be for the protonated state
+            int indx1 = static_cast<int>(round(scales[j][1]*pHnTypes1-0.5));
+	    int indx2 = static_cast<int>(round(scales[j][2]*pHnTypes2-0.5));
+            q[i] = pH1qs[type[i]][indx1] + scale * (pH2qs[type[i]][indx2] - pH1qs[type[i]][indx1]); // scale == 1 should be for the protonated state
 	    q_changes_local[0]++;
 	    q_changes_local[1] += (q[i] - q_init);
         }
@@ -1060,8 +1062,8 @@ void FixConstantPH::modify_qs(double** scales)
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
                  double q_init = q_orig[i];
-                 int indx1 = static_cast<int>(round(scales[1]pHnTypes1-0.5));
-		 int indx2 = static_cast<int>(round(scales[2]pHnTypes2-0.5));
+                 int indx1 = static_cast<int>(round(scales[j][1]*pHnTypes1-0.5));
+		 int indx2 = static_cast<int>(round(scales[j][2]*pHnTypes2-0.5));
                  q[i] = pH1qs[type[i]][indx1] + scales[j][0] * (pH2qs[type[i]][indx2] - pH1qs[type[i]][indx1]); // scale == 1 should be for the protonated state
 	         q_changes_local[0]++;
 	         q_changes_local[1] += (q[i] - q_init);
