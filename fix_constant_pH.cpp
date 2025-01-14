@@ -403,7 +403,9 @@ void FixConstantPH::update_a_lambda()
    if (GFF_flag) calculate_GFFs();
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
-   double kT = force->boltz * T;
+
+   calculate_T_lambda();
+   double kT = force->boltz * this->T_lambda;
 
    //df = 1.0;
    //f = 1.0;
