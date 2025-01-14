@@ -148,9 +148,9 @@ void FixNHConstantPH::init()
   fix_constant_pH->return_nparams(n_lambdas);
 
    
-  memory->create(x_lambdas,3*n_lambdas,"nh_constant_pH:x_lambdas");
-  memory->create(v_lambdas,3*n_lambdas,"nh_constant_pH:v_lambdas");
-  memory->create(a_lambdas,3*n_lambdas,"nh_constant_pH:a_lambdas");
+  memory->create(x_lambdas,n_lambdas,3,"nh_constant_pH:x_lambdas");
+  memory->create(v_lambdas,n_lambdas,3,"nh_constant_pH:v_lambdas");
+  memory->create(a_lambdas,n_lambdas,3,"nh_constant_pH:a_lambdas");
   memory->create(m_lambdas,n_lambdas,"nh_constant_pH:m_lambdas");
 
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
@@ -171,11 +171,10 @@ void FixNHConstantPH::nve_v()
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
-  for (int i = 0; i < n_lambdas; i++) {
-     v_lambdas[i][0] += dtf * a_lambdas[i][0];
-     v_lambdas[i][1] += dtf * a_lambdas[i][1];
-     v_lambdas[i][2] += dtf * a_lambdas[i][2];
-  }
+  for (int i = 0; i < n_lambdas; i++) 
+     for (int j = 0; j < 3; j++)
+        v_lambdas[i][j] += dtf * a_lambdas[i][j];
+  
    
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 
@@ -196,11 +195,10 @@ void FixNHConstantPH::nve_x()
   bigint ntimestep = update->ntimestep;
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-  for (int i = 0; i < n_lambdas; i++) {
-     x_lambdas[i][0] += dtv * v_lambdas[i][0];
-     x_lambdas[i][1] += dtv * v_lambdas[i][1];
-     x_lambdas[i][2] += dtv * v_lambdas[i][2];
-  }
+  for (int i = 0; i < n_lambdas; i++)
+     for (int j = 0; j < 3; j++)
+        x_lambdas[i][j] += dtv * v_lambdas[i][j];
+  
      
   // Resets the parameters for x_lambdas to be used in the constrain
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
