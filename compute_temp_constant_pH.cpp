@@ -1,4 +1,4 @@
-/* ----------------------------------------------------------------------
+/* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
    LAMMPS development team: developers@lammps.org
@@ -11,130 +11,68 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
-#include "compute_temp_constant_pH.h"
+#ifdef COMPUTE_CLASS
+// clang-format off
+ComputeStyle(constant_pH/GFF,ComputeGFFConstantPH);
+// clang-format on
+#else
 
-#include "atom.h"
-#include "domain.h"
-#include "error.h"
-#include "fix.h"
-#include "force.h"
-#include "group.h"
-#include "update.h"
-#include "modify.h"
+#ifndef COMPUTE_GFF_CONSTANT_PH_H
+#define COMPUTE_GFF_CONSTANT_PH_H
 
-using namespace LAMMPS_NS;
+#include "fix_constant_pH.h"
 
-/* ---------------------------------------------------------------------- */
+#include "compute.h"
+#include "pair.h"
 
-ComputeTempConstantPH::ComputeTempConstantPH(LAMMPS *lmp, int narg, char **arg) : ComputeTemp(lmp, narg-1, arg), 
-fix_constant_pH_id(nullptr), x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
-{
-  if (narg != 4) error->all(FLERR, "Illegal compute temp constant pH command");
-  fix_constant_pH_id = utils::strdup(arg[3]);
+namespace LAMMPS_NS {
 
-  n_lambdas = 1;
-  int iarg = 4;
-  while (iarg < narg) {
-     if (!strcmp(arg[iarg], "n_lambdas")) {
-        n_lambdas = utils::numeric(FLERR,arg[iarg+1],false,lmp);
-        iarg += 2;
-     } else error->all(FLERR,"Illegal compute temp constant pH command");
-  }
-
-  scalar_flag = vector_flag = 1;
-  size_vector = 7; // I need to double check to see if the fix_nh.cpp can access the seventh element or if this element causes any problem for the fix_nh.cpp
-  extscalar = 0;
-  extvector = 1;
-  tempflag = 1;
-
-  vector = new double[size_vector];
-}
-
-/* ---------------------------------------------------------------------- */
-
-ComputeTempConstantPH::~ComputeTempConstantPH()
-{
-  if (x_lambdas) delete[] x_lambdas;
-  if (v_lambdas) delete[] v_lambdas;
-  if (a_lambdas) delete[] a_lambdas;
-  if (m_lambdas) delete[] m_lambdas;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void ComputeTempConstantPH::setup()
-{
-  dynamic = 0;
-  if (dynamic_user || group->dynamic[igroup]) dynamic = 1;
-  dof_compute();
-
-  fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
-
-  x_lambdas = new double[n_lambdas];
-  v_lambdas = new double[n_lambdas];
-  a_lambdas = new double[n_lambdas];
-  m_lambdas = new double[n_lambdas];
-}
-
-
-/* ---------------------------------------------------------------------- */
-
-void ComputeTempConstantPH::dof_compute()
-{
-  adjust_dof_fix();
-  natoms_temp = group->count(igroup);
-  dof = domain->dimension * natoms_temp + 1; // The +1 is for the lambda dof
-  dof -= extra_dof + fix_dof;
-  if (dof > 0.0)
-    tfactor = force->mvv2e / (dof * force->boltz);
-  else
-    tfactor = 0.0;
-}
-
-/* ---------------------------------------------------------------------- */
-
-double ComputeTempConstantPH::compute_scalar()
-{
-  invoked_scalar = update->ntimestep;
-
-  double **v = atom->v;
-  double *mass = atom->mass;
-  double *rmass = atom->rmass;
-  int *type = atom->type;
-  int *mask = atom->mask;
-  int nlocal = atom->nlocal;
-  int _n_lambdas;
-
-  double t = 0.0;
-
-  if (rmass) {
-    for (int i = 0; i < nlocal; i++)
-      if (mask[i] & groupbit)
-        t += (v[i][0] * v[i][0] + v[i][1] * v[i][1] + v[i][2] * v[i][2]) * rmass[i];
-  } else {
-    for (int i = 0; i < nlocal; i++)
-      if (mask[i] & groupbit)
-        t += (v[i][0] * v[i][0] + v[i][1] * v[i][1] + v[i][2] * v[i][2]) * mass[type[i]];
-  }
-
-
-  fix_constant_pH->return_nparams(_n_lambdas);
-  if (n_lambdas != _n_lambdas)
-     error->all(FLERR,"The n_lambdas parameter in the compute temperature constant pH is not the same as the n_lambdas in the fix constant pH: {},{}",n_lambdas,_n_lambdas);
-
-  MPI_Allreduce(&t, &scalar, 1, MPI_DOUBLE, MPI_SUM, world);
+class ComputeGFFConstantPH : public Compute {
+ public:
+  ComputeGFFConstantPH(class LAMMPS *, int, char **);
+  ~ComputeGFFConstantPH() override;
+  void setup() override;
+  void init() override;
+  void compute_array() override;
+  void compute_peratom() override {}; // I just wanted LAMMPS to consider this as peratom compute so the peratom energies be tallied in this timestep.
   
-  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas); // The return_parameters section should be implemented in the fix_constant_pH.cpp code
   
-  double scaling_factor = 100.0;
-
-  for (int i = 0; i < n_lambdas; i++)
-     scalar += v_lambdas[i]*v_lambdas[i] * m_lambdas[i] *scaling_factor;
-
   
-  if (dynamic) dof_compute();
-  if (dof < 0.0 && natoms_temp > 0.0)
-    error->all(FLERR, "Temperature compute degrees of freedom < 0");
-  scalar *= tfactor;
-  return scalar;
-}
+ private:
+  // flags
+  int flags; 
+  
+  // dlambda for the calculation of dU/dlambda
+  double lambda, dlambda, lambda_buff;
+
+  // lambda variables from the fix constant pH  
+  FixConstantPH *fix_constant_pH;
+  char *fix_constant_pH_id;
+  double** x_lambdas, **v_lambdas, **a_lambdas, *m_lambdas, *H_lambdas;
+  double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
+  double T_lambda;
+  int n_lambdas;
+  int N_buff;
+  int lambda_every;
+
+  class Fix *fixgpu;
+
+  /* HA and HB are for the thermodynamic integration and they should not be confused with the HA and HB
+   * in the fix constant pH command.
+   * HAs[i] ==> H[lambda_i](lambda-dlambda), HBs[i] ==> H[lambda_i](lambda+dlambda), 
+   * HCs[i] ==> H[lambda_i](lambda), dH_dLambda ==> (HB-HA)/(2*dlambda)
+   */
+   
+  double *HAs, *HBs, *HCs, *dH_dLambda;
+  
+
+  // Memory allocation and deallocation
+  void allocate_storage();
+  void deallocate_storage();
+
+};
+
+}    // namespace LAMMPS_NS
+
+#endif
+#endif
