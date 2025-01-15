@@ -1206,7 +1206,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     double kT = boltz * _T_lambda;
 
     std::mt19937 rng(std::random_device{}());	
-    double stddev = std::sqrt(kT/mvv2e));
+    double stddev = std::sqrt(kT/mvv2e);
     std::normal_distribution<double> distribution(0.0, stddev);
 
     
