@@ -1206,7 +1206,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     double kT = boltz * _T_lambda;
 
     std::mt19937 rng(std::random_device{}());	
-    double stddev = std::sqrt(kT/(m_lambda_buff*mvv2e));
+    double stddev = std::sqrt(kT/mvv2e));
     std::normal_distribution<double> distribution(0.0, stddev);
 
     
@@ -1214,11 +1214,11 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     double ke_lambdas_target = 0.5*n_lambdas*kT; // Not sure about this part.
     if (flags & BUFFER) ke_lambdas_target += 0.5*N_buff*kT;
     for (int j = 0; j < n_lambdas; j++) {
-	v_lambdas[j] = 
+	v_lambdas[j] = distribution(rng)/std::sqrt(m_lambdas[j]);
 	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*mvv2e;
     }
     if (flags & BUFFER) {
-	v_lambda_buff = 
+	v_lambda_buff = distribution(rng)/std::sqrt(m_lambda_buff);
 	ke_lambdas += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e; 
     }
 
