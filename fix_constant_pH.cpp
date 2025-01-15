@@ -1217,7 +1217,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     if (flags & BUFFER) {
         double stddev = std::sqrt(kT/(m_lambda_buff*mvv2e));
         v_lambda_buff = stddev * distribution(rng);
-	ke_lambdas += 0.5*m_lambda_buff*v_lambda_buff*v_lambda_buff; 
+	ke_lambdas += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff; 
     }
     double scaling_factor = std::sqrt(ke_lambdas_target/ke_lambdas);
 
