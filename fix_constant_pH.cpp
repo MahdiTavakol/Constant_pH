@@ -1225,7 +1225,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 	v_lambdas[j] *= scaling_factor;
     if (flags & BUFFER)
         v_lambda_buff *= scaling_factor;
-
+   /*
     double v_cm = 0.0;
     for (int j = 0; j < n_lambdas; j++)
 	v_cm += v_lambdas[j];
@@ -1235,7 +1235,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     if (flags & BUFFER) n_cm += static_cast<double>(N_buff);
     v_cm /= static_cast<double>(n_cm);
     for (int j = 0; j < n_lambdas; j++)
-	v_lambdas[j] -= v_cm;
+	v_lambdas[j] -= v_cm; */
 }
 
 /* --------------------------------------------------------------------- */
