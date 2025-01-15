@@ -417,7 +417,7 @@ void FixConstantPH::update_a_lambda()
    }
 
    if (flags & BUFFER) {
-	double f_lambda_buff = -(kj2kcal*dU_buff);
+	double f_lambda_buff = -0.0*(kj2kcal*dU_buff);
 	this->a_lambda_buff = f_lambda_buff / m_lambda_buff; // the fix_nh_constant_pH itself takes care of units
 	this->H_lambda_buff = kj2kcal*U_buff + N_buff*(m_lambda_buff/2.0)*(v_lambda_buff*v_lambda_buff)*mvv2e;
    }
