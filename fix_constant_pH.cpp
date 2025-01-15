@@ -1214,9 +1214,11 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     double ke_lambdas_target = 0.5*n_lambdas*kT; // Not sure about this part.
     if (flags & BUFFER) ke_lambdas_target += 0.5*N_buff*kT;
     for (int j = 0; j < n_lambdas; j++) {
+	v_lambdas[j] = 
 	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*mvv2e;
     }
     if (flags & BUFFER) {
+	v_lambda_buff = 
 	ke_lambdas += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e; 
     }
 
