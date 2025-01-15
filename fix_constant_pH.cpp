@@ -1212,12 +1212,12 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     for (int j = 0; j < n_lambdas; j++) {
 	double stddev = std::sqrt(kT/(m_lambdas[j]*mvv2e));
 	v_lambdas[j] = stddev * distribution(rng);
-	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j];
+	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*mvv2e;
     }
     if (flags & BUFFER) {
         double stddev = std::sqrt(kT/(m_lambda_buff*mvv2e));
         v_lambda_buff = stddev * distribution(rng);
-	ke_lambdas += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff; 
+	ke_lambdas += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e; 
     }
     double scaling_factor = std::sqrt(ke_lambdas_target/ke_lambdas);
 
