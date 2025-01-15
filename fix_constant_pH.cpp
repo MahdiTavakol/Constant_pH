@@ -1201,23 +1201,23 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 
 void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {
+    double mvv2e = force->mvv2e;
+    double boltz = force->boltz;
     std::mt19937 rng;
     std::normal_distribution<double> distribution(0.0, 1.0);
-    double kT = force->boltz * _T_lambda;
+    double kT = boltz * _T_lambda;
     double ke_lambdas = 0.0;
     double ke_lambdas_target = 0.5*n_lambdas*kT; // Not sure about this part.
     if (flags & BUFFER) ke_lambdas_target += 0.5*N_buff*kT;
     for (int j = 0; j < n_lambdas; j++) {
-	double stddev = std::sqrt(kT/m_lambdas[j]);
-	v_lambdas[j] = distribution(rng);
+	double stddev = std::sqrt(kT/(m_lambdas[j]*mvv2e));
+	v_lambdas[j] = stddev * distribution(rng);
 	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j];
-	v_lambdas[j] *= std::sqrt(4184/10.0)/1000.0; // A/fs
     }
     if (flags & BUFFER) {
-        double stddev = std::sqrt(kT/m_lambda_buff);
-        v_lambda_buff = distribution(rng);
-	ke_lambdas += 0.5*m_lambda_buff*v_lambda_buff*v_lambda_buff;
-	v_lambda_buff *= std::sqrt(4184/10.0)/1000.0; // A/fs
+        double stddev = std::sqrt(kT/(m_lambda_buff*mvv2e));
+        v_lambda_buff = stddev * distribution(rng);
+	ke_lambdas += 0.5*m_lambda_buff*v_lambda_buff*v_lambda_buff; 
     }
     double scaling_factor = std::sqrt(ke_lambdas_target/ke_lambdas);
 
