@@ -1203,22 +1203,24 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {
     double mvv2e = force->mvv2e;
     double boltz = force->boltz;
-    std::mt19937 rng;
-    std::normal_distribution<double> distribution(0.0, 1.0);
     double kT = boltz * _T_lambda;
+
+    std::mt19937 rng(std::random_device{}());	
+    double stddev = std::sqrt(kT/(m_lambda_buff*mvv2e));
+    std::normal_distribution<double> distribution(0.0, stddev);
+
+    
     double ke_lambdas = 0.0;
     double ke_lambdas_target = 0.5*n_lambdas*kT; // Not sure about this part.
     if (flags & BUFFER) ke_lambdas_target += 0.5*N_buff*kT;
     for (int j = 0; j < n_lambdas; j++) {
-	double stddev = std::sqrt(kT/(m_lambdas[j]*mvv2e));
-	v_lambdas[j] = stddev * distribution(rng);
 	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*mvv2e;
     }
     if (flags & BUFFER) {
-        double stddev = std::sqrt(kT/(m_lambda_buff*mvv2e));
-        v_lambda_buff = stddev * distribution(rng);
 	ke_lambdas += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e; 
     }
+
+	
     double scaling_factor = std::sqrt(ke_lambdas_target/ke_lambdas);
 
     for (int j = 0; j < n_lambdas; j++)
