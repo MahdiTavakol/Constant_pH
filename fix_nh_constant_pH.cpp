@@ -244,7 +244,7 @@ void FixNHConstantPH::nh_v_temp()
   double t_lambda_target = t_target;
   fix_constant_pH->return_T_lambda(t_lambda_current);
   
-  if (lambda_thermostat_type == LAMBDA_ANDERSEN) {
+  if (lambda_thermostat_type == LAMBDA_ANDERSEN && comm->me == 0) {
     double P = dt/t_andersen;
    
 
@@ -275,7 +275,7 @@ void FixNHConstantPH::nh_v_temp()
       // This needs to be implemented
       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  } else if (lambda_thermostat_type == LAMBDA_BUSSI) {
+  } else if (lambda_thermostat_type == LAMBDA_BUSSI  && comm->me == 0) {
     //tau_t_bussi should be 1000
      
 
@@ -314,7 +314,7 @@ void FixNHConstantPH::nh_v_temp()
        // This needs to be implemented
        error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER) {  
+  } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER && comm->me == 0) {  
      zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
 
      if (which == NOBIAS) {
@@ -335,7 +335,11 @@ void FixNHConstantPH::nh_v_temp()
         error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
      }
   }
-  
+
+  MPI_Bcast(v_lambdas,n_lambdas,MPI_DOUBLE,0,world);
+  if (lambda_integration_flags & BUFFER)
+     MPI_Bcast(&v_lambda_buff,1,MPI_DOUBLE,0,world);  
+   
   for (int i = 0; i < n_lambdas; i++) {
      v_cm += v_lambdas[i]*mols_charge_change;
   }
