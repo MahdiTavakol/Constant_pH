@@ -1270,7 +1270,7 @@ void FixConstantPH::calculate_T_lambda()
     if (flags & BUFFER)
         KE_lambda_buff += N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
     
-    T_lambda = (KE_lambda+KE_lambda_buff) / (Nf * k);
+    T_lambda = 2.0*(KE_lambda+KE_lambda_buff) / (Nf * k);
     
 }
 
