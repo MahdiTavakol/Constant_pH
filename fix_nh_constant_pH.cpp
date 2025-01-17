@@ -233,7 +233,10 @@ void FixNHConstantPH::nh_v_temp()
      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      
   // The number of degrees of freedom
-  double Nf_lambdas = static_cast<double>(n_lambdas+N_buff);
+  double Nf_lambdas = static_cast<double>(n_lambdas);
+
+  if (lambda_integration_flags & BUFFER)
+     Nf_lambdas += 1.0;
   
   if (lambda_integration_flags & CONSTRAIN)
      Nf_lambdas -= 1.0;
