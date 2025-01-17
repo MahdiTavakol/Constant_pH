@@ -37,6 +37,7 @@
 #include "update.h"
 #include "math_const.h"
 #include "modify.h"
+#include "random_park.h"
 
 #include <cstring>
 #include <string>
@@ -266,6 +267,22 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
+    /* 
+     * As it is hypothesized that the initial values for 
+     * lambdas are zero the initial value for the lambda_buff
+     * should be one so there is enough protons to be exchanged
+     * between the lambdas and buffer due to the contraint on
+     * the lambas[0] + ... + lambdas[n] + lambda_buff
+     */
+    
+    if (flags & BUFFER) {
+        lambda_buff = 1.0;
+        v_lambda_buff = 0.0;
+        m_lambda_buff = 20.0;
+        
+        modify_q_buff(lambda_buff);
+        compute_q_total();
+    }
 
     set_lambdas();
        
@@ -278,22 +295,6 @@ void FixConstantPH::setup(int /*vflag*/)
 
     nmax = atom->nmax;
     allocate_storage();
-    
-    /* As it is hypothesized that the initial values for 
-       lambdas are zero the initial value for the lambda_buff
-       should be one so there is enough protons to be exchanged
-       between the lambdas and buffer due to the contraint on
-       the lambas[0] + ... + lambdas[n] + lambda_buff
-    */
-    
-    if (flags & BUFFER) {
-        lambda_buff = 1.0;
-        v_lambda_buff = 0.0;
-        m_lambda_buff = 20.0;
-        
-        modify_q_buff(lambda_buff);
-        compute_q_total();
-    }
 
 }
 
