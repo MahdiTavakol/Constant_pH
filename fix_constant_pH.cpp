@@ -12,7 +12,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.05----- */
+/* ---v0.08.07----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -1013,8 +1013,8 @@ void FixConstantPH::modify_qs(double scale, int j)
         if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
         {
             double q_init = q_orig[i];
-	    double pH1q = pH1qs[type[i]][indx11] + scale1 * (pH1qs[type[i]][indx12] - pH1qs[type[i]][indx11])
-            double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH1qs[type[i]][indx21])
+	    double pH1q = pH1qs[type[i]][indx11] + scale1 * (pH1qs[type[i]][indx12] - pH1qs[type[i]][indx11]);
+            double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH1qs[type[i]][indx21]);
             q[i] = pH1q + scale3 * (pH2q - pH1q); // scale == 1 should be for the protonated state
 	    q_changes_local[0]++;
 	    q_changes_local[1] += (q[i] - q_init);
@@ -1088,8 +1088,8 @@ void FixConstantPH::modify_qs(double** scales)
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
                  double q_init = q_orig[i];
-                 double pH1q = pH1qs[type[i]][indx11] + scale1 * (pH1qs[type[i]][indx12] - pH1qs[type[i]][indx11])
-                 double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH1qs[type[i]][indx21])
+                 double pH1q = pH1qs[type[i]][indx11] + scale1 * (pH1qs[type[i]][indx12] - pH1qs[type[i]][indx11]);
+                 double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH1qs[type[i]][indx21]);
                  q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
 	         q_changes_local[0]++;
 	         q_changes_local[1] += (q[i] - q_init);
