@@ -997,16 +997,25 @@ void FixConstantPH::modify_qs(double scale, int j)
 
     double * q_changes_local = new double[4]{0.0,0.0,0.0,0.0};
     double * q_changes = new double[4]{0.0,0.0,0.0,0.0};
+
+    double scale0 = scale;
+    int indx11 = std::floor(lambdas[j][1]*pHnTypes1-0.5);
+    int indx12 = std::ceil(lambdas[j][1]*pHnTypes1-0.5);
+    double scale1 = (lambdas[j][1]*pHnTypes1-0.5 - static_cast<double>(indx11))/(static_cast<double>(indx12)-static_cast<double>(indx11));
+    int indx21 = std::floor(lambdas[j][2]*pHnTypes2-0.5);
+    int indx22 = std::ceil(lambdas[j][2]*pHnTypes2-0.5);
+    double scale2 = (lambdas[j][2]*pHnTypes2-0.5 - static_cast<double>(indx21))/(static_cast<double>(indx22)-static_cast<double>(indx21));
     
-    
+
+	
     for (int i = 0; i < nlocal; i++) {
         int molid_i = atom->molecule[i];
         if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
         {
             double q_init = q_orig[i];
-            int indx1 = static_cast<int>(round(lambdas[j][1]*pHnTypes1-0.5));
-	    int indx2 = static_cast<int>(round(lambdas[j][2]*pHnTypes2-0.5));
-            q[i] = pH1qs[type[i]][indx1] + scale * (pH2qs[type[i]][indx2] - pH1qs[type[i]][indx1]); // scale == 1 should be for the protonated state
+	    double pH1q = pH1qs[type[i]][indx11] + scale1 * (pH1qs[type[i]][indx12] - pH1qs[type[i]][indx11])
+            double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH1qs[type[i]][indx21])
+            q[i] = pH1q + scale3 * (pH2q - pH1q); // scale == 1 should be for the protonated state
 	    q_changes_local[0]++;
 	    q_changes_local[1] += (q[i] - q_init);
         }
@@ -1064,15 +1073,24 @@ void FixConstantPH::modify_qs(double** scales)
 
     // update the charges
     for (int j = 0; j < n_lambdas; j++) {
+        
+        double scale0 = scales[j][0];
+        int    indx11 = std::floor(scales[j][1]*pHnTypes1-0.5);
+        int    indx12 = std::ceil(scales[j][1]*pHnTypes1-0.5);
+        double scale1 = (scales[j][1]*pHnTypes1-0.5 - static_cast<double>(indx11))/(static_cast<double>(indx12)-static_cast<double>(indx11));
+        int    indx21 = std::floor(scales[j][2]*pHnTypes2-0.5);
+        int    indx22 = std::ceil(scales[j][2]*pHnTypes2-0.5);
+        double scale2 = (scales[j][2]*pHnTypes2-0.5 - static_cast<double>(indx21))/(static_cast<double>(indx22)-static_cast<double>(indx21));
+
     	for (int i = 0; i < nlocal; i++)
     	{
 	    int molid_i = atom->molecule[i];
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
                  double q_init = q_orig[i];
-                 int indx1 = static_cast<int>(round(scales[j][1]*pHnTypes1-0.5));
-		 int indx2 = static_cast<int>(round(scales[j][2]*pHnTypes2-0.5));
-                 q[i] = pH1qs[type[i]][indx1] + scales[j][0] * (pH2qs[type[i]][indx2] - pH1qs[type[i]][indx1]); // scale == 1 should be for the protonated state
+                 double pH1q = pH1qs[type[i]][indx11] + scale1 * (pH1qs[type[i]][indx12] - pH1qs[type[i]][indx11])
+                 double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH1qs[type[i]][indx21])
+                 q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
 	         q_changes_local[0]++;
 	         q_changes_local[1] += (q[i] - q_init);
             }
