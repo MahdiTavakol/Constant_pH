@@ -262,19 +262,12 @@ void FixNHConstantPH::nh_v_temp()
       }
       // Dealing with the buffer
       if (lambda_integration_flags & BUFFER) {
-        // we sample it N_buff times like we have N_buff coordinates and then average all the velocities
-        double v_lambda_buff_avg = 0;
-        for (int i = 0; i < N_buff; i++) {
-           double r = static_cast<double>(rand())/ RAND_MAX;
-           if (r < P) {
-              double mean = 0.0;
-              double sigma = std::sqrt(kT/(m_lambda_buff*mvv2e));
-              v_lambda_buff_avg += random_normal(mean,sigma);
-           }
-           else v_lambda_buff_avg += v_lambda_buff;
-        }
-        v_lambda_buff_avg =/ static_cast<double>(N_buff);
-        v_lambda_buff = v_lambda_buff_avg;
+        double r = static_cast<double>(rand())/ RAND_MAX;
+        if (r < P) {
+           double mean = 0.0;
+           double sigma = std::sqrt(kT/(N_buff*m_lambda_buff*mvv2e));
+           v_lambda_buff = random_normal(mean,sigma);
+         }
         if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
            v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
       }
