@@ -1261,7 +1261,9 @@ void FixConstantPH::calculate_T_lambda()
     
     double Nf = static_cast<double>(n_lambdas);
     if (flags & BUFFER)
-    	Nf += static_cast<double>(N_buff);
+	Nf += 1;
+     //	Nf += static_cast<double>(N_buff);
+     
     if (flags & CONSTRAIN)
     	Nf -= 1.0;
     	
