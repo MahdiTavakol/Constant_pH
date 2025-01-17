@@ -265,7 +265,7 @@ void FixNHConstantPH::nh_v_temp()
         double r = static_cast<double>(rand())/ RAND_MAX;
         if (r < P) {
            double mean = 0.0;
-           double sigma = std::sqrt(kT/(m_lambda_buff*mvv2e));
+           double sigma = std::sqrt(kT/(N_buff*m_lambda_buff*mvv2e));
            v_lambda_buff = random_normal(mean,sigma);
         }
         if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
