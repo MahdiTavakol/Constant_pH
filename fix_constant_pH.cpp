@@ -375,18 +375,18 @@ void FixConstantPH::set_lambdas() {
    memory->create(lambdas,n_lambdas,3,"constant_pH:lambdas");
    memory->create(v_lambdas,n_lambdas,3,"constant_pH:v_lambdas");
    memory->create(a_lambdas,n_lambdas,3,"constant_pH:a_lambdas");
-   memory->create(m_lambdas,n_lambdas,3,"constant_pH:m_lambdas");
-   memory->create(H_lambdas,n_lambdas,3,"constant_pH:H_lambdas");
+   memory->create(m_lambdas,n_lambdas,"constant_pH:m_lambdas");
+   memory->create(H_lambdas,n_lambdas,"constant_pH:H_lambdas");
 
-   memory->create(HAs,n_lambdas,3,"constant_pH:HAs");
-   memory->create(HBs,n_lambdas,3,"constant_pH:HBs");
-   memory->create(GFF_lambdas,n_lambdas,3,"constant_pH:GFF_lambdas");
-   memory->create(fs,n_lambdas,3,"constant_pH:fs");
-   memory->create(dfs,n_lambdas,3,"constant_pH:df");
-   memory->create(Us,n_lambdas,3,"constant_pH:Us");
-   memory->create(dUs,n_lambdas,3,"constant_pH:dUs");
+   memory->create(HAs,n_lambdas,"constant_pH:HAs");
+   memory->create(HBs,n_lambdas,"constant_pH:HBs");
+   memory->create(GFF_lambdas,n_lambdas,"constant_pH:GFF_lambdas");
+   memory->create(fs,n_lambdas,"constant_pH:fs");
+   memory->create(dfs,n_lambdas,"constant_pH:df");
+   memory->create(Us,n_lambdas,"constant_pH:Us");
+   memory->create(dUs,n_lambdas,"constant_pH:dUs");
    
-   memory->create(lambdas_j,n_lambdas,3,"constant_pH:lambdas_j");
+   memory->create(lambdas_j,n_lambdas,"constant_pH:lambdas_j");
 
    if (flags & ADAPTIVE) memory->create(molids,n_lambdas,"constant_pH:molids");
 
