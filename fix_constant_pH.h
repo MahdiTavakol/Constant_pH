@@ -68,6 +68,9 @@ namespace LAMMPS_NS {
 	// parameter for shifting the minima of the potential near lambda = 0 and lambda = 1
 	double mu;
 
+        // Random number seed for the creation of initial v_lambdas
+        double random_number_seed;
+
 	// Buffer potential parameters
 	double a_buff, b_buff, s_buff, m_buff, w_buff, r_buff, d_buff, k_buff, h_buff;
 	
