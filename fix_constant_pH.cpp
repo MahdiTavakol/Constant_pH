@@ -155,6 +155,10 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	nevery_fix_adaptive = utils::numeric(FLERR,arg[iarg+2],false,lmp);
 	iarg+=3;
     }
+    else if (strcmp(arg[iarg],"seed") == 0) {
+	random_number_seed = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	iarg+=2;
+    }
     else if (strcmp(arg[iarg],"constrain") == 0) {
         flags |= CONSTRAIN;
         iarg++;
@@ -1203,8 +1207,7 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {
     RanPark *random = nullptr;
-    double seed = 1234579;
-    random = new RanPark(lmp,seed);
+    random = new RanPark(lmp,random_number_seed);
 
     
     for (int j = 0; j < n_lambdas; j++) {
