@@ -163,6 +163,10 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
         flags |= CONSTRAIN;
         iarg++;
     }
+    else if (strcmp(arg[iarg],"seed") == 0) {
+	random_number_seed = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	iarg+=2;
+    }
     else if (strcmp(arg[iarg],"zero_total_charge") == 0) {
         flags |= ZEROCHARGE;
         iarg++;
@@ -1293,7 +1297,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {    
     RanPark *random = nullptr;
     double seed = 1234579;
-    random = new RanPark(lmp,seed);
+    random = new RanPark(lmp,random_number_seed);
 
     for (int i = 0; i < n_lambdas; i++) 
         for (int j = 0; j < 3; j++)
