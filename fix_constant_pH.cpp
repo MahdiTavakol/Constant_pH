@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.07.26----- */
+/* ---v0.07.27----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -93,6 +93,9 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   
   // The default value for the mu
   mu = 0.0;
+
+  // The default value for the seed number for the creation of v_lambdas
+  random_number_seed = 12347;
 
   /* Unset all the flags
      it is an important step since
