@@ -1002,6 +1002,7 @@ void FixConstantPH::modify_qs(double scale, int j)
     double * q_changes = new double[4]{0.0,0.0,0.0,0.0};
 
     double scale0 = scale;
+    
     int indx11 = std::floor(lambdas[j][1]*pHnStructures1-0.5);
     int indx12 = std::ceil(lambdas[j][1]*pHnStructures1-0.5);
     double scale1 = (lambdas[j][1]*pHnStructures1-0.5 - static_cast<double>(indx11))/(static_cast<double>(indx12)-static_cast<double>(indx11));
@@ -1078,39 +1079,17 @@ void FixConstantPH::modify_qs(double** scales)
     for (int j = 0; j < n_lambdas; j++) {
         
         double scale0 = scales[j][0];
-        int    indx11 = std::floor(scales[j][1]*pHnStructures1-0.5);
-        int    indx12 = std::ceil(scales[j][1]*pHnStructures1-0.5);
-        double scale1;
-        if (indx11 == indx12)
-            scale1 = 0.0;
-        else 
-            scale1 = (scales[j][1]*pHnStructures1-0.5 - static_cast<double>(indx11))/(static_cast<double>(indx12)-static_cast<double>(indx11));
-        int    indx21 = std::floor(scales[j][2]*pHnStructures2-0.5);
-        int    indx22 = std::ceil(scales[j][2]*pHnStructures2-0.5);
-        double scale2;
-        if (indx21 == indx22)
-            scale2 = 0.0;
-        else
-            scale2 = (scales[j][2]*pHnStructures2-0.5 - static_cast<double>(indx21))/(static_cast<double>(indx22)-static_cast<double>(indx21));
+        int    indx1 = std::round(scales[j][1]*pHnStructures1-0.5);
+        int    indx2 = std::round(scales[j][2]*pHnStructures2-0.5);
             
-        if (indx11 < 0)
-            indx11 += pHnStructures1*(static_cast<int>(indx11/pHnStructures1) + 1);
-        if (indx12 < 0)
-            indx12 += pHnStructures1*(static_cast<int>(indx12/pHnStructures1) + 1);
-        if (indx21 < 0)
-            indx21 += pHnStructures2*(static_cast<int>(indx21/pHnStructures2) + 1);
-        if (indx22 < 0)
-            indx22 += pHnStructures2*(static_cast<int>(indx22/pHnStructures2) + 1);
-            
-            
-        if (indx11 > pHnStructures1 - 1)
-            indx11 -= pHnStructures1*(static_cast<int>(indx11/pHnStructures1) + 1);
-        if (indx12 > pHnStructures1 - 1)
-            indx12 -= pHnStructures1*(static_cast<int>(indx12/pHnStructures1) + 1);
-        if (indx21 > pHnStructures2 - 1)
-            indx21 -= pHnStructures2*(static_cast<int>(indx21/pHnStructures2) + 1);
-        if (indx22 > pHnStructures2 - 1)
-            indx22 -= pHnStructures2*(static_cast<int>(indx22/pHnStructures2) + 1);
+        if (indx1 < 0)
+            indx1 += pHnStructures1*(static_cast<int>(indx1/pHnStructures1) + 1);
+        if (indx2 < 0)
+            indx2 += pHnStructures2*(static_cast<int>(indx2/pHnStructures2) + 1);
+        if (indx1 > pHnStructures1 - 1)
+            indx1 -= pHnStructures1*(static_cast<int>(indx1/pHnStructures1) + 1);
+        if (indx2 > pHnStructures2 - 1)
+            indx2 -= pHnStructures2*(static_cast<int>(indx2/pHnStructures2) + 1);
 
 
     	for (int i = 0; i < nlocal; i++)
@@ -1119,8 +1098,8 @@ void FixConstantPH::modify_qs(double** scales)
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
                  double q_init = q_orig[i];
-                 double pH1q = pH1qs[type[i]][indx11] + scale1 * (pH1qs[type[i]][indx12] - pH1qs[type[i]][indx11]);
-                 double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH2qs[type[i]][indx21]);
+                 double pH1q = pH1qs[type[i]][indx1];
+                 double pH2q = pH2qs[type[i]][indx2];
                  q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
 	         q_changes_local[0]++;
 	         //q_changes_local[1] += (q[i] - pH1q);
