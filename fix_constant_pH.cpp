@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.07----- */
+/* ---v0.08.15----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -180,7 +180,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   
    array_flag = 1;
    size_array_rows = 12;
-   size_array_cols = n_lambdas+1;
+   size_array_cols = 3*n_lambdas+1;
 
 }
 
@@ -1102,37 +1102,18 @@ void FixConstantPH::modify_qs(double** scales)
                  double pH2q = pH2qs[type[i]][indx2];
                  q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
 	         q_changes_local[0]++;
-	         //q_changes_local[1] += (q[i] - pH1q);
-	         q_changes_local[1] += (pH1q);
-	         q_changes_local[2] += (pH2q);
-	         q_changes_local[3] += q[i] - pH1q;
-	         //q_changes_local[1] += (pH1qs[type[i]][4]);
-	         //q_changes_local[2] += (pH1qs[type[i]][5]);
+	         q_changes_local[1] += (q[i] - pH1q);
             }
         }
     }
 
-
-    MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
-    
-    if (comm->me == 0) {
-    double sigma_scale = 0.0;
-       for (int i = 0; i < n_lambdas; i++)
-       sigma_scale += scales[i][0];
-       //std::cout << "scale[" << i <<"] = " << scales[i][0] << std::endl;
-       std::cout << "sigma_scale = " << sigma_scale << std::endl;
-       std::cout << " q_changes = " << q_changes[1] << std::endl;
-       std::cout << " q_changes = " << q_changes[2] << std::endl;
-       std::cout << " q_changes = " << q_changes[3] << std::endl;
-       
-    }
-
+ 
 
     /* If the buffer is set the modify_q_buffer modifies the charge of the buffer 
        and the constraint in the fix_nh_constant_pH would constrain the total charge.
        So, nothing lefts to do here! */
     if (!(flags & BUFFER) || (flags & ZEROCHARGE)) {
-    	MPI_Allreduce(q_changes_local,q_changes,2,MPI_DOUBLE,MPI_SUM,world);
+    	MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
 	double HW_q_change = -q_changes[1]/static_cast<double>(num_HWs);
 	
 	
