@@ -414,8 +414,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 1.5;
-   double nStructures2Barrier = 1.5;
+   double nStructures1Barrier = 2.0;
+   double nStructures2Barrier = 2.0;
 
    //df = 1.0;
    //f = 1.0;
@@ -1100,8 +1100,6 @@ void FixConstantPH::modify_qs(double** scales)
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
                  double q_init = q_orig[i];
-                 indx1 = 1;
-                 indx2 = 1;
                  double pH1q = pH1qs[type[i]][indx1];
                  double pH2q = pH2qs[type[i]][indx2];
                  q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
