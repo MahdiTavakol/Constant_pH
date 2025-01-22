@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.15----- */
+/* ---v0.08.07----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -414,14 +414,16 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
+   double nStructures1Barrier = 1.5;
+   double nStructures2Barrier = 1.5;
 
    //df = 1.0;
    //f = 1.0;
 
    for (int i = 0; i < n_lambdas; i++) {
 	double  f_lambda_0 = -(-dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // The df sign should be positive if the lambda = 0 is for the protonated state 
-	double  f_lambda_1 = 2*M_PI*pHnStructures1*kT*sin(2*M_PI*pHnStructures1*lambdas[i][1]);
-	double  f_lambda_2 = 2*M_PI*pHnStructures2*kT*sin(2*M_PI*pHnStructures2*lambdas[i][2]);
+	double  f_lambda_1 = 2*M_PI*nStructures1Barrier*pHnStructures1*kT*sin(2*M_PI*pHnStructures1*lambdas[i][1]);
+	double  f_lambda_2 = 2*M_PI*nStructures2Barrier*pHnStructures2*kT*sin(2*M_PI*pHnStructures2*lambdas[i][2]);
 	   
 	this->a_lambdas[i][0] = f_lambda_0 /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
 	this->a_lambdas[i][1] = f_lambda_1 /m_lambdas[i];
@@ -1302,6 +1304,7 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {    
     RanPark *random = nullptr;
+    double seed = 1234579;
     random = new RanPark(lmp,random_number_seed);
 
     for (int i = 0; i < n_lambdas; i++) 
