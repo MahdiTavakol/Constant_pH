@@ -1081,34 +1081,52 @@ void FixConstantPH::modify_qs(double** scales)
     for (int j = 0; j < n_lambdas; j++) {
         
         double scale0 = scales[j][0];
-        int    indx1 = std::round(scales[j][1]*pHnStructures1-0.5);
-        int    indx2 = std::round(scales[j][2]*pHnStructures2-0.5);
-            
-        while (indx1 < 0)
-            indx1 += pHnStructures1;
-        while (indx2 < 0)
-            indx2 += pHnStructures2;
-        while (indx1 > pHnStructures1 - 1)
-            indx1 -= pHnStructures1;
-        while (indx2 > pHnStructures2 - 1)
-            indx2 -= pHnStructures2;
+	int indx11 = std::floor(lambdas[j][1]*pHnStructures1-0.5);
+        int indx12 = std::ceil(lambdas[j][1]*pHnStructures1-0.5);
+        double scale1 = (lambdas[j][1]*pHnStructures1-0.5 - static_cast<double>(indx11))/(static_cast<double>(indx12)-static_cast<double>(indx11));
+        int indx21 = std::floor(lambdas[j][2]*pHnStructures2-0.5);
+        int indx22 = std::ceil(lambdas[j][2]*pHnStructures2-0.5);
+        double scale2 = (lambdas[j][2]*pHnStructures2-0.5 - static_cast<double>(indx21))/(static_cast<double>(indx22)-static_cast<double>(indx21));
 
+ 
+	while (indx11 < 0)
+            indx11 += pHnStructures1;
+	while (indx12 < 0)
+            indx12 += pHnStructures1;
+        while (indx21 < 0)
+            indx21 += pHnStructures2;
+        while (indx22 < 0)
+            indx22 += pHnStructures2;
+        while (indx11 > pHnStructures1 - 1)
+            indx11 -= pHnStructures1;
+        while (indx12 > pHnStructures1 - 1)
+            indx12 -= pHnStructures1;
+        while (indx21 > pHnStructures2 - 1)
+            indx21 -= pHnStructures2;
+        while (indx22 > pHnStructures2 - 1)
+            indx22 -= pHnStructures2;
+    
 
-    	for (int i = 0; i < nlocal; i++)
-    	{
-	    int molid_i = atom->molecule[i];
+	
+        for (int i = 0; i < nlocal; i++) {
+            int molid_i = atom->molecule[i];
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
-                 double q_init = q_orig[i];
-                 double pH1q = pH1qs[type[i]][indx1];
-                 double pH2q = pH2qs[type[i]][indx2];
-                 q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
-	         q_changes_local[0]++;
-	         q_changes_local[1] += (q[i] - pH1q);
+                double q_init = q_orig[i];
+	        double pH1q = pH1qs[type[i]][indx11] + scale1 * (pH1qs[type[i]][indx12] - pH1qs[type[i]][indx11]);
+                double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH2qs[type[i]][indx21]);
+                q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
+	        q_changes_local[0]++;
+	        //q_changes_local[1] += (q[i] - q_init);
+		q_changes_local[1] += pH1q;
+		q_changes_local[2] += pH2q;
             }
         }
     }
 
+    MPI_Allreduce(q_changes_local,q_changes,3,MPI_DOUBLE,MPI_SUM,world);
+    if (comm->me == 0)
+	std::cout << "pH1qs 
  
 
     /* If the buffer is set the modify_q_buffer modifies the charge of the buffer 
