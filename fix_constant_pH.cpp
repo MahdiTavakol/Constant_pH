@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.19----- */
+/* ---v0.08.07----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -414,8 +414,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 2.0;
-   double nStructures2Barrier = 2.0;
+   double nStructures1Barrier = 3.0;
+   double nStructures2Barrier = 3.0;
 
    //df = 1.0;
    //f = 1.0;
@@ -1127,7 +1127,7 @@ void FixConstantPH::modify_qs(double** scales)
 
     MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
     
-    if (comm->me == 0) {
+    if (comm->me == 0 && false) {
     double sigma_scale = 0.0;
        for (int i = 0; i < n_lambdas; i++)
        sigma_scale += scales[i][0];
