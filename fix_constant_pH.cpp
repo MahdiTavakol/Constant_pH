@@ -718,8 +718,8 @@ void FixConstantPH::read_pH_structure_files()
    
    MPI_Bcast(protonable,ntypes+1,MPI_INT,0,world);
    MPI_Bcast(typePerProtMol,ntypes+1,MPI_INT,0,world);
-   MPI_Bcast(pH1qs,(ntypes+1)*(pHnStructures1),MPI_DOUBLE,0,world);
-   MPI_Bcast(pH2qs,(ntypes+1)*(pHnStructures2),MPI_DOUBLE,0,world);
+   MPI_Bcast(pH1qs[0],(ntypes+1)*(pHnStructures1),MPI_DOUBLE,0,world);
+   MPI_Bcast(pH2qs[0],(ntypes+1)*(pHnStructures2),MPI_DOUBLE,0,world);
 }
 
 
@@ -1082,14 +1082,14 @@ void FixConstantPH::modify_qs(double** scales)
         int    indx1 = std::round(scales[j][1]*pHnStructures1-0.5);
         int    indx2 = std::round(scales[j][2]*pHnStructures2-0.5);
             
-        if (indx1 < 0)
-            indx1 += pHnStructures1*(static_cast<int>(indx1/pHnStructures1) + 1);
-        if (indx2 < 0)
-            indx2 += pHnStructures2*(static_cast<int>(indx2/pHnStructures2) + 1);
-        if (indx1 > pHnStructures1 - 1)
-            indx1 -= pHnStructures1*(static_cast<int>(indx1/pHnStructures1) + 1);
-        if (indx2 > pHnStructures2 - 1)
-            indx2 -= pHnStructures2*(static_cast<int>(indx2/pHnStructures2) + 1);
+        while (indx1 < 0)
+            indx1 += pHnStructures1;
+        while (indx2 < 0)
+            indx2 += pHnStructures2;
+        while (indx1 > pHnStructures1 - 1)
+            indx1 -= pHnStructures1;
+        while (indx2 > pHnStructures2 - 1)
+            indx2 -= pHnStructures2;
 
 
     	for (int i = 0; i < nlocal; i++)
@@ -1105,6 +1105,7 @@ void FixConstantPH::modify_qs(double** scales)
 	         //q_changes_local[1] += (q[i] - pH1q);
 	         q_changes_local[1] += (pH1q);
 	         q_changes_local[2] += (pH2q);
+	         q_changes_local[3] += q[i] - pH1q;
 	         //q_changes_local[1] += (pH1qs[type[i]][4]);
 	         //q_changes_local[2] += (pH1qs[type[i]][5]);
             }
@@ -1112,7 +1113,7 @@ void FixConstantPH::modify_qs(double** scales)
     }
 
 
-    MPI_Allreduce(q_changes_local,q_changes,3,MPI_DOUBLE,MPI_SUM,world);
+    MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
     
     if (comm->me == 0) {
     double sigma_scale = 0.0;
@@ -1122,6 +1123,7 @@ void FixConstantPH::modify_qs(double** scales)
        std::cout << "sigma_scale = " << sigma_scale << std::endl;
        std::cout << " q_changes = " << q_changes[1] << std::endl;
        std::cout << " q_changes = " << q_changes[2] << std::endl;
+       std::cout << " q_changes = " << q_changes[3] << std::endl;
        
     }
 
