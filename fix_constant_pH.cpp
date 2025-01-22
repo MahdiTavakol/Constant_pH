@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.07----- */
+/* ---v0.08.19----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -1120,13 +1120,24 @@ void FixConstantPH::modify_qs(double** scales)
 	        //q_changes_local[1] += (q[i] - q_init);
 		q_changes_local[1] += pH1q;
 		q_changes_local[2] += pH2q;
+		q_changes_local[3] += (q[i] - pH1q);
             }
         }
     }
 
-    MPI_Allreduce(q_changes_local,q_changes,3,MPI_DOUBLE,MPI_SUM,world);
-    if (comm->me == 0)
-	std::cout << "pH1qs 
+    MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    
+    if (comm->me == 0) {
+    double sigma_scale = 0.0;
+       for (int i = 0; i < n_lambdas; i++)
+       sigma_scale += scales[i][0];
+       //std::cout << "scale[" << i <<"] = " << scales[i][0] << std::endl;
+       std::cout << "sigma_scale = " << sigma_scale << std::endl;
+       std::cout << " q_changes = " << q_changes[1] << std::endl;
+       std::cout << " q_changes = " << q_changes[2] << std::endl;
+       std::cout << " q_changes = " << q_changes[3] << std::endl;
+       
+    }
  
 
     /* If the buffer is set the modify_q_buffer modifies the charge of the buffer 
