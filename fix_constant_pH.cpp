@@ -1302,7 +1302,6 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {    
     RanPark *random = nullptr;
-    double seed = 1234579;
     random = new RanPark(lmp,random_number_seed);
 
     for (int i = 0; i < n_lambdas; i++) 
