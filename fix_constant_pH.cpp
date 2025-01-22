@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.16----- */
+/* ---v0.08.07----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -1100,6 +1100,8 @@ void FixConstantPH::modify_qs(double** scales)
             if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
             {
                  double q_init = q_orig[i];
+                 indx1 = 1;
+                 indx2 = 1;
                  double pH1q = pH1qs[type[i]][indx1];
                  double pH2q = pH2qs[type[i]][indx2];
                  q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
