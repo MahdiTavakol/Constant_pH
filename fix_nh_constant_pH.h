@@ -1,3 +1,4 @@
+
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
@@ -13,7 +14,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.03.15
+   v0.08.21
 ------------------------------------------------------------------------- */
 
 #ifndef LMP_FIX_NH_CONSTANT_PH_H
@@ -48,7 +49,7 @@ class FixNHConstantPH : public FixNH {
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
   char *fix_constant_pH_id;
-  double** x_lambdas, **v_lambdas, **a_lambdas, *m_lambdas;
+  double** x_lambdas, **v_lambdas, **a_lambdas, **m_lambdas;
   double T_lambda;
   int n_lambdas;
   int lambda_every;
