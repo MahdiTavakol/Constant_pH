@@ -563,7 +563,7 @@ void FixConstantPH::return_T_lambda(double& _T_lambda)
     --------------------------------------------------------------------- */
 
 void FixConstantPH::reset_params(double** const _x_lambdas, double** const _v_lambdas, 
-                                 double** const _a_lambdas, const double** const _m_lambdas)
+                                 double** const _a_lambdas, double** const _m_lambdas)
 {
     for (int i = 0; i < n_lambdas; i++) {
         for (int j = 0; j < 3; j++) {
