@@ -76,7 +76,7 @@ namespace LAMMPS_NS {
 	
 
         // Lambda arrays
-        double ** lambdas, ** v_lambdas, ** a_lambdas, * m_lambdas, * H_lambdas;
+        double ** lambdas, ** v_lambdas, ** a_lambdas, ** m_lambdas, * H_lambdas;
         double T_lambda;
         int * molids;
         int n_lambdas;
@@ -147,9 +147,9 @@ namespace LAMMPS_NS {
         // Functions for accessing or reseting the lambda dynamics parameters
         void return_nparams(int& _n_params) const;
         void return_params(double** const _x_lambdas, double** const _v_lambdas, 
-                           double** const _a_lambdas, double* const _m_lambdas) const;
+                           double** const _a_lambdas, double** const _m_lambdas) const;
         void reset_params(double** const _x_lambdas, double** const _v_lambdas, 
-                          double** const _a_lambdas, const double* const _m_lambdas);
+                          double** const _a_lambdas, const double** const _m_lambdas);
         void return_H_lambdas(double* _H_lambdas) const;
         void return_T_lambda(double& _T_lambda);
 
