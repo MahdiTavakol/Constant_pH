@@ -149,7 +149,7 @@ namespace LAMMPS_NS {
         void return_params(double** const _x_lambdas, double** const _v_lambdas, 
                            double** const _a_lambdas, double** const _m_lambdas) const;
         void reset_params(double** const _x_lambdas, double** const _v_lambdas, 
-                          double** const _a_lambdas, const double** const _m_lambdas);
+                          double** const _a_lambdas, double** const _m_lambdas);
         void return_H_lambdas(double* _H_lambdas) const;
         void return_T_lambda(double& _T_lambda);
 
