@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.07----- */
+/* ---v0.08.21----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -374,7 +374,7 @@ void FixConstantPH::set_lambdas() {
    memory->create(lambdas,n_lambdas,3,"constant_pH:lambdas");
    memory->create(v_lambdas,n_lambdas,3,"constant_pH:v_lambdas");
    memory->create(a_lambdas,n_lambdas,3,"constant_pH:a_lambdas");
-   memory->create(m_lambdas,n_lambdas,"constant_pH:m_lambdas");
+   memory->create(m_lambdas,n_lambdas,3,"constant_pH:m_lambdas");
    memory->create(H_lambdas,n_lambdas,"constant_pH:H_lambdas");
 
    memory->create(HAs,n_lambdas,"constant_pH:HAs");
@@ -391,7 +391,6 @@ void FixConstantPH::set_lambdas() {
 
    for (int i = 0; i < n_lambdas; i++) {
       GFF_lambdas[i] = 0.0;
-      m_lambdas[i] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
       H_lambdas[i] = 0.0;
       if (flags & ADAPTIVE)
          molids[i] = 0.0;
@@ -399,6 +398,9 @@ void FixConstantPH::set_lambdas() {
          lambdas[i][j] = 0.0;
          v_lambdas[i][j] = 0.0;
          a_lambdas[i][j] = 0.0;
+         
+         if (j == 0) m_lambdas[i][j] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
+         else m_lambdas[i][j] = 30.0;
       }
    } 
 
@@ -425,12 +427,12 @@ void FixConstantPH::update_a_lambda()
 	double  f_lambda_1 = 2*M_PI*nStructures1Barrier*pHnStructures1*kT*sin(2*M_PI*pHnStructures1*lambdas[i][1]);
 	double  f_lambda_2 = 2*M_PI*nStructures2Barrier*pHnStructures2*kT*sin(2*M_PI*pHnStructures2*lambdas[i][2]);
 	   
-	this->a_lambdas[i][0] = f_lambda_0 /m_lambdas[i]; // 4.184*0.0001*f_lambda / m_lambda;
-	this->a_lambdas[i][1] = f_lambda_1 /m_lambdas[i];
-	this->a_lambdas[i][2] = f_lambda_2 /m_lambdas[i];
+	this->a_lambdas[i][0] = f_lambda_0 /m_lambdas[i][0]; // 4.184*0.0001*f_lambda / m_lambda;
+	this->a_lambdas[i][1] = f_lambda_1 /m_lambdas[i][1];
+	this->a_lambdas[i][2] = f_lambda_2 /m_lambdas[i][2];
 	 
 	// I am not sure about the sign of the f*kT*log(10)*(pK-pH)
-        this->H_lambdas[i] = - fs[i]*kT*log(10)*(pK-pH) + kj2kcal*Us[i] + (m_lambdas[i]/2.0)*(v_lambdas[i][0]*v_lambdas[i][0])*mvv2e; // This might not be needed. May be I need to tally this into energies.
+        this->H_lambdas[i] = - fs[i]*kT*log(10)*(pK-pH) + kj2kcal*Us[i] + (m_lambdas[i][0]/2.0)*(v_lambdas[i][0]*v_lambdas[i][0])*mvv2e; // This might not be needed. May be I need to tally this into energies.
         // I might need to use the leap-frog integrator and so this function might need to be in other functions than postforce()
    }
 
@@ -496,14 +498,14 @@ void FixConstantPH::return_nparams(int& _n_params) const
    ---------------------------------------------------------------------- */
 
 void FixConstantPH::return_params(double** const _x_lambdas, double** const _v_lambdas, 
-                           double** const _a_lambdas, double* const _m_lambdas) const 
+                           double** const _a_lambdas, double** const _m_lambdas) const 
 {
     for (int i = 0; i < n_lambdas; i++) {
-        _m_lambdas[i] = m_lambdas[i];
         for (int j = 0; j < 3; j++) {
 	    _x_lambdas[i][j] = lambdas[i][j];
 	    _v_lambdas[i][j] = v_lambdas[i][j];
 	    _a_lambdas[i][j] = a_lambdas[i][j];
+	    _m_lambdas[i][j] = m_lambdas[i][j];
         }
     }
 }
@@ -561,14 +563,14 @@ void FixConstantPH::return_T_lambda(double& _T_lambda)
     --------------------------------------------------------------------- */
 
 void FixConstantPH::reset_params(double** const _x_lambdas, double** const _v_lambdas, 
-                                 double** const _a_lambdas, const double* const _m_lambdas)
+                                 double** const _a_lambdas, const double** const _m_lambdas)
 {
     for (int i = 0; i < n_lambdas; i++) {
-        m_lambdas[i] = _m_lambdas[i];
         for (int j = 0; j < 3; j++) {
 	    lambdas[i][j]   = _x_lambdas[i][j];
 	    v_lambdas[i][j] = _v_lambdas[i][j];
 	    a_lambdas[i][j] = _a_lambdas[i][j];
+	    m_lambdas[i][j] = _m_lambdas[i][j];
         }
     }
 }
@@ -1320,7 +1322,7 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
    MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
    for (int i = 0; i < n_lambdas; i++) { 
       double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
-      a_lambdas[i][0] = 4.184*0.0001*force_i / m_lambdas[i]; 
+      a_lambdas[i][0] = 4.184*0.0001*force_i / m_lambdas[i][0]; 
    }
 
    delete [] energy_local;
@@ -1338,7 +1340,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 
     for (int i = 0; i < n_lambdas; i++) 
         for (int j = 0; j < 3; j++)
-	    v_lambdas[i][j] = random->gaussian()/std::sqrt(m_lambdas[j]);
+	    v_lambdas[i][j] = random->gaussian()/std::sqrt(m_lambdas[i][j]);
 
     if (flags & BUFFER) 
         v_lambda_buff = random->gaussian()/std::sqrt(m_lambda_buff);
@@ -1395,7 +1397,7 @@ void FixConstantPH::calculate_T_lambda()
     	
     for (int j = 0; j < n_lambdas; j++)
         for (int k = 0; k < 3; k++)
-            KE_lambda += 0.5*m_lambdas[j]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
+            KE_lambda += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
     if (flags & BUFFER)
         KE_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
     
