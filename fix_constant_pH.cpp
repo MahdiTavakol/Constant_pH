@@ -400,7 +400,7 @@ void FixConstantPH::set_lambdas() {
          a_lambdas[i][j] = 0.0;
          
          if (j == 0) m_lambdas[i][j] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
-         else m_lambdas[i][j] = 240.0;
+         else m_lambdas[i][j] = 20.0;
       }
    } 
 
@@ -416,8 +416,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 3.0;
-   double nStructures2Barrier = 3.0;
+   double nStructures1Barrier = 0.5;
+   double nStructures2Barrier = 0.5;
 
    //df = 1.0;
    //f = 1.0;
