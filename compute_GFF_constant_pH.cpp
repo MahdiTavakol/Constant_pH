@@ -198,10 +198,10 @@ void ComputeGFFConstantPH::allocate_storage()
 {
   memory->create(array,n_lambdas,4,"compute_GFF_constant_pH:array");
 	
-  memory->create(x_lambdas, n_lambdas, "compute_GFF_constant_pH:x_lambdas");
-  memory->create(v_lambdas, n_lambdas, "compute_GFF_constant_pH:v_lambdas");
-  memory->create(a_lambdas, n_lambdas, "compute_GFF_constant_pH:a_lambdas");
-  memory->create(m_lambdas, n_lambdas, "compute_GFF_constant_pH:m_lambdas");
+  memory->create(x_lambdas, n_lambdas, 3, "compute_GFF_constant_pH:x_lambdas");
+  memory->create(v_lambdas, n_lambdas, 3, "compute_GFF_constant_pH:v_lambdas");
+  memory->create(a_lambdas, n_lambdas, 3, "compute_GFF_constant_pH:a_lambdas");
+  memory->create(m_lambdas, n_lambdas, 3, "compute_GFF_constant_pH:m_lambdas");
   memory->create(H_lambdas, n_lambdas, "compute_GFF_constant_pH:H_lambdas");
 	
   memory->create(HAs, n_lambdas, "compute_GFF_constant_pH:HAs");
