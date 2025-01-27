@@ -416,8 +416,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 0.1*kT;
-   double nStructures2Barrier = 0.1*kT;
+   double nStructures1Barrier = 0.4*kT;
+   double nStructures2Barrier = 0.4*kT;
 
    //df = 1.0;
    //f = 1.0;
