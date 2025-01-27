@@ -425,7 +425,10 @@ void FixNHConstantPH::constrain_lambdas()
    
    /* The while(true) loop was used on purpose so that even when the loop termination condition
       is satisfied the q_total is calculated for the last time with final values of lambdas */
-   while(true) {
+   while(comm) {
+      // Just doing this on the root and then broadcasting the results
+      if (comm->me != 0)
+          break;
       sigma_lambda = 0.0;
       sigma_mass_inverse = 0.0;
       
@@ -468,7 +471,13 @@ void FixNHConstantPH::constrain_lambdas()
       fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
       fix_constant_pH->reset_qs();
-   }   
+   }
+   
+   
+   MPI_Bcast(x_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
+   MPI_Bcast(v_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
+   MPI_Bcast(&x_lambda_buff,1,MPI_DOUBLE,0,world);
+   MPI_Bcast(&v_lambda_buff,1,MPI_DOUBLE,0,world);  
 }
 
 /* ----------------------------------------------------------------------
