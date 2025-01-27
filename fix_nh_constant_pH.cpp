@@ -349,7 +349,7 @@ void FixNHConstantPH::nh_v_temp()
            for (int j = 0; j < 3; j++) {
               v_lambdas[i][j] *= std::exp(-zeta_nose_hoover * dt);
            
-              if (i / n_lambdas == 0) {
+              if (j == 0) {
                 if (x_lambdas[i][j] < -0.1 || x_lambdas[i][j] > 1.1)
                   v_lambdas[i][j] = -(x_lambdas[i][j]/std::abs(x_lambdas[i][j]))*std::abs(v_lambdas[i][j]);
               }
@@ -449,7 +449,7 @@ void FixNHConstantPH::constrain_lambdas()
       else error->one(FLERR,"You should never have reached here!!!");
 
 
-      if (std::abs(q_total) < etol || cycle++ > 100) {
+      if (std::abs(q_total) < etol || cycle++ > 1000) {
          break;
       }
       
