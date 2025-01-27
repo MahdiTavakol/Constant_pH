@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.32----- */
+/* ---v0.08.34----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -416,8 +416,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 1.5;
-   double nStructures2Barrier = 1.5;
+   double nStructures1Barrier = 1.0;
+   double nStructures2Barrier = 1.0;
 
    //df = 1.0;
    //f = 1.0;
