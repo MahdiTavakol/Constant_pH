@@ -425,7 +425,7 @@ void FixNHConstantPH::constrain_lambdas()
    
    /* The while(true) loop was used on purpose so that even when the loop termination condition
       is satisfied the q_total is calculated for the last time with final values of lambdas */
-   while(comm) {
+   while(true) {
       // Just doing this on the root and then broadcasting the results
       if (comm->me != 0)
           break;
