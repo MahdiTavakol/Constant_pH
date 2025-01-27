@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.36----- */
+/* ---v0.08.37----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -416,16 +416,16 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 0.2;
-   double nStructures2Barrier = 0.2;
+   double nStructures1Barrier = 0.1*kT;
+   double nStructures2Barrier = 0.1*kT;
 
    //df = 1.0;
    //f = 1.0;
 
    for (int i = 0; i < n_lambdas; i++) {
 	double  f_lambda_0 = -(-dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // The df sign should be positive if the lambda = 0 is for the protonated state 
-	double  f_lambda_1 = 2*M_PI*nStructures1Barrier*pHnStructures1*kT*sin(2*M_PI*pHnStructures1*lambdas[i][1]);
-	double  f_lambda_2 = 2*M_PI*nStructures2Barrier*pHnStructures2*kT*sin(2*M_PI*pHnStructures2*lambdas[i][2]);
+	double  f_lambda_1 = 2*M_PI*nStructures1Barrier*pHnStructures1*sin(2*M_PI*pHnStructures1*lambdas[i][1]);
+	double  f_lambda_2 = 2*M_PI*nStructures2Barrier*pHnStructures2*sin(2*M_PI*pHnStructures2*lambdas[i][2]);
 	   
 	this->a_lambdas[i][0] = f_lambda_0 /m_lambdas[i][0]; // 4.184*0.0001*f_lambda / m_lambda;
 	this->a_lambdas[i][1] = f_lambda_1 /m_lambdas[i][1];
