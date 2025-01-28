@@ -1393,6 +1393,8 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
         v_lambda_buff -= v_cm;
 
     delete random;
+      
+    MPI_Bcast(v_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
 }
 
 /* --------------------------------------------------------------------- */
@@ -1402,20 +1404,24 @@ void FixConstantPH::calculate_T_lambda()
     double KE_lambda = 0.0;
     double k = force->boltz;
     double mvv2e = force->mvv2e;
-    
     double Nf = static_cast<double>(3.0*n_lambdas);
-    if (flags & BUFFER)
-    	Nf += 1.0;
-    if (flags & CONSTRAIN)
-    	Nf -= 1.0;
-    	
-    for (int j = 0; j < n_lambdas; j++)
-        for (int k = 0; k < 3; k++)
-            KE_lambda += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
-    if (flags & BUFFER)
-        KE_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
     
-    T_lambda = 2*KE_lambda / (Nf * k);
+    if (comm->me == 0) {
+        if (flags & BUFFER)
+    	    Nf += 1.0;
+        if (flags & CONSTRAIN)
+    	    Nf -= 1.0;
+    	
+        for (int j = 0; j < n_lambdas; j++)
+            for (int k = 0; k < 3; k++)
+                KE_lambda += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
+        if (flags & BUFFER)
+            KE_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
+    
+        T_lambda = 2*KE_lambda / (Nf * k);
+    }
+    
+    MPI_Bcast(&T_lambda,1,MPI_DOUBLE,0,world);
 }
 
    
