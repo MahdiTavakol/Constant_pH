@@ -401,7 +401,7 @@ void FixConstantPH::set_lambdas() {
          a_lambdas[i][j] = 0.0;
          
          if (j == 0) m_lambdas[i][j] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
-         else m_lambdas[i][j] = 80.0; // To see if the hot-cold spot problem is solved.
+         else m_lambdas[i][j] = 20.0; // To see if the hot-cold spot problem is solved.
       }
    } 
 
@@ -1435,7 +1435,9 @@ void FixConstantPH::calculate_T_lambda()
             KE_lambdas[0] += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
             KE_lambdas[2] += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
         } 
-        
+
+	if (Nfs[0] == 0 || Nfs[1] == 0 || Nfs[2] == 0) error->one(FLERR,"Error");
+        if (k == 0) error->one(FLERR,"error-2");
         T_lambdas[0] = 2*KE_lambdas[0] / (Nfs[0] * k);
         T_lambdas[1] = 2*KE_lambdas[1] / (Nfs[1] * k);
         T_lambdas[2] = 2*KE_lambdas[2] / (Nfs[2] * k);
