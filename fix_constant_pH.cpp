@@ -315,6 +315,69 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
          fix_adaptive_protonation->get_n_protonable(n_protonable);
          if (n_protonable != this->n_lambdas) {
             this->n_lambdas = n_protonable;
+ /* -*- c++ -*- ----------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+
+#ifdef FIX_CLASS
+// clang-format off
+FixStyle(constant_pH,FixConstantPH);
+// clang-format on
+#else
+
+#ifndef LMP_FIX_CONSTANTPH_H
+#define LMP_FIX_CONSTANTPH_H
+
+#include "fix.h"
+#include "fix_adaptive_protonation.h"
+#include "pair.h"
+
+
+namespace LAMMPS_NS {
+
+  class FixConstantPH: public Fix {
+     friend class FixNHConstantPH;
+     friend class ComputeGFFConstantPH;
+     friend class ComputeTempConstantPH;
+     public:
+	FixConstantPH(class LAMMPS*, int, char**);
+	~FixConstantPH() override;
+	int setmask() override;
+	void init() override;
+	void setup(int) override;
+	void initial_integrate(int) override;
+	void post_force(int) override;
+        double compute_array(int, int) override;
+	double memory_usage() override;
+
+
+
+     protected:
+        int flags;
+	// Sturcture files
+        FILE *pHStructureFile1, *pHStructureFile2;
+
+	// Atom types and charges that change due to protonation
+        int pHnStructures1, pHnStructures2;
+        int pHnTypes1, pHnTypes2;
+        double **pH1qs, **pH2qs;
+        int * typePerProtMol;
+        int * protonable;
+
+
+	// Input variables for constant values
+	double pK, pH, T;
+
+
             delete_lambdas();
             set_lambdas();
             fix_adaptive_protonation->get_protonable_molids(molids);
@@ -416,8 +479,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 0.8*kT;
-   double nStructures2Barrier = 0.8*kT;
+   double nStructures1Barrier = 0.4*kT;
+   double nStructures2Barrier = 0.4*kT;
 
    //df = 1.0;
    //f = 1.0;
@@ -446,6 +509,69 @@ void FixConstantPH::update_a_lambda()
 /* ----------------------------------------------------------------------- 
     This function is called by compute_GFF for thermodynamic integration 
     of the GFF value.
+ /* -*- c++ -*- ----------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+
+#ifdef FIX_CLASS
+// clang-format off
+FixStyle(constant_pH,FixConstantPH);
+// clang-format on
+#else
+
+#ifndef LMP_FIX_CONSTANTPH_H
+#define LMP_FIX_CONSTANTPH_H
+
+#include "fix.h"
+#include "fix_adaptive_protonation.h"
+#include "pair.h"
+
+
+namespace LAMMPS_NS {
+
+  class FixConstantPH: public Fix {
+     friend class FixNHConstantPH;
+     friend class ComputeGFFConstantPH;
+     friend class ComputeTempConstantPH;
+     public:
+	FixConstantPH(class LAMMPS*, int, char**);
+	~FixConstantPH() override;
+	int setmask() override;
+	void init() override;
+	void setup(int) override;
+	void initial_integrate(int) override;
+	void post_force(int) override;
+        double compute_array(int, int) override;
+	double memory_usage() override;
+
+
+
+     protected:
+        int flags;
+	// Sturcture files
+        FILE *pHStructureFile1, *pHStructureFile2;
+
+	// Atom types and charges that change due to protonation
+        int pHnStructures1, pHnStructures2;
+        int pHnTypes1, pHnTypes2;
+        double **pH1qs, **pH2qs;
+        int * typePerProtMol;
+        int * protonable;
+
+
+	// Input variables for constant values
+	double pK, pH, T;
+
+
    ----------------------------------------------------------------------- */
 
 void FixConstantPH::calculate_H_once()
