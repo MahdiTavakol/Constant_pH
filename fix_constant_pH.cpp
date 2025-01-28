@@ -1552,9 +1552,9 @@ void FixConstantPH::calculate_T_lambda()
         for (int j = 0; j < n_lambdas; j++) {
             KE_lambdas[0] += 0.5*m_lambdas[j][0]*v_lambdas[j][0]*v_lambdas[j][0]*mvv2e; 
             for (int k = 0; k < 3; k++)
-                KE_lambdas[2] += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
-            KE_lambdas[1] = KE_lambdas[2]-KE_lambdas[0];
+                KE_lambdas[1] += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
         }
+        KE_lambdas[2] = KE_lambdas[0] + KE_lambdas[1];
         
         if (flags & BUFFER) {
             KE_lambdas[0] += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
