@@ -77,7 +77,7 @@ namespace LAMMPS_NS {
 
         // Lambda arrays
         double ** lambdas, ** v_lambdas, ** a_lambdas, ** m_lambdas, * H_lambdas;
-        double T_lambda;
+        double T_lambdas[3];
         int * molids;
         int n_lambdas;
         
@@ -155,7 +155,7 @@ namespace LAMMPS_NS {
             reset_params(_x_lambdas,_v_lambdas,_a_lambdas,_m_lambdas,1);              
         }
         void return_H_lambdas(double* _H_lambdas) const;
-        void return_T_lambda(double& _T_lambda);
+        void return_T_lambda(double& _T_lambda, int component = 2);
 
 
 	// Functions to return the buffer parameters
