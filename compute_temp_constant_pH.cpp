@@ -112,6 +112,7 @@ double ComputeTempConstantPH::compute_scalar()
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
   int _n_lambdas;
+  double mvv2e = force->mvv2e;
 
   double t = 0.0;
 
@@ -134,16 +135,18 @@ double ComputeTempConstantPH::compute_scalar()
   
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas); // The return_parameters section should be implemented in the fix_constant_pH.cpp code
   
-  double scaling_factor = 100.0;
 
   for (int i = 0; i < n_lambdas; i++)
      for (int j = 0; j < 3; j++)
-        scalar += v_lambdas[i][j]*v_lambdas[i][j] * m_lambdas[i][j] *scaling_factor;
+        scalar += v_lambdas[i][j]*v_lambdas[i][j] * m_lambdas[i][j] *mvv2e;
+   
 
   
   if (dynamic) dof_compute();
   if (dof < 0.0 && natoms_temp > 0.0)
     error->all(FLERR, "Temperature compute degrees of freedom < 0");
   scalar *= tfactor;
+
+  MPI_Bcast(&scaler,1,MPI_DOUBLE,0,world);
   return scalar;
 }
