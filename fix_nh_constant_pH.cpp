@@ -423,12 +423,11 @@ void FixNHConstantPH::constrain_lambdas()
    int maxCycles = 10000;
    int cycle = 0;
    
+   
    /* The while(true) loop was used on purpose so that even when the loop termination condition
       is satisfied the q_total is calculated for the last time with final values of lambdas */
    while(true) {
       // Just doing this on the root and then broadcasting the results
-      if (comm->me != 0)
-          break;
       sigma_lambda = 0.0;
       sigma_mass_inverse = 0.0;
       
@@ -467,17 +466,16 @@ void FixNHConstantPH::constrain_lambdas()
          x_lambdas[i][0] += (omega * mols_charge_change / m_lambdas[i][0]);
 
       x_lambda_buff += buff_charge_change * omega / m_lambda_buff;
-      
-      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-      fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+     
+
+      fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas,0);
+      fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff,0);
       fix_constant_pH->reset_qs();
    }
    
-   
-   MPI_Bcast(x_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
-   MPI_Bcast(v_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
-   MPI_Bcast(&x_lambda_buff,1,MPI_DOUBLE,0,world);
-   MPI_Bcast(&v_lambda_buff,1,MPI_DOUBLE,0,world);  
+   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+   fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+   fix_constant_pH->reset_qs();
 }
 
 /* ----------------------------------------------------------------------
