@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.37----- */
+/* ---v0.08.46----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -233,6 +233,17 @@ void FixConstantPH::init()
       fix_adaptive_protonation = static_cast<FixAdaptiveProtonation*>(modify->get_fix_by_id(fix_adaptive_protonation_id));
       fix_adaptive_protonation->get_n_protonable(n_lambdas);
    }
+   
+   if (flags & BUFFER) {
+      lambda_buff = 1.0;
+      v_lambda_buff = 0.0;
+      m_lambda_buff = 20.0;
+        
+      modify_q_buff(lambda_buff);
+      compute_q_total();
+   }
+
+   set_lambdas();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -278,16 +289,6 @@ void FixConstantPH::setup(int /*vflag*/)
      * the lambas[0] + ... + lambdas[n] + lambda_buff
      */
     
-    if (flags & BUFFER) {
-        lambda_buff = 1.0;
-        v_lambda_buff = 0.0;
-        m_lambda_buff = 20.0;
-        
-        modify_q_buff(lambda_buff);
-        compute_q_total();
-    }
-
-    set_lambdas();
        
     if (GFF_flag)
 	init_GFF();
@@ -315,69 +316,6 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
          fix_adaptive_protonation->get_n_protonable(n_protonable);
          if (n_protonable != this->n_lambdas) {
             this->n_lambdas = n_protonable;
- /* -*- c++ -*- ----------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://www.lammps.org/, Sandia National Laboratories
-   LAMMPS development team: developers@lammps.org
-
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
-   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
-   the GNU General Public License.
-
-   See the README file in the top-level LAMMPS directory.
-------------------------------------------------------------------------- */
-
-#ifdef FIX_CLASS
-// clang-format off
-FixStyle(constant_pH,FixConstantPH);
-// clang-format on
-#else
-
-#ifndef LMP_FIX_CONSTANTPH_H
-#define LMP_FIX_CONSTANTPH_H
-
-#include "fix.h"
-#include "fix_adaptive_protonation.h"
-#include "pair.h"
-
-
-namespace LAMMPS_NS {
-
-  class FixConstantPH: public Fix {
-     friend class FixNHConstantPH;
-     friend class ComputeGFFConstantPH;
-     friend class ComputeTempConstantPH;
-     public:
-	FixConstantPH(class LAMMPS*, int, char**);
-	~FixConstantPH() override;
-	int setmask() override;
-	void init() override;
-	void setup(int) override;
-	void initial_integrate(int) override;
-	void post_force(int) override;
-        double compute_array(int, int) override;
-	double memory_usage() override;
-
-
-
-     protected:
-        int flags;
-	// Sturcture files
-        FILE *pHStructureFile1, *pHStructureFile2;
-
-	// Atom types and charges that change due to protonation
-        int pHnStructures1, pHnStructures2;
-        int pHnTypes1, pHnTypes2;
-        double **pH1qs, **pH2qs;
-        int * typePerProtMol;
-        int * protonable;
-
-
-	// Input variables for constant values
-	double pK, pH, T;
-
-
             delete_lambdas();
             set_lambdas();
             fix_adaptive_protonation->get_protonable_molids(molids);
@@ -479,8 +417,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 0.4*kT;
-   double nStructures2Barrier = 0.4*kT;
+   double nStructures1Barrier = 0.8*kT;
+   double nStructures2Barrier = 0.8*kT;
 
    //df = 1.0;
    //f = 1.0;
@@ -509,69 +447,6 @@ void FixConstantPH::update_a_lambda()
 /* ----------------------------------------------------------------------- 
     This function is called by compute_GFF for thermodynamic integration 
     of the GFF value.
- /* -*- c++ -*- ----------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://www.lammps.org/, Sandia National Laboratories
-   LAMMPS development team: developers@lammps.org
-
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
-   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
-   the GNU General Public License.
-
-   See the README file in the top-level LAMMPS directory.
-------------------------------------------------------------------------- */
-
-#ifdef FIX_CLASS
-// clang-format off
-FixStyle(constant_pH,FixConstantPH);
-// clang-format on
-#else
-
-#ifndef LMP_FIX_CONSTANTPH_H
-#define LMP_FIX_CONSTANTPH_H
-
-#include "fix.h"
-#include "fix_adaptive_protonation.h"
-#include "pair.h"
-
-
-namespace LAMMPS_NS {
-
-  class FixConstantPH: public Fix {
-     friend class FixNHConstantPH;
-     friend class ComputeGFFConstantPH;
-     friend class ComputeTempConstantPH;
-     public:
-	FixConstantPH(class LAMMPS*, int, char**);
-	~FixConstantPH() override;
-	int setmask() override;
-	void init() override;
-	void setup(int) override;
-	void initial_integrate(int) override;
-	void post_force(int) override;
-        double compute_array(int, int) override;
-	double memory_usage() override;
-
-
-
-     protected:
-        int flags;
-	// Sturcture files
-        FILE *pHStructureFile1, *pHStructureFile2;
-
-	// Atom types and charges that change due to protonation
-        int pHnStructures1, pHnStructures2;
-        int pHnTypes1, pHnTypes2;
-        double **pH1qs, **pH2qs;
-        int * typePerProtMol;
-        int * protonable;
-
-
-	// Input variables for constant values
-	double pK, pH, T;
-
-
    ----------------------------------------------------------------------- */
 
 void FixConstantPH::calculate_H_once()
@@ -682,7 +557,7 @@ void FixConstantPH::return_T_lambda(double& _T_lambda, int component)
     calculate_T_lambda();
     
     if (component < 0 || component > 2)
-        error->one(FLERR,"Illegal input variable");
+        error->one(FLERR,"Illegal function input");
     _T_lambda = this->T_lambdas[component];
 }
 
@@ -1546,7 +1421,7 @@ void FixConstantPH::calculate_T_lambda()
     	}
         if (flags & CONSTRAIN) {
     	    Nfs[0] -= 1.0;
-    	    Nfs[0] -= 1.0;
+    	    Nfs[2] -= 1.0;
     	}
     	
         for (int j = 0; j < n_lambdas; j++) {
@@ -1554,7 +1429,7 @@ void FixConstantPH::calculate_T_lambda()
             for (int k = 0; k < 3; k++)
                 KE_lambdas[1] += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
         }
-        KE_lambdas[2] = KE_lambdas[0] + KE_lambdas[1];
+        KE_lambdas[2] = KE_lambdas[0]+KE_lambdas[1];
         
         if (flags & BUFFER) {
             KE_lambdas[0] += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
@@ -1692,6 +1567,7 @@ double FixConstantPH::compute_array(int i, int j)
       case 8:
         // 9
         calculate_T_lambda();
+        if (j < 0 || j > 2) error->one(FLERR,"Out of range access");
         return T_lambdas[j];
       case 9:
         // 10
