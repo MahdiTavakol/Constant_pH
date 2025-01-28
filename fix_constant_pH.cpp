@@ -401,7 +401,7 @@ void FixConstantPH::set_lambdas() {
          a_lambdas[i][j] = 0.0;
          
          if (j == 0) m_lambdas[i][j] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
-         else m_lambdas[i][j] = 40.0; // To see if the hot-cold spot problem is solved.
+         else m_lambdas[i][j] = 80.0; // To see if the hot-cold spot problem is solved.
       }
    } 
 
