@@ -248,9 +248,9 @@ void FixNHConstantPH::nh_v_temp()
      
 
   // Temperature
-  double t_lambda_current;
+  double t_lambda_current_1, t_lambda_current_2;
   double t_lambda_target = t_target;
-  fix_constant_pH->return_T_lambda(t_lambda_current);
+  fix_constant_pH->return_T_lambda(t_lambda_current1,t_lambda_current2);
   
   if (lambda_thermostat_type == LAMBDA_ANDERSEN && comm->me == 0) {
     double P = dt/t_andersen;
@@ -299,26 +299,37 @@ void FixNHConstantPH::nh_v_temp()
     // Calculate the Bussi scaling factor
     zeta_bussi = std::exp(-dt/tau_t_bussi);
     
-    double r1 = random_normal(0,1);
-    double sum_r2 = 0;
-    
-    for (int j = 1; j < Nf_lambdas; j++) {
+    double r11 = random_normal(0,1);
+    double r12 = random_normal(0,1);
+    double sum_r21 = 0.0;
+    double sum_r22 = 0.0;
+
+    for (int j = 1; j < n_lambdas; j++) {
        double r = random_normal(0,1);
-       sum_r2 += r*r;
+       sum_r21 += r*r;
     }
+    for (int j = 1; j < 2*n_lambdas; j++) {
+       double r = random_normal(0,1);
+       sum_r22 += r*r;
+    }
+
     
-    double t_lambda_new = t_lambda_current;
-    t_lambda_new +=  (1-zeta_bussi)*(t_lambda_target*(r1*r1+sum_r2)/Nf_lambdas-t_lambda_current);
-    t_lambda_new += 2*r1*std::sqrt((t_lambda_target*t_lambda_current/Nf_lambdas)*(1-zeta_bussi)*zeta_bussi);
-    double alpha_bussi = std::sqrt(t_lambda_new / t_lambda_current);
-    
+    double t_lambda_new_1 = t_lambda_current_1;
+    double t_lambda_new_2 = t_lambda_current_2;
+    t_lambda_new_1 +=  (1-zeta_bussi)*(t_lambda_target*(r11*r11+sum_r21)/n_lambdas-t_lambda_current_1);
+    t_lambda_new_1 += 2*r11*std::sqrt((t_lambda_target*t_lambda_current_1/n_lambdas)*(1-zeta_bussi)*zeta_bussi);
+    t_lambda_new_2 +=  (1-zeta_bussi)*(t_lambda_target*(r12*r12+sum_r22)/(2*n_lambdas)-t_lambda_current_2);
+    t_lambda_new_2 += 2*r12*std::sqrt((t_lambda_target*t_lambda_current_2/(2*n_lambdas))*(1-zeta_bussi)*zeta_bussi);
+    double alpha_bussi1 = std::sqrt(t_lambda_new_1 / t_lambda_current);
+    double alpha_bussi2 = std::sqrt(t_lambda_new_2 / t_lambda_current);
 
     if (which == NOBIAS) {
 
        // first, the lambdas
        for (int i = 0; i < n_lambdas; i++)
-          for (int j = 0; j < 3; j++) {
-             v_lambdas[i][j] *= alpha_bussi;
+          v_lambdas[i][0] *= alpha_bussi1;
+          for (int j = 1; j < 3; j++) {
+             v_lambdas[i][j] *= alpha_bussi2;
 
              if (j == 0) {
                if (x_lambdas[i][j] < -0.1 || x_lambdas[i][j] > 1.1)
