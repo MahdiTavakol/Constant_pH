@@ -250,7 +250,8 @@ void FixNHConstantPH::nh_v_temp()
   // Temperature
   double t_lambda_current_1, t_lambda_current_2;
   double t_lambda_target = t_target;
-  fix_constant_pH->return_T_lambda(t_lambda_current1,t_lambda_current2);
+  fix_constant_pH->return_T_lambda(t_lambda_current1,0);
+  fix_constant_pH->return_T_lambda(t_lambda_current2,1);
   
   if (lambda_thermostat_type == LAMBDA_ANDERSEN && comm->me == 0) {
     double P = dt/t_andersen;
