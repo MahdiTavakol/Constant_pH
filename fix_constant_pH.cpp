@@ -76,10 +76,10 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   if (comm->me == 0) {
       pHStructureFile1 = fopen(arg[4],"r"); // The command reads the file the type and charge of each atom before and after protonation
       if (pHStructureFile1 == nullptr)
-         error->all(FLERR,"Unable to open the file");
+         error->one(FLERR,"Unable to open the file");
       pHStructureFile2 = fopen(arg[5],"r");
       if (pHStructureFile2 == nullptr)
-         error->all(FLERR,"Unable to open the file");
+         error->one(FLERR,"Unable to open the file");
   }
   
   
