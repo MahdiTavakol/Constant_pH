@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.05.16----------------- */
+/* ---------- v0.08.56----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
@@ -52,14 +52,14 @@ using namespace FixConst;
 using namespace MathConst;
 
 enum { NONE, CONSTANT, EQUAL, ATOM };
+enum {NEITHER = -1, SOLID = 0, SOLVENT = 1}
 
 /* --------------------------------------------------------------------------------------- */
 
-FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) :
-   Fix(lmp, narg, arg), typePstr(nullptr), typeOstr(nullptr), typeHstr(nullptr),
-   typeOHstr(nullptr), typePOHstr(nullptr)
+FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) : Fix(lmp, narg, arg), 
+   pHstructureFile3(nullptr), pHstructureFile4(nullptr)
 {
-   if (narg < 11) utils::missing_cmd_args(FLERR, "fix AdaptiveProtonation", error);
+   if (narg < 10) utils::missing_cmd_args(FLERR, "fix adaptive_protonation", error);
 
    dynamic_group_allow = 0;
    scalar_flag = 1; 
@@ -70,77 +70,61 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    extvector = 1; // What is this?
    energy_global_flag = 1;
    virial_global_flag = 1;
+      int typeP, typeO, typeH, typeOH, typePOH;
    virial_peratom_flag = 1;
    respa_level_support = 1;
    
    nevery = utils::numeric(FLERR, arg[3], false, lmp);
 
-   if (utils::strmatch(arg[4], "^v_")) {
-      typePstr = utils::strdup(arg[4]+2);
+   if (nevery < 0) error->all(FLERR,"Illegal fix adaptive_protonation every value {}", nevery);
+
+   if (comm->me == 0) {
+      pHstructureFile3 = fopen(arg[4],"r"); // The structure in the solid state
+      if (pHstructureFile1 == nullptr) error->one(FLERR,"Unable to open the file");
+      pHstructureFile4 = fopen(arg[5],"r"); // The structure in the solvent phase ==> It should be modified based on the pKa and pH values by the fix constant_pH command
+      if (pHstructureFile2 == nullptr) error->one(FLERR,"Unable to open the file");
    }
-   else
-   {
-      typeP = utils::numeric(FLERR,arg[4],false,lmp);
-      typePstyle = CONSTANT;
-   }
-   if (utils::strmatch(arg[5], "^v_")) {
-      typeOstr = utils::strdup(arg[5]+2);
-   }
-   else
-   {
-      typeO = utils::numeric(FLERR,arg[5],false,lmp);
-      typeOstyle = CONSTANT;
-   }
-   if (utils::strmatch(arg[6], "^v_")) {
-      typeHstr = utils::strdup(arg[6]+2);
-   }
-   else
-   {
-      typeH = utils::numeric(FLERR,arg[6],false,lmp);
-      typeHstyle = CONSTANT;
-   }
-   if (utils::strmatch(arg[7], "^v_")) {
-      typeOHstr = utils::strdup(arg[7]+2);
-   }
-   else
-   {
-      typeOH = utils::numeric(FLERR,arg[7],false,lmp);
-      typeOHstyle = CONSTANT;
-   }
-   if (utils::strmatch(arg[8], "^v_")) {
-      typePOHstr = utils::strdup(arg[8]+2);
-   }
-   else {
-      typePOH = utils::numeric(FLERR,arg[8],false,lmp);
-      typePOHstyle = CONSTANT;  
-   }
-   if (utils::strmatch(arg[8], "^v_")) {
-      error->all(FLERR,"The variable input for threshold in AdaptiveProtonation is not supported yet!");
-   }
-   else
-   {
-      threshold = utils::numeric(FLERR,arg[8],false,lmp);
-   }
-   pKa = utils::numeric(FLERR,arg[9],false,lmp);
-   pH   = utils::numeric(FLERR,arg[10],false,lmp);
-   req_numHs = utils::numeric(FLERR,arg[11],false,lmp);
+
+   typeOW = utils::numeric(FLERR,arg[6],false,lmp);
+
+   threshold = utils::numeric(FLERR,arg[7],false,lmp);
+
+   // Are these variables really necessary?
+   pKa = utils::numeric(FLERR,arg[8],false,lmp);
+   pH   = utils::numeric(FLERR,arg[9],false,lmp);
+   req_numHs = utils::numeric(FLERR,arg[10],false,lmp);
    
-   nmax = 1;
-   memory->create(mark,nmax,"AdaptiveProtontation:mark");
+
 }
 
 /* --------------------------------------------------------------------------------------- */
 
 FixAdaptiveProtonation::~FixAdaptiveProtonation()
 {
-   if (typePstr) delete[] typePstr;
-   if (typeOstr) delete[] typeOstr;
-   if (typeHstr) delete[] typeHstr;
-   if (typeOHstr) delete[] typeOHstr;
-   if (typePOHstr) delete[] typePOHstr;
-   if (protonable_molids) delete[] protonable_molids;
+   if (pH1qs) memory->destroy(pH1qs);
+   if (pH2qs) memory->destroy(pH2qs);
+   if (typePerProtMol) memory->destroy(typePerProtMol);
+   if (protonable) memory->destroy(protonable);
+   if (mark) memory->destroy(mark);
+   if (mark_prev) memory->destroy(mark_prev);
+   if (mark_local) memory->destroy(mark_local);
+   if (molecule_size) memory->destroy(molecule_size);
+   if (molecule_size_local) memory->destroy(molecule_size_loca); 
+   
+   if (protonable_molids) delete [] protonable_molids;
 
-   memory->destroy(mark);
+   // It is a good practice to put the deallocated pointers to nullptr
+   pH1qs = nullptr;
+   pH2qs = nullptr;
+   typePerProtMol = nullptr;
+   protonable = nullptr;
+   mark = nullptr;
+   mark_prev = nullptr;
+   mark_local = nullptr;
+   molecule_size = nullptr;
+   molecule_size_local = nullptr;
+
+   protonable_molids = nullptr;
 }
 
 /* --------------------------------------------------------------------------------------- */
@@ -156,75 +140,26 @@ int FixAdaptiveProtonation::setmask()
 
 void FixAdaptiveProtonation::init()
 {
-   // check variables
-   if (typePstr) {
-      typePvar = input->variable->find(typePstr);
-      if (typePvar < 0) error->all(FLERR, "Variable {} for fix AdaptiveProtonation does not exist", typePstr);
-      if (input->variable->equalstyle(typePvar))
-          typePstyle = EQUAL;
-      else if (input->variable->atomstyle(typePvar))
-          error->all(FLERR, "Atomic style variable is not supported in fix adaptiveProtonaton");
-      else
-          error->all(FLERR, "Variable {} for fix adaptiveProtonatonis invalid style", typePvar);
-   }
-   if (typeOstr) {
-      typeOvar = input->variable->find(typeOstr);
-      if (typeOvar < 0) error->all(FLERR, "Variable {} for fix AdaptiveProtonation does not exist", typeOstr);
-      if (input->variable->equalstyle(typeOvar))
-          typeOstyle = EQUAL;
-      else if (input->variable->atomstyle(typeOvar))
-          error->all(FLERR, "Atomic style variable is not supported in fix adaptiveProtonaton");
-      else
-          error->all(FLERR, "Variable {} for fix adaptiveProtonatonis invalid style", typeOvar);
-   }
-   if (typeHstr) {
-      typeHvar = input->variable->find(typeHstr);
-      if (typeHvar < 0) error->all(FLERR, "Variable {} for fix AdaptiveProtonation does not exist", typeHstr);
-      if (input->variable->equalstyle(typeHvar))
-          typeHstyle = EQUAL;
-      else if (input->variable->atomstyle(typeHvar))
-          error->all(FLERR, "Atomic style variable is not supported in fix adaptiveProtonaton");
-      else
-          error->all(FLERR, "Variable {} for fix adaptiveProtonatonis invalid style", typeHvar);
-   }
-   if (typeOHstr) {
-      typeOHvar = input->variable->find(typeOHstr);
-      if (typeOHvar < 0) error->all(FLERR, "Variable {} for fix AdaptiveProtonation does not exist", typeOHstr);
-      if (input->variable->equalstyle(typeOHvar))
-          typeOHstyle = EQUAL;
-      else if (input->variable->atomstyle(typeOHvar))
-          error->all(FLERR, "Atomic style variable is not supported in fix adaptiveProtonaton");
-      else
-          error->all(FLERR, "Variable {} for fix adaptiveProtonatonis invalid style", typeOHvar);
-   }
-   if (typePOHstr) {
-      typePOHvar = input->variable->find(typePOHstr);
-      if (typePOHvar < 0) error->all(FLERR,"Variable {} for fix AdaptiveProtonation does not exit", typePOHstr);
-      if (input->variable->equalstyle(typePOHvar))
-         typePOHstyle = EQUAL;
-      else if (input->variable->atomstyle(typePOHvar))
-         error->all(FLERR,"Atomic style variable is not supported in fix AdaptiveProtonation");
-      else
-         error->all(FLERR,"Variable {} for fix adaptiveProtonation is invalid style",typePOHvar);
-   }
+   // I am not sure if this should be here to in the setup() function
+   read_pH_structure_files();
 
+   // Checking if the atom style contains the molecules information
+   if (atom->molecular != 1) error->all(FLERR,"Illegal atom style in the fix adpative protonation");
 
-   // reseting the molecule ids so each atom and all of its connected atoms have the same molecule id
-   int * molecule = atom->molecule;
-   int * tag = atom->tag;
-   int nlocal = atom->nlocal;
-   for (int i = 0; i < nlocal; i++) {
-      molecule[i] = tag[i];
-   }
-   set_molecule_id();
+   nmax = atom->nmax;
+   nmolecules = atom->nmolecules;
 
-   // The initial value for the change in the natoms, nbonds and nangles
-   natoms_change = 0;
-   nbonds_change = 0;
-   nangles_change = 0;
-   natoms_change_total = 0;
-   nbonds_change_total = 0;
-   nangles_change_total = 0;
+   //It could be separate function
+   memory->create(mark,nmolecules+1,"AdaptiveProtontation:mark");
+   memory->create(mark_prev,nmolecules+1,"AdaptiveProtonation:mark_prev");
+   memory->create(mark_local,nmolecules+1,"AdaptiveProtonation:mark_local");
+   memory->create(molecule_size,nmolecules+1,"AdaptiveProtonation:molecule_size");
+   memory->create(molecule_size_local,nmolecules+1,"AdaptiveProtonation:molecule_size_local");
+   std::fill(mark,mark+nmolecules+1,0);
+   std::fill(mark_prev,mark_prev+nmolecules+1,-1); // I put it on purpose so in the first step every molecule changes
+   std::fill(mark_local,mark_local+nmolecules+1,0);
+   std::fill(molecule_size,molecule_size+nmolecules+1,0);
+   std::fill(molecule_size_local,molecule_size_local+nmolecules+1,0);
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -242,16 +177,143 @@ void FixAdaptiveProtonation::pre_exchange()
 {
    if(update->ntimestep != next_reneighbor) return;
 
-   if (atom->nmax > nmax)
+   if (atom->nmolecules > nmolecules)
    {
       memory->destroy(mark);
-      nmax = atom->nmax;
-      memory->create(mark,nmax,"AdaptiveProtontation:mark");
+      memory->destroy(mark_prev);
+      memory->destroy(mark_local);
+      memory->destroy(molecule_size);
+      memory->destroy(molecule_size_local);
+
+      nmolecules = atom->nmolecules;
+      
+      memory->create(mark,nmolecules+1,"AdaptiveProtontation:mark");
+      memory->create(mark_prev,nmolecules+1,"AdaptiveProtonation:mark_prev");
+      memory->create(mark_local,nmolecules+1,"AdaptiveProtonation:mark_local");
+      memory->create(molecule_size,nmolecules+1,"AdaptiveProtonation:molecule_size");
+      memory->create(molecule_size_local,nmolecules+1,"AdaptiveProtonation:molecule_size_local");
+      std::fill(mark,mark+nmolecules+1,0);
+      std::fill(mark_prev,mark_prev+nmolecules+1,-1); // I put it on purpose so in the first step every molecule changes
+      std::fill(mark_local,mark_local+nmolecules+1,0);
+      std::fill(molecule_size,molecule_size+nmolecules+1,0);
+      std::fill(molecule_size_local,molecule_size_local+nmolecules+1,0);
    }
 
    mark_protonation_deprotonation();
    modify_protonable_hydrogens();
    set_protonable_molids();
+}
+
+/* ----------------------------------------------------------------------------------------
+    Reading the structure files
+   ---------------------------------------------------------------------------------------- */
+
+void FixAdaptiveProtonation::read_pH_structure_files()
+{
+    /* File format
+    * Comment
+    * pHnStructures
+    * pHnTypes
+    * type1,  number of type1 atoms in the protonable molecule, qState1, qState2, qState3
+    * ... 
+    * ...  
+    */
+
+   /*Allocating the required memory*/
+   int ntypes = atom->ntypes;
+   memory->create(protonable,ntypes+1,"constant_pH:protonable"); //ntypes+1 so the atom types start from 1.
+   memory->create(typePerProtMol,ntypes+1,"constant_pH:typePerProtMol");
+
+
+
+   char line[128];
+   if (comm->me == 0)
+   {
+       if (!pHStructureFile1 || !pHStructureFile2 )
+           error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
+
+       // comment 
+       fgets(line,sizeof(line),pHStructureFile1);
+       fgets(line,sizeof(line),pHStructureFile2);
+
+       // pHnStructures
+       fgets(line,sizeof(line),pHStructureFile1);
+       line[strcspn(line,"\n")] = '\0';
+       char *token = strtok(line,",");   
+       pHnStructures1 = std::stoi(token);
+
+       // pHnStructures
+       fgets(line,sizeof(line),pHStructureFile2);
+       line[strcspn(line,"\n")] = '\0';
+       token = strtok(line,",");   
+       pHnStructures2 = s9es2,1,MPI_INT,0,world);
+   }
+
+   memory->create(pH1qs,ntypes+1,pHnStructures1, "constant_pH:pH1qs");
+   memory->create(pH2qs,ntypes+1,pHnStructures2, "constant_pH:pH2qs");
+
+   if (comm->me == 0) {
+      // pHnTypes
+      fgets(line,sizeof(line),pHStructureFile1);
+      line[strcspn(line,"\n")] = '\0';
+      char *token = strtok(line,",");    
+      pHnTypes1 = std::stoi(token);
+
+      fgets(line,sizeof(line),pHStructureFile2);
+      line[strcspn(line,"\n")] = '\0';
+      token = strtok(line,",");    
+      pHnTypes2 = std::stoi(token);
+	
+      for (int i = 1; i < ntypes+1; i++)
+      {
+	        protonable[i] = 0;
+	        typePerProtMol[i] = 0;
+	        for (int j = 0; j < pHnStructures1; j++)
+	           pH1qs[i][j] = 0.0;
+	        for (int j = 0; j < pHnStructures2; j++)
+	           pH2qs[i][j] = 0.0;
+      }  
+	   
+      for (int i = 0; i < pHnTypes1; i++)
+      {
+	        if (fgets(line,sizeof(line),pHStructureFile1) == nullptr)
+	           error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
+	        line[strcspn(line,"\n")] = '\0';
+	        token = strtok(line,",");
+	        int type = std::stoi(token);
+	        protonable[type] = 1;
+	        token = strtok(NULL,",");
+	        typePerProtMol[type] = std::stoi(token);
+	        for (int j = 0; j < pHnStructures1; j++) {
+	           token = strtok(NULL,",");
+	           pH1qs[type][j] = std::stod(token);  
+	        }
+
+	        if (fgets(line,sizeof(line),pHStructureFile2) == nullptr)
+	           error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
+	        line[strcspn(line,"\n")] = '\0';
+	        token = strtok(line,",");
+	        type = std::stoi(token);
+	        protonable[type] = 1;
+	        token = strtok(NULL,",");
+	        typePerProtMol[type] = std::stoi(token);
+	        for (int j = 0; j < pHnStructures2; j++) {
+	           token = strtok(NULL,",");
+	           pH2qs[type][j] = std::stod(token);  
+	         }
+       }
+       fclose(pHStructureFile1);
+       fclose(pHStructureFile2);
+   }
+   
+   // To avoid the code trying to reclose it.
+   pHStructureFile1 = nullptr;
+   pHStructureFile2 = nullptr;
+   
+   MPI_Bcast(protonable,ntypes+1,MPI_INT,0,world);
+   MPI_Bcast(typePerProtMol,ntypes+1,MPI_INT,0,world);
+   MPI_Bcast(pH1qs[0],(ntypes+1)*(pHnStructures1),MPI_DOUBLE,0,world);
+   MPI_Bcast(pH2qs[0],(ntypes+1)*(pHnStructures2),MPI_DOUBLE,0,world); 
 }
 
 /* ----------------------------------------------------------------------------------------
@@ -265,18 +327,22 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
    int inum, jnum;
    int wnum; // number of surrounding water molecules
 
-   inum = list->inum + list->gnum;
+   inum = list->inum; // I do not ghost atoms for inum. however, I need them in jnum
    ilist = list->ilist;
    numneigh = list->numneigh;
    firstneigh = list->firstneigh;
 
    int * type = atom->type;
+   int * molecule = atom->molecule;
 
    for (int ii = 0; ii < inum; ii++) {
       wnum = 0.0;
       int i = ilist[ii];
-      if (type[i] != typeP) {
-         mark[i] = 0.0;
+      molecule_size_local[molecule[i]]++;
+
+      // Check if this atom is protonable --> if not do not bother with it.
+      if (protonable[type[i]] == 0) {
+         mark_local[molecule[i]] = NEITHER;
          continue;
       }
       jlist = firstneigh[i];
@@ -285,16 +351,33 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
          int j = jlist[jj];
          j &= NEIGHMASK;
 
-         if (type[j] == typeO)
+         if (type[j] == typeOW)
             wnum++;  // Just considering the Oxygens. It is possible that both O and H from the same water molecule are close to this atom.
       }
       if (wnum >= threshold) {
-         mark[i] = 1;
+         mark_local[molecule[i]] += SOLVENT;
+      } else {
+         mark_local[molecule[i]] += SOLID;
       }
-      else {
-         mark[i] = -1;
-      }  
+   }
+
+
+
+
+   // Reducing the values from various cpus
+   MPI_Allreduce(&mark_local,&mark,nmolecules+1,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(&molecule_size_local,&molecule_size,nmolecules+1,MPI_DOUBLE,MPI_SUM,world);
+
+   for (int i = 1; i < nmolecules+1; i++)
+   {
+      double test_condition = mark[i]/molecule_size[i];
+      if (test_condition >= 0 && test_condition <= 0.5 ) mark[i] = SOLID;
+      else if (test_condition > 0.5 && test_condition <= 1) mark[i] = SOLVENT;
+      else if (test_condition > 1 || test_condition < -1) 
+         error->one(FLERR,"Error in fix adaptive_protonation: You should never have reached here!");
+      else mark[i] = NEITHER;
    }  
+     
 }
 
 /* ----------------------------------------------------------------------------------------
@@ -418,343 +501,47 @@ void FixAdaptiveProtonation::get_protonable_molids(int *_molids) const
 }
 
 /* ----------------------------------------------------------------------------------------
-   changing the protonation state of phosphates 
-   ---------------------------------------------------------------------------------------- */
+   Changing from the protonated to deprotonated states --> Moving from the solvent to the solid phase
 
-void FixAdaptiveProtonation::modify_protonable_hydrogens()
+   ---------------------------------------------------------------------------------------- */
+void FixAdaptiveProtonation::modify_protonation_state()
 {
    int nlocal = atom->nlocal;
-   tagint *tag = atom->tag;
+   double* q = atom->q;
    int * type = atom->type;
-   double **x = atom->x;
-   AtomVec *avec = atom->avec;
+   int * molecule = atom->molecule;
 
 
-   if (atom->avec->bonds_allow) {
-      
-      int pAtom;     // local atom id for the P atom
-      int oAtoms[3]; // local atom id for the O atoms  <----> It is only used for identifying those oxygen atoms needed to be added
-      int hAtoms[3]; // local atom id for the H atoms  <----> It is only used for identifying those hydrogen atoms needed to be removed
-
-      for (int i = 0; i < nlocal; i++) {
-         if (mark[i] == 0) continue;
-
-
-         pAtom = i;
-         int numHs = 0; 
-         for (int m = 0; m < atom->num_bond[i]; m++) {
-            /* 
-               bond_atoms[i][m] contains the global id (tag) of the connected atom
-               so there is a need for mapping the global id to the local one
-            */
-            int atom2 = atom->map(atom->bond_atom[i][m]);
-            if (m < 3) oAtoms[m] = atom2;
-            else error->warning(FLERR,"Number of atoms connected to P is {}",atom->num_bond[i]);
-            if (atom2 == -1) error->warning(FLERR,"Bond atom missing in fix AdaptiveProtonation");
-            for (int n = 0; n < atom->num_bond[atom2]; n++) {
-               int atom3 = atom->map(atom->bond_atom[atom2][n]);
-               if (type[atom3] == typeH) 
-               {
-                   if (numHs < 3)
-                      hAtoms[numHs++] = atom3;
-                   else
-                      error->warning(FLERR,"Number of protons are {}",++numHs);
-               }
-            }
-
-            /* 
-               Considering different values of mark[i] and setting the number of hydrogen atoms
-               to an appropriate value
-            */
-            
-            if (mark[i] == -1 && numHs == 0) continue; // PO4 inside the HAp ---> Nothing to do here!
-            if (mark[i] == -1 && numHs > 0) remove_hydrogens(i,numHs,oAtoms,hAtoms); //HPO4, H2PO4 or H3PO4 inside ---> The hydrogens must be removed
-            if (mark[i] == 1 && numHs == req_numHs) continue; // HxPO4 inside the surface with the exact number of required Hydrogen atoms ---> Nothing to do here!
-            if (mark[i] == 1 && numHs > req_numHs) remove_hydrogens(i,numHs-req_numHs,oAtoms,hAtoms); // HxPO4 in the surface or in solution with higher number of Hydrogens
-            if (mark[i] == 1 && numHs < req_numHs) {
-               /* HxPO4 in the surface or in solution with lower number of Hydrogens
-                  I would prefer to remove all the hydrogens of this phosphate and then add
-                  the required number to eliminate the possibility of having an Oxygen atom with
-                  two hydrogen atoms
-               */
-               remove_hydrogens(i,numHs,oAtoms, hAtoms);
-               add_hydrogens(i,req_numHs,oAtoms, hAtoms);
-            }
-         }
+   // You have take care of the situation in which one of the atoms of a molecule has mark[i] == 1
+   for (int i; i < nlocal; i++) {
+      switch(mark[molecule[i]])
+      {
+         case NEITHER: // Not protonable --> nothing to do here
+            break;
+         case SOLVENT: // In the water
+            if (mark_prev[molecule[i]] == SOLID) // It came from the solid --> protonate it
+               q[i] = pH2qs[type[i]][0];
+            else
+            {} // It used to be in the water --> do nothing
+            break;
+         case SOLID: // In the solid
+            if (make_prev[molecule[i]] == SOLVENT) // It came from the water --> deprotonate it
+               q[i] = pH1qs[type[i]][0];
+            else
+            {} // It used to be in the solid --> do nothing 
       }
    }
 }
 
-/* ------------------------------------------------------------------------------------------
-   Adding the requested number of hydrogen atoms to the molecule with P local id of i
-   Warning <----> This function does not take into account the number of hydrogen atoms
-   aldready present in the phosphate molecule so the best practice is to remove all
-   the hydrogen atoms and then add the required number of hydrogens
-   ------------------------------------------------------------------------------------------ */
-
-void FixAdaptiveProtonation::add_hydrogens(const int& i, const int& req_numHs, const int oAtoms[3], const int hAtoms[3]) 
-{
-   double **x = atom->x;
-
-   // adding hydrogens to this phosphate
-   double coors[3][3]; // Maximum three phosphate ions
-               
-   coors[0][0] = x[oAtoms[0]][0] + 0.9;
-   coors[0][1] = x[oAtoms[0]][1];
-   coors[0][2] = x[oAtoms[0]][2];
-   coors[1][0] = x[oAtoms[1]][0] - 0.8;
-   coors[1][1] = x[oAtoms[1]][1];
-   coors[1][2] = x[oAtoms[1]][2];
-   coors[2][0] = x[oAtoms[2]][0];
-   coors[2][1] = x[oAtoms[2]][1] + 0.64;
-   coors[2][2] = x[oAtoms[2]][2] - 0.64;
-               
-
-   // atom->avec->create_atoms itself updates the atom->nlocal value
-
-               
-   // Let's connect these two new Hs to the P
-   if (atom->num_bond[i] == atom->bond_per_atom)
-      error->one(FLERR,"Num bonds exceeded bonds per atom in fix AdaptiveProtonation");
-
-   /*
-     I guess that the size of bond_type and bond_atom is atom->bond_per_atom so there is enough space there
-   */
-
-   for (int k = 0; k < req_numHs; k++) {
-      // Adding the kth hydrogen atom
-      
-      error->warning(FLERR,"atom->natoms before adding atoms = {}",atom->natoms);
-      atom->avec->create_atom(typeH,coors[k]);
-      error->warning(FLERR,"atom->natoms after adding atoms = {}",atom->natoms);
-      // If these two are the same I need to modify the atom->nlocal ---> However, it is not so likely.
-      natoms_change++;
-      
-
-      // global and local indexes of new hydrogens are needed to modify the bond and angle information in the topology
-      int tagH = (atom->tag[atom->nlocal-1] > 0)? atom->tag[atom->nlocal-1]: atom->natoms-1;
-      int jH = atom->nlocal-1 ;
-
-      
-      // The kth OH bond and angle (Fortunately each hydrogen contributes to just one bond and one angle!)
-      int p_local_index = i;
-      int o_local_index = oAtoms[k];
-      int h_local_index = jH;
-      int p_global_index = atom->tag[p_local_index];
-      int o_global_index = atom->tag[o_local_index];
-      int h_global_index = tagH;
-      int & p_num_bond = atom->num_bond[p_local_index]; // it is here just for completeness, we are not adding any new bonds to the P atom here.
-      int & o_num_bond = atom->num_bond[o_local_index];
-      int & h_num_bond = atom->num_bond[h_local_index];
-      int & p_num_angle = atom->num_angle[p_local_index];
-      int & o_num_angle = atom->num_angle[o_local_index];
-      int & h_num_angle = atom->num_angle[h_local_index];
-
-      // The oxygen section for the new bond
-      atom->bond_type[o_local_index][o_num_bond] = typeOH;
-      atom->bond_atom[o_local_index][o_num_bond] = h_global_index;
-      o_num_bond++;
-
-      // Just one bond is added for each added hydrogen atom
-      nbonds_change++;
-
-      // The oxygen section for the new angle
-      atom->angle_type[o_local_index][o_num_angle] = typePOH;
-      atom->angle_atom1[o_local_index][o_num_angle] = p_global_index;
-      atom->angle_atom2[o_local_index][o_num_angle] = o_global_index;
-      atom->angle_atom3[o_local_index][o_num_angle] = h_global_index;
-      o_num_angle++;
-
-      // Just one angle is added for each extra hydrogen atom
-      nangles_change++;
-      
-      if (force->newton_bond) continue; // If the newton flag is on just half of the topology information is required
-      
-      // The hydrogen section for the new bond
-      atom->bond_type[h_local_index][0] = typeOH;
-      atom->bond_atom[h_local_index][0] = o_global_index;
-      h_num_bond++;
-
-      // The phosphate section for the new angle
-      atom->angle_type[p_local_index][o_num_angle] = typePOH;
-      atom->angle_atom1[p_local_index][o_num_angle] = p_global_index;
-      atom->angle_atom2[p_local_index][o_num_angle] = o_global_index;
-      atom->angle_atom3[p_local_index][o_num_angle] = h_global_index;
-      p_num_angle++;
-
-      // The Oxygen section for the new angle
-      atom->angle_type[o_local_index][1] = typePOH;
-      atom->angle_atom1[o_local_index][i] = p_global_index;
-      atom->angle_atom2[o_local_index][i] = o_global_index;
-      atom->angle_atom3[o_local_index][i] = h_global_index;
-      o_num_angle++;
-
-      // The Hydrogen section for the new angle
-      atom->angle_type[h_local_index][i] = typePOH;
-      atom->angle_atom1[h_local_index][i] = p_global_index;
-      atom->angle_atom2[h_local_index][i] = o_global_index;
-      atom->angle_atom3[h_local_index][i] = h_global_index;
-      h_num_angle = 1;
-   }
-
-
-   // Summing up the total change in the natoms, nbonds and nangles
-   MPI_Allreduce(&natoms_change,&natoms_change_total,1,MPI_INT,MPI_SUM,world);
-   MPI_Allreduce(&nbonds_change,&nbonds_change_total,1,MPI_INT,MPI_SUM,world);
-   MPI_Allreduce(&nangles_change,&nangles_change_total,1,MPI_INT,MPI_SUM,world);
-
-   // Updating the number of atoms, bonds and angles
-   atom->natoms += natoms_change_total;
-   atom->nbonds += nbonds_change_total;
-   atom->nangles += nangles_change_total;
-}
 
 /* --------------------------------------------------------------------------
-   The function to remove specific number of hydrogen atoms with the local
-   ids in the hAtoms[3] array
-   
-   
-   HERE I AM NOT SURE ABOUT THE NEWTON FLAG, SHOULD THE CODE BE DIFFERENT 
-   WHEN FORCE->NEWTON_BOND????
+   Set the mark_prev
    -------------------------------------------------------------------------- */
 
-void FixAdaptiveProtonation::remove_hydrogens(const int i, int _numHs_2_del, const int oAtoms[3], const int hAtoms[3])
+void FixAdaptiveProtonation::set_mark_prev()
 {
-   int nlocal = atom->nlocal;
-   int numHs_2_del = _numHs_2_del;
-
-
-   int p_local_index = i;
-   int p_global_index = atom->tag[p_local_index];
-   int & p_num_bond = atom->num_bond[p_local_index]; // it is here just for completeness, we are not adding any new bonds to the P atom here.
-   int & p_num_angle = atom->num_angle[p_local_index];
-
-   // Updating the topology for the P atom removing the angle involving the Hydrogen atoms
-   for (int k = 0; k < p_num_angle; k++)/* ----------------------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://www.lammps.org/, Sandia National Laboratories
-   LAMMPS development team: developers@lammps.org
-
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
-   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
-   the GNU General Public License.
-
-   See the README file in the top-level LAMMPS directory.
-------------------------------------------------------------------------- */
-/* ---------- v0.05.15----------------- */
-// Please remove unnecessary includes 
-#include "fix_adaptive_protonation.h"
-
-#include "atom.h"
-#include "atom_masks.h"
-#include "domain.h"
-#include "error.h"
-#include "input.h"
-#include "math_const.h"
-#include "memory.h"
-#include "comm.h"
-#include "modify.h"
-#include "region.h"
-#include "neigh_list.h"
-#include "neighbor.h"
-#include "output.h"
-#include "respa.h"
-#include "update.h"
-#include "variable.h"
-
-
-#include "force.h"
-#include "pair.h"
-#include "improper.h"
-#include "dihedral.h"
-#include "kspace.h"
-#include "angle.h"
-#include "bond.h"
-#include "atom.h"
-#include "group.h"
-
-#include "thermo.h"
-#include <cmath>
-#include <cstring>
-#include <stdio.h>
-
-using namespace LAMMPS_NS;
-using namespace FixConst;
-using namespace MathConst;
-
-enum { NONE, CONSTANT, EQUAL, ATOM };
-
-/* --------------------------------------------------------------------------------------- */
-
-FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) :
-   Fix(lmp, narg, arg), typePstr(nullptr), typeOstr(nullptr), typeHstr(nullptr),
-   typeOHstr(nullptr), typePOHstr(nullptr)
-{
-   if (narg < 11) utils::missing_cmd_args(FLERR, "fix AdaptiveProtonation", error);
-
-
-   {
-      if (atom->angle_atom1[p_local_index][k] == atom->tag[hAtoms[0]] ||
-          atom->angle_atom3[p_local_index][k] == atom->tag[hAtoms[0]] ||
-          atom->angle_atom1[p_local_index][k] == atom->tag[hAtoms[1]] ||
-          atom->angle_atom3[p_local_index][k] == atom->tag[hAtoms[1]] ||
-          atom->angle_atom1[p_local_index][k] == atom->tag[hAtoms[2]] ||
-          atom->angle_atom3[p_local_index][k] == atom->tag[hAtoms[2]]) {
-         atom->angle_type[p_local_index][k] = atom->angle_type[p_local_index][p_num_angle-1];
-         atom->angle_atom1[p_local_index][k] = atom->angle_atom1[p_local_index][p_num_angle-1];
-         atom->angle_atom2[p_local_index][k] = atom->angle_atom2[p_local_index][p_num_angle-1];
-         atom->angle_atom3[p_local_index][k] = atom->angle_atom3[p_local_index][p_num_angle-1];
-         p_num_angle--;
-         nangles_change--;
-      }
-   }
-
-   
-
-   // Updating the topology for the O atom removing the bond involving the deleted atoms
-   for (int k = 0; k < 3; k++) {
-      int o_local_index = oAtoms[k];
-      int o_global_index = atom->tag[o_local_index];
-      int o_num_bond = atom->num_bond[o_local_index];
-
-      for (int l = 0; l < o_num_bond; l++) {
-         if (atom->bond_atom[o_local_index][l] == atom->tag[hAtoms[0]] ||
-             atom->bond_atom[o_local_index][l] == atom->tag[hAtoms[1]] ||
-             atom->bond_atom[o_local_index][l] == atom->tag[hAtoms[2]]) {
-               atom->bond_type[o_local_index][l] = atom->bond_type[o_local_index][o_num_bond-1];
-               atom->bond_atom[o_local_index][l] = atom->bond_type[o_local_index][o_num_bond-1];
-               o_num_bond--;
-               nbonds_change--;
-             }
-      }
-   }
-   
-   int k = 0;
-   while(k < nlocal && numHs_2_del) {
-      if (hAtoms[0] == k ||
-          hAtoms[1] == k ||
-          hAtoms[2] == k) {
-         atom->avec->copy(nlocal-1, k , 1);
-         nlocal--;
-         numHs_2_del--;
-         natoms_change--;
-      }
-      k++;
-   }
-
-   if (numHs_2_del)
-      error->warning(FLERR,"There is not enough hydrogen atoms for the fix adaptive protonation to delete, this should not have happen!!!");
-      
-   // Summing up the change in natoms, nbonds and nangles from different procs
-   MPI_Allreduce(&natoms_change,&natoms_change_total,1,MPI_INT,MPI_SUM,world);
-   MPI_Allreduce(&nbonds_change,&nbonds_change_total,1,MPI_INT,MPI_SUM,world);
-   MPI_Allreduce(&nangles_change,&nangles_change_total,1,MPI_INT,MPI_SUM,world);
-   
-   // Updating the total number of atoms, bonds and angles
-   atom->natoms += natoms_change_total;
-   atom->nbonds += nbonds_change_total;
-   atom->nangles += nangles_change_total;  
+   for (int i = 0; i < nmolecules + 1; i++)
+      mark_prev[i] = mark[i];
 }
 
 /* --------------------------------------------------------------------------
@@ -790,4 +577,5 @@ double FixAdaptiveProtonation::memory_usage()
 {
    return 0.0;
 }
+
 
