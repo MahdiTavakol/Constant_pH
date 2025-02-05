@@ -78,6 +78,17 @@ ComputeSoluteCoordination::~ComputeSoluteCoordination()
    memory->destroy(vector_atom);
 }
 
+/* --------------------------------------------------------------------------------------- */
+
+void ComputeSoluteCoordination::init()
+{
+   // Request a full neighbor list
+   int list_flags = NeighConst::REQ_OCCASIONAL | NeighConst::REQ_FULL;
+
+
+   // request for a neighbor list
+   neighbor->add_request(this, list_flags);
+}
 
 /* ---------------------------------------------------------------------------------------
     It is need to access the neighbor list
