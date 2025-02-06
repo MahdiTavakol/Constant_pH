@@ -53,7 +53,7 @@ using namespace MathConst;
 
 /* --------------------------------------------------------------------------------------- */
 
-ComputeSoluteCoordination::ComputeSoluteCoordination(LAMMPS* lmp, int narg, char** arg) : Compute(lmp, narg, arg), 
+ComputeSoluteCoordination::ComputeSoluteCoordination(LAMMPS* lmp, int narg, char** arg) : Compute(lmp, narg, arg) 
 {
    if (narg < 3) utils::missing_cmd_args(FLERR, "fix adaptive_protonation", error);
 
@@ -82,7 +82,7 @@ ComputeSoluteCoordination::~ComputeSoluteCoordination()
 
 void ComputeSoluteCoordination::init()
 {
-   // Request a full neighbor list
+   // Request a fulintl neighbor list
    int list_flags = NeighConst::REQ_OCCASIONAL | NeighConst::REQ_FULL;
 
 
@@ -101,8 +101,9 @@ void ComputeSoluteCoordination::init_list(int /*id*/, NeighList* ptr)
 
 /* --------------------------------------------------------------------------------------- */
 
-int FixAdaptiveProtonation::compute_peratom()
+void ComputeSoluteCoordination::compute_peratom()
 {
+  int* type = atom->type;
   invoked_peratom = update->ntimestep;
 
 
