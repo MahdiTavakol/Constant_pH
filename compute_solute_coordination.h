@@ -37,17 +37,9 @@ class ComputeSoluteCoordination : public Compute {
   ComputeSoluteCoordination(class LAMMPS *, int, char **);
   ~ComputeSoluteCoordination() override;
   void init() override;
-  void setup() override;
   void compute_peratom() override;
-  double compute_scalar() override;
-  void set_arrays(int) override;
-  double memory_usage() override;
   void init_list(int, class NeighList*) override;
 
-  void lock(class Fix *, bigint, bigint) override;
-  void unlock(class Fix *) override;
-  int setup_chunks();
-  void compute_ichunk();
 
  private:
   int typeOW;
