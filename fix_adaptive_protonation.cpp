@@ -167,6 +167,9 @@ void FixAdaptiveProtonation::init_list(int /*id*/, NeighList* ptr)
 
 void FixAdaptiveProtonation::pre_exchange()
 {
+   // Building the neighbor
+   neighbor->build_one(list);
+	
    if(update->ntimestep != next_reneighbor) return;
 
    if (atom->nmax > nmax)
