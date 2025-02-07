@@ -53,6 +53,7 @@ using namespace MathConst;
 
 enum { NONE, CONSTANT, EQUAL, ATOM };
 enum {NEITHER = -1, SOLID = 0, SOLVENT = 1};
+enum {F_NONE,RESET_MID = 1 << 1};
 
 /* --------------------------------------------------------------------------------------- */
 
@@ -81,11 +82,11 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    typeOW = utils::numeric(FLERR,arg[6],false,lmp);
    threshold = utils::numeric(FLERR,arg[7],false,lmp);
 
-   molecule_id_flag = false;
+   flags = 0;
    int iarg = 8;
    while (iarg < narg) {
       if (strcmp(arg[iarg], "reset_molecule_ids") == 0) {
-         molecule_id_flag = true;
+         flags |= RESET_MID;
          iarg++;
       }
       else
@@ -102,8 +103,8 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    if (pH2qs) memory->destroy(pH2qs);
    if (typePerProtMol) memory->destroy(typePerProtMol);
    if (protonable) memory->destroy(protonable);
-   
-   if (protonable_molids) delete [] protonable_molids;
+   if (protonable_molids) memory->destroy(protonable_molids);
+   if (vector_atom) delete [] vector_atom;
 
    deallocate_storage(); 
 
@@ -112,8 +113,8 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    pH2qs = nullptr;
    typePerProtMol = nullptr;
    protonable = nullptr;
-
    protonable_molids = nullptr;
+   vector_atom = nullptr;
 }
 
 /* --------------------------------------------------------------------------------------- */
@@ -121,7 +122,7 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
 int FixAdaptiveProtonation::setmask()
 {
    int mask = 0;
-   mask |= PRE_EXCHANGE;
+   mask |= INITIAL_INTEGRATE;
    return mask;
 }
 
@@ -140,7 +141,7 @@ void FixAdaptiveProtonation::init()
 
    allocate_storage();
 
-   if (molecule_id_flag)
+   if (flags & RESET_MID)
       set_molecule_id();
 
    nmax = atom->nmax;
@@ -158,6 +159,22 @@ void FixAdaptiveProtonation::init()
 }
 
 /* ---------------------------------------------------------------------------------------
+   Setup
+   --------------------------------------------------------------------------------------- */
+   
+void FixAdaptiveProtonation::setup(int /*vflag*/)
+{
+   // Counting the number of water molecules surrounding the protonable molecules
+   mark_protonation_deprotonation();
+
+   // This is required since the fix_constant_pH.cpp does not deal with those molecules in the solid
+   modify_protonation_state();
+
+   // Resetting the mark_prev parameter to help us keep the track of which molecule moves from solid to solvent and vice versa
+   set_mark_prev();
+}
+
+/* ---------------------------------------------------------------------------------------
     It is need to access the neighbor list
    --------------------------------------------------------------------------------------- */
 
@@ -168,7 +185,7 @@ void FixAdaptiveProtonation::init_list(int /*id*/, NeighList* ptr)
 
 /* --------------------------------------------------------------------------------------- */
 
-void FixAdaptiveProtonation::pre_exchange()
+void FixAdaptiveProtonation::initial_integrate(int /*vflag*/)
 {
    // Building the neighbor
    neighbor->build_one(list);
