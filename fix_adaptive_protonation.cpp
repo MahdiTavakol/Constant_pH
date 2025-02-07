@@ -152,6 +152,9 @@ void FixAdaptiveProtonation::init()
 
    // request for a neighbor list
    neighbor->add_request(this, list_flags);
+   
+   // n_protonable
+   n_protonable = 0;
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -408,7 +411,7 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
       else if (test_condition > 1 || test_condition < -1) 
          error->one(FLERR,"Error in fix adaptive_protonation: You should never have reached here!");
       else mark[i] = NEITHER;
-   }  
+   }
      
 }
 
@@ -512,6 +515,29 @@ void FixAdaptiveProtonation::modify_protonation_state()
    }
 
    MPI_Allreduce(nchanges_local,nchanges,3,MPI_INT,MPI_SUM,world);
+   
+   
+   // Check if we need to change n_protonable and protonable_molids
+   /*
+    * It is possible that nchanges_local[1] and nchanges_local[2] cancel each other,
+    * however, since different molecules are protonable, I would prefer to deallocate
+    * and reallocate the protonable_molids so that fix_constant_pH is informed of the change
+    * and it reinitializes the v_lambdas.
+    */
+   if (nchanges[0]) {
+      n_protonable += nchanges[1]-nchanges[2];
+      
+      if (protonable_molids) memory->destroy(protonable_molids);
+      protonable_molids = nullptr;
+      memory->create(protonable_molids,nmolecules+1,"constant_pH:protonable_molids"); 
+
+      int j = 0;      
+      for (int i = 0; i < nmolecules+1; i++)
+         if (mark[i] == SOLVENT) {
+            protonable_molids[j] = i;
+            j++;
+         }
+   }
 }
 
 
@@ -552,5 +578,3 @@ double FixAdaptiveProtonation::memory_usage()
 {
    return 0.0;
 }
-
-
