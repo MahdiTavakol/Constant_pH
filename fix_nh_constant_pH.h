@@ -38,23 +38,35 @@ class FixNHConstantPH : public FixNH {
 
  protected:
 
+  // integration functions (x and lambdas)
   void nve_x() override;
   void nve_v() override;
   void nh_v_temp() override;
+  
+  // functions related to lambdas
+  void deallocate_lambda_storage();
+  void allocate_lambda_storage();
+  void update_lambda_params();
+  
+  // random number function
   double random_normal(double mean, double stddev);
+  // constraining total charge through change lambdas and lambda_buff
   template <int mode>
   void constrain_lambdas();
+  // computing the total charge 
   double compute_q_total();
 
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
   char *fix_constant_pH_id;
+  
+  // lambdas variables --> It should have its own class
   double** x_lambdas, **v_lambdas, **a_lambdas, **m_lambdas;
   double T_lambda;
   int n_lambdas;
   int lambda_every;
-
-  // Do I have a buffer here and if so what are its parameters
+  
+  // Buffer parameters
   double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
   int N_buff;
 
