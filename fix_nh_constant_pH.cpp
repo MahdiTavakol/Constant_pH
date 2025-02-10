@@ -20,7 +20,6 @@
    Constant pH support added by: Mahdi Tavakol (Oxford)
    v0.08.52
 ------------------------------------------------------------------------- */
-#include <iostream>
 
 #include "fix_constant_pH.h"
 #include "fix_nh_constant_pH.h"
@@ -62,7 +61,7 @@ enum {LAMBDA_NONE,LAMBDA_ANDERSEN,LAMBDA_BUSSI,LAMBDA_NOSEHOOVER};
 enum { 
        NONE_LAMBDA=0,
        BUFFER=1<<0, 
-       CONSTRAIN=1<<1
+       CONSTRAIN=1<<1,
      };
 
 /* ----------------------------------------------------------------------
@@ -131,10 +130,7 @@ FixNHConstantPH::FixNHConstantPH(LAMMPS *lmp, int narg, char **arg) :
 FixNHConstantPH::~FixNHConstantPH()
 {
   if (fix_constant_pH_id) delete [] fix_constant_pH_id;
-  if (x_lambdas) memory->destroy(x_lambdas);
-  if (v_lambdas) memory->destroy(v_lambdas);
-  if (a_lambdas) memory->destroy(a_lambdas);
-  if (m_lambdas) memory->destroy(m_lambdas); 
+  deallocate_lambda_storage();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -147,15 +143,57 @@ void FixNHConstantPH::init()
   fix_constant_pH = static_cast<FixConstantPH*>(modify->get_fix_by_id(fix_constant_pH_id));
   fix_constant_pH->return_nparams(n_lambdas);
 
-   
-  memory->create(x_lambdas,n_lambdas,3,"nh_constant_pH:x_lambdas");
-  memory->create(v_lambdas,n_lambdas,3,"nh_constant_pH:v_lambdas");
-  memory->create(a_lambdas,n_lambdas,3,"nh_constant_pH:a_lambdas");
-  memory->create(m_lambdas,n_lambdas,3,"nh_constant_pH:m_lambdas");
+  allocate_lambda_storage();
 
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
   zeta_nose_hoover = 0.0;
+}
+
+/* ----------------------------------------------------------------------
+    deallocating the storage of the lambda parameters
+   ---------------------------------------------------------------------- */
+   
+void FixNHConstantPH::deallocate_lambda_storage()
+{
+  if (x_lambdas) memory->destroy(x_lambdas);
+  if (v_lambdas) memory->destroy(v_lambdas);
+  if (a_lambdas) memory->destroy(a_lambdas);
+  if (m_lambdas) memory->destroy(m_lambdas);
+  
+  x_lambdas = nullptr;
+  v_lambdas = nullptr;
+  a_lambdas = nullptr;
+  m_lambdas = nullptr; 
+}
+
+/* ----------------------------------------------------------------------
+    allocating the storage of the lambda parameters
+   ---------------------------------------------------------------------- */
+   
+void FixNHConstantPH::allocate_lambda_storage()
+{
+  memory->create(x_lambdas,n_lambdas,3,"nh_constant_pH:x_lambdas");
+  memory->create(v_lambdas,n_lambdas,3,"nh_constant_pH:v_lambdas");
+  memory->create(a_lambdas,n_lambdas,3,"nh_constant_pH:a_lambdas");
+  memory->create(m_lambdas,n_lambdas,3,"nh_constant_pH:m_lambdas");
+}
+
+/* ----------------------------------------------------------------------
+   updating the lambda parameters from the fix constant_pH
+   ---------------------------------------------------------------------- */
+   
+void FixNHConstantPH::update_lambda_params()
+{
+  int n_lambdas_current;
+  fix_constant_pH->return_nparams(n_lambdas_current);
+  // We need to check if the number of lambdas have changed
+  if (n_lambdas != n_lambdas_current) {
+    n_lambdas = n_lambdas_current;
+    deallocate_lambda_storage();
+    allocate_lambda_storage();
+  }
+  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
 }
 
 /* ----------------------------------------------------------------------
@@ -167,9 +205,8 @@ void FixNHConstantPH::nve_v()
   FixNH::nve_v();
   
   bigint ntimestep = update->ntimestep;
-
-  fix_constant_pH->return_nparams(n_lambdas);
-  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  
+  update_lambda_params();
 
   for (int i = 0; i < n_lambdas; i++) 
      for (int j = 0; j < 3; j++)
@@ -193,8 +230,7 @@ void FixNHConstantPH::nve_x()
 {
   FixNH::nve_x();
   bigint ntimestep = update->ntimestep;
-  fix_constant_pH->return_nparams(n_lambdas);
-  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  update_lambda_params();
   for (int i = 0; i < n_lambdas; i++)
      for (int j = 0; j < 3; j++)
         x_lambdas[i][j] += dtv * v_lambdas[i][j];
@@ -230,8 +266,7 @@ void FixNHConstantPH::nh_v_temp()
   double mvv2e = force->mvv2e;
 
   // Lets extract the parameters from the fix_constant_pH again
-  fix_constant_pH->return_nparams(n_lambdas);
-  fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+  update_lambda_params();
   
   // and the buffer if present
   if (lambda_integration_flags & BUFFER)
@@ -248,10 +283,11 @@ void FixNHConstantPH::nh_v_temp()
      
 
   // Temperature
-  double t_lambda_current_1, t_lambda_current_2;
+  double t_lambda_current, t_lambda_current_1, t_lambda_current_2;
   double t_lambda_target = t_target;
-  fix_constant_pH->return_T_lambda(t_lambda_current1,0);
-  fix_constant_pH->return_T_lambda(t_lambda_current2,1);
+  fix_constant_pH->return_T_lambda(t_lambda_current_1,0);
+  fix_constant_pH->return_T_lambda(t_lambda_current_2,1);
+  fix_constant_pH->return_T_lambda(t_lambda_current,2);
   
   if (lambda_thermostat_type == LAMBDA_ANDERSEN && comm->me == 0) {
     double P = dt/t_andersen;
@@ -321,13 +357,13 @@ void FixNHConstantPH::nh_v_temp()
     t_lambda_new_1 += 2*r11*std::sqrt((t_lambda_target*t_lambda_current_1/n_lambdas)*(1-zeta_bussi)*zeta_bussi);
     t_lambda_new_2 +=  (1-zeta_bussi)*(t_lambda_target*(r12*r12+sum_r22)/(2*n_lambdas)-t_lambda_current_2);
     t_lambda_new_2 += 2*r12*std::sqrt((t_lambda_target*t_lambda_current_2/(2*n_lambdas))*(1-zeta_bussi)*zeta_bussi);
-    double alpha_bussi1 = std::sqrt(t_lambda_new_1 / t_lambda_current);
-    double alpha_bussi2 = std::sqrt(t_lambda_new_2 / t_lambda_current);
+    double alpha_bussi1 = std::sqrt(t_lambda_new_1 / t_lambda_current_1);
+    double alpha_bussi2 = std::sqrt(t_lambda_new_2 / t_lambda_current_2);
 
     if (which == NOBIAS) {
 
        // first, the lambdas
-       for (int i = 0; i < n_lambdas; i++)
+       for (int i = 0; i < n_lambdas; i++) {
           v_lambdas[i][0] *= alpha_bussi1;
           for (int j = 1; j < 3; j++) {
              v_lambdas[i][j] *= alpha_bussi2;
@@ -342,9 +378,10 @@ void FixNHConstantPH::nh_v_temp()
                  x_lambdas[i][j] -= 1.0;
              }
           }
+       }
        // and then the buffer 
        if (lambda_integration_flags & BUFFER) {
-          v_lambda_buff *= alpha_bussi;
+          v_lambda_buff *= alpha_bussi1;
           if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
             v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
        }
@@ -382,6 +419,9 @@ void FixNHConstantPH::nh_v_temp()
      }
   }
 
+  if (n_lambdas == 0)
+     return;
+ 
   MPI_Bcast(v_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
   if (lambda_integration_flags & BUFFER)
      MPI_Bcast(&v_lambda_buff,1,MPI_DOUBLE,0,world);  
