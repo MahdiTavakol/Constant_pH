@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.10.00----- */
+/* ---v0.10.15----- */
 
 #ifdef FIX_CLASS
 // clang-format off
