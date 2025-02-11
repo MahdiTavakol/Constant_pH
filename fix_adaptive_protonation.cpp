@@ -518,6 +518,8 @@ void FixAdaptiveProtonation::read_molids_file()
 {
    /*
     *  File format
+    *  comment_1
+    *  comment_2
     *  n_molids 
     *  molid1
     *  molid2
@@ -526,6 +528,7 @@ void FixAdaptiveProtonation::read_molids_file()
     *  molidn
     */
   
+   char *token;
    if (comm->me == 0) {
 
       char line[128];
@@ -533,8 +536,12 @@ void FixAdaptiveProtonation::read_molids_file()
       line[strcspn(line,"\n")] = '\0';
       token = strtok(line,",");
       n_protonable = std::stoi(token);
-      if (n_protonable > n_molecules) error->one(FLERR,"Unknown error");
-      for (int i = 0; i < n_mid; i++) {
+      if (n_protonable > nmolecules) error->one(FLERR,"Unknown error");
+      // Skipping the first comment
+      fgets(line,sizeof(line),init_molid_file);
+      // Skipping the second comment
+      fgets(line,sizeof(line),init_molid_file);
+      for (int i = 0; i < n_protonable; i++) {
 	 fgets(line,sizeof(line),init_molid_file);
          line[strcspn(line,"\n")] = '\0';
 	 token = strtok(line,",");
