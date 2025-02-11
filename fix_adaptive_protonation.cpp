@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.10.09----------------- */
+/* ---------- v0.10.15----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
