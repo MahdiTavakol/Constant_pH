@@ -123,7 +123,10 @@ namespace LAMMPS_NS {
       void deallocate_storage();
       // Allocating storage
       void allocate_storage();
+      // Reseting all the molids 
       void set_molecule_id();
+      // Reading the molids from a file <--> For the file structure please have a look at the implementation file.
+      void read_molids_file();
       // Mark phosphate atoms for protonation/deprotonation
       void mark_protonation_deprotonation();
       // Modifying the protonation state
