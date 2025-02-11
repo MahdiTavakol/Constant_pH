@@ -53,7 +53,7 @@ using namespace MathConst;
 
 enum { NONE, CONSTANT, EQUAL, ATOM };
 enum {NEITHER = -1, SOLID = 0, SOLVENT = 1};
-enum {F_NONE,RESET_MID = 1 << 1};
+enum {F_NONE,RESET_MID = 1 << 1, INIT_MID = 1 << 2};
 
 /* --------------------------------------------------------------------------------------- */
 
@@ -63,7 +63,8 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    molecule_size(nullptr), molecule_size_local(nullptr),
    pH1qs(nullptr), pH2qs(nullptr),
    typePerProtMol(nullptr),
-   protonable(nullptr), protonable_molids(nullptr)
+   protonable(nullptr), protonable_molids(nullptr),
+   init_molid_file(nullptr)
 {
    if (narg < 7) utils::missing_cmd_args(FLERR, "fix adaptive_protonation", error);
 
@@ -90,11 +91,21 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
       if (strcmp(arg[iarg], "reset_molecule_ids") == 0) {
          flags |= RESET_MID;
          iarg++;
-      }
-      else
+      } else if (strcmp(arg[iarg], "initial_molids") == 0) {
+	 flags |= INIT_MID;
+	 if (comm->me == 0) {
+	    init_molid_file = fopen(arg[iarg+1],"r");
+            if (init_molid_file == nullptr)
+	       error->one(FLERR,"Unable to open the file {}",arg[iarg+1]);
+	 }
+	 iarg += 2;
+      } else
          error->all(FLERR,"Unknown keyword");
    }
-   
+
+   if ((flags & RESET_MID) && (flags & INIT_MID))
+      error->one(FLERR,"It is not possible to have both the initial_molids and reset_molecule_ids keywords in the fix adaptive_protonation");
+	
    dynamic_group_allow = 0;
    scalar_flag = 1; 
    vector_flag = 1;
@@ -171,6 +182,8 @@ void FixAdaptiveProtonation::setup(int /*vflag*/)
 
    if (flags & RESET_MID)
       set_molecule_id();
+   if (flags & INIT_MID)
+      read_molids_file();
 
 }
 
@@ -346,7 +359,6 @@ void FixAdaptiveProtonation::read_pH_structure_files()
 
 /* ----------------------------------------------------------------------------------------
    Deallocating the storage
-
    ---------------------------------------------------------------------------------------- */
 
 void FixAdaptiveProtonation::deallocate_storage()
@@ -496,6 +508,47 @@ void FixAdaptiveProtonation::set_molecule_id()
    Of course if the molecules are long spanning multiple procs there is a need
    for atom exchange here.
    */
+}
+
+/* ----------------------------------------------------------------------------------------
+   Reading the file containing the initial molids
+   ---------------------------------------------------------------------------------------- */
+
+void FixAdaptiveProtonation::read_molids_file()
+{
+   /*
+    *  File format
+    *  n_molids 
+    *  molid1
+    *  molid2
+    *  ...
+    *
+    *  molidn
+    */
+  
+   if (comm->me == 0) {
+
+      char line[128];
+      fgets(line,sizeof(line),init_molid_file);
+      line[strcspn(line,"\n")] = '\0';
+      token = strtok(line,",");
+      n_protonable = std::stoi(token);
+      if (n_protonable > n_molecules) error->one(FLERR,"Unknown error");
+      for (int i = 0; i < n_mid; i++) {
+	 fgets(line,sizeof(line),init_molid_file);
+         line[strcspn(line,"\n")] = '\0';
+	 token = strtok(line,",");
+	 protonable_molids[i] = std::stoi(token);
+      }
+      fclose(init_molid_file);
+   }
+   // It should set to nullptr in all the ranks so none of them tries to close the file again.
+   init_molid_file = nullptr;
+
+   // First broadcasting the size;
+   MPI_Bcast(&n_protonable,1,MPI_INT,0,world);
+   // Then broadcasting the individual molids
+   MPI_Bcast(&protonable_molids,n_protonable,MPI_INT,0,world);	
 }
 
 /* ----------------------------------------------------------------------------------------
