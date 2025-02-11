@@ -72,6 +72,11 @@ namespace LAMMPS_NS {
       // <------ This part is similar to the part in the fix_constant_pH.cpp, so should be a separate class
       
       int flags;
+
+      /* When a huge number of lambdas is added to the system the simulation becomes unstable.
+         So, there might be a need to input the molids of the lambdas
+      */
+      FILE* init_molid_file;
       
 
 
