@@ -185,6 +185,31 @@ void FixAdaptiveProtonation::setup(int /*vflag*/)
    if (flags & INIT_MID)
       read_molids_file();
 
+   int nlocal = atom->nlocal;
+   int * molecule = atom->molecule;
+   nmolecules = 0;
+   int nmolecules_local = 0;
+   int nmolecules_total;
+   
+   for (int i = 0; i < nlocal; i++) {
+       if (atom->molecule[i] > nmolecules_local)
+           nmolecules_local = atom->molecule[i];
+   }
+   
+   MPI_Allreduce(&nmolecules_local,&nmolecules_total,1,MPI_INT,MPI_MAX,world);
+
+   if (nmolecules_total > nmolecules)
+   {
+      nmolecules = nmolecules_total;
+      deallocate_storage();
+      allocate_storage();
+   }
+
+   for (int i = 0; i < nlocal; i++) {
+      if (molecule[i] == 0)
+         molecule[i] = nmolecules+1;
+   }
+   nmolecules++;
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -213,7 +238,6 @@ void FixAdaptiveProtonation::initial_integrate(int /*vflag*/)
    }
    
    // If I do not put this to zero, it will have a very large value making the if statement false.
-   nmolecules = 0;
    int nmolecules_local = 0;
    int nmolecules_total;
    
