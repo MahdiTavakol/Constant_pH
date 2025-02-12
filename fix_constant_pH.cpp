@@ -28,6 +28,7 @@
 
 #include "force.h"
 #include "group.h"
+#include "input.h"
 #include "memory.h"
 #include "pair.h"
 #include "timer.h"
