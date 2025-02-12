@@ -638,7 +638,7 @@ void FixAdaptiveProtonation::modify_protonation_state()
       }
    }
    
-   MPI_Allreduce(&q_change_local,q_change,1,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(&q_change_local,&q_change,1,MPI_DOUBLE,MPI_SUM,world);
    MPI_Allreduce(nchanges_local,nchanges,3,MPI_INT,MPI_SUM,world);
    
    
