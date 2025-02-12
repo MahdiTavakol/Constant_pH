@@ -80,7 +80,6 @@ namespace LAMMPS_NS {
       
 
 
-
       // I need to detect water molecules
       int typeOW;
       // The threshold for the number of neighboring water molecules
@@ -105,7 +104,8 @@ namespace LAMMPS_NS {
       int * molecule_size; // used to average the mark for each molecule
       int * molecule_size_local;
       
-
+      // Tracking the changes in the q_total
+      double q_total;
 
       // array to access the molids of the protonable molecules
       int * protonable_molids;
