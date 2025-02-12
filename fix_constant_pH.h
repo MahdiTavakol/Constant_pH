@@ -187,6 +187,7 @@ namespace LAMMPS_NS {
 	void compute_Hs();
         void check_num_OWs_HWs();
         void read_pH_structure_files();
+        void read_commands_file();
         void restore_epsilon();
 	void delete_lambdas();
 	void set_lambdas();
