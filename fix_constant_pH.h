@@ -58,7 +58,7 @@ namespace LAMMPS_NS {
         int * protonable;
 
         // Commands that run whenever the lambdas array is modified
-        int ncommands, nevery_commands;
+        int ncommands;
         char ** commands;
         FILE *commandsFile;
 
