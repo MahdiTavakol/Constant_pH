@@ -105,7 +105,7 @@ namespace LAMMPS_NS {
       int * molecule_size_local;
       
       // Tracking the changes in the q_total
-      double q_total;
+      double q_change;
 
       // array to access the molids of the protonable molecules
       int * protonable_molids;
