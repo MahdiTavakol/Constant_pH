@@ -235,7 +235,7 @@ void FixAdaptiveProtonation::initial_integrate(int /*vflag*/)
    mark_protonation_deprotonation();
 
    // This is required since the fix_constant_pH.cpp does not deal with those molecules in the solid
-   //modify_protonation_state();
+   modify_protonation_state();
 
    // Resetting the mark_prev parameter to help us keep the track of which molecule moves from solid to solvent and vice versa
    set_mark_prev();
@@ -597,7 +597,7 @@ void FixAdaptiveProtonation::modify_protonation_state()
                case SOLID:   // The molecule was in the solid before
                case NEITHER: // First step (initial value of mark_prev is -1)
 		  q_init = q[i];
-                  q[i] = pH2qs[type[i]][0];
+                  //q[i] = pH2qs[type[i]][0];
 		  q_change_local += q[i] - q_init;
                   nchanges_local[0]++;
                   nchanges_local[1]++;
@@ -617,7 +617,7 @@ void FixAdaptiveProtonation::modify_protonation_state()
                case SOLVENT:  // It came from the water ----> deprotonate it
                case NEITHER:  // First step (initial value of mark_prev is -1)
 	          q_init = q[i];
-                  q[i] = pH1qs[type[i]][0];
+                  //q[i] = pH1qs[type[i]][0];
 		  q_change_local += q[i] - q_init;
                   nchanges_local[0]++;
                   nchanges_local[2]++;
