@@ -583,18 +583,22 @@ void FixAdaptiveProtonation::modify_protonation_state()
    int * type = atom->type;
    int * molecule = atom->molecule;
    int nchanges_local[3] = {0,0,0};
+   double q_change_local = 0;
+   double q_init;
 
 
    for (int i = 0; i < nlocal; i++) {
       switch (mark[molecule[i]]) {
-         case NEITHER: // Not protonable --> nothing to do here
+         case NEITHER: // Not protonable ----> nothing to do here
             break;
 
          case SOLVENT: // The molecule is in the water
             switch (mark_prev[molecule[i]]) {
                case SOLID:   // The molecule was in the solid before
                case NEITHER: // First step (initial value of mark_prev is -1)
-                  q[i] = pH2qs[type[i]][0]; 
+		  q_init = q[i];
+                  q[i] = pH2qs[type[i]][0];
+		  q_change_local += q[i] - q_init;
                   nchanges_local[0]++;
                   nchanges_local[1]++;
                   break;
@@ -610,14 +614,16 @@ void FixAdaptiveProtonation::modify_protonation_state()
 
          case SOLID: // The molecule is in the solid
             switch (mark_prev[molecule[i]]) {
-               case SOLVENT:  // It came from the water → deprotonate it
+               case SOLVENT:  // It came from the water ----> deprotonate it
                case NEITHER:  // First step (initial value of mark_prev is -1)
-                  q[i] = pH1qs[type[i]][0]; 
+	          q_init = q[i];
+                  q[i] = pH1qs[type[i]][0];
+		  q_change_local += q[i] - q_init;
                   nchanges_local[0]++;
                   nchanges_local[2]++;
                   break;
 
-               case SOLID:  // It was already in the solid → do nothing
+               case SOLID:  // It was already in the solid ----> do nothing
                   break;
 
                default:  // Catch unexpected values
@@ -632,8 +638,7 @@ void FixAdaptiveProtonation::modify_protonation_state()
       }
    }
    
-   
-   
+   MPI_Allreduce(&q_change_local,q_change,1,MPI_DOUBLE,MPI_SUM,world);
    MPI_Allreduce(nchanges_local,nchanges,3,MPI_INT,MPI_SUM,world);
    
    
