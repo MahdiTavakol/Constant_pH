@@ -227,7 +227,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
     }
 
     if (!(flags & ADAPTIVE) && (flags & COMMANDS))
-        error->warning(FLERR,"The keyword \"commands\" has been used without the keyword "\adaptive\"");
+        error->warning(FLERR,"The keyword \"commands\" has been used without the keyword \"adaptive\"");
 	
     fixgpu = nullptr;
     
