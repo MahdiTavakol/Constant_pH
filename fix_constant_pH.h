@@ -57,6 +57,10 @@ namespace LAMMPS_NS {
         int * typePerProtMol;
         int * protonable;
 
+        // Commands that run whenever the lambdas array is modified
+        int ncommands, nevery_commands;
+        char ** commands;
+        FILE *commandsFile;
 
 	// Input variables for constant values
 	double pK, pH, T;
