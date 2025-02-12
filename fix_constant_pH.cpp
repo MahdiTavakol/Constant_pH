@@ -51,7 +51,8 @@ enum {
        BUFFER=1<<0, 
        ADAPTIVE=1<<1,
        ZEROCHARGE=1<<2,
-       CONSTRAIN=1<<3
+       CONSTRAIN=1<<3,
+       COMMANDS=1<<4
      };
 
 enum {
@@ -79,7 +80,8 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
     q_orig(nullptr), f_orig(nullptr), peatom_orig(nullptr),
     pvatom_orig(nullptr), keatom_orig(nullptr), kvatom_orig(nullptr),
     lambda_fp(nullptr), lambda_1_fp(nullptr), lambda_2_fp(nullptr),
-    v_lambda_fp(nullptr), a_lambda_fp(nullptr), H_lambda_fp(nullptr)
+    v_lambda_fp(nullptr), a_lambda_fp(nullptr), H_lambda_fp(nullptr),
+    commands(nullptr), commandsFile(nullptr)
 {
     if (narg < 9) 
         utils::missing_cmd_args(FLERR, "fix constant_pH", error);
@@ -208,7 +210,14 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
                lambda_2_fp = fopen(arg[iarg + 2], "w");
             }
             iarg+=3;
-        } else {
+        } else if (strcmp(arg[iarg],"commands") == 0) {
+	    flags |= COMMANDS;
+            if (comm->me == 0) {
+		commandsFile = fopen(arg[iarg+1],"w");
+	    }
+	    read_commands_file();
+	    iarg += 2;
+	} else {
             error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
         }
     }
