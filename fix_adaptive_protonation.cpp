@@ -235,7 +235,7 @@ void FixAdaptiveProtonation::initial_integrate(int /*vflag*/)
    mark_protonation_deprotonation();
 
    // This is required since the fix_constant_pH.cpp does not deal with those molecules in the solid
-   modify_protonation_state();
+   //modify_protonation_state();
 
    // Resetting the mark_prev parameter to help us keep the track of which molecule moves from solid to solvent and vice versa
    set_mark_prev();
