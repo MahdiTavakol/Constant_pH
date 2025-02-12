@@ -94,11 +94,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
     if (comm->me == 0) {
         pHStructureFile1 = fopen(arg[4], "r"); 
         if (pHStructureFile1 == nullptr)
-            error->all(FLERR, "Unable to open the file");
+            error->one(FLERR, "Unable to open the file");
 
         pHStructureFile2 = fopen(arg[5], "r");
         if (pHStructureFile2 == nullptr)
-            error->all(FLERR, "Unable to open the file");
+            error->one(FLERR, "Unable to open the file");
     }
     
     pK = utils::numeric(FLERR, arg[6], false, lmp);
@@ -110,6 +110,9 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
 
     // Default value for mu
     mu = 0.0;
+
+    // set the ncommands to zero
+    ncommands = 0;
 
     // Unset all flags to avoid uninitialized values
     flags = 0;
@@ -214,6 +217,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
 	    flags |= COMMANDS;
             if (comm->me == 0) {
 		commandsFile = fopen(arg[iarg+1],"w");
+		if (commandsFile == nullptr) error->one(FLERR,"Unable to open the commands file");
 	    }
 	    read_commands_file();
 	    iarg += 2;
@@ -222,7 +226,9 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
         }
     }
 
-    
+    if (!(flags & ADAPTIVE) && (flags & COMMANDS))
+        error->warning(FLERR,"The keyword \"commands\" has been used without the keyword "\adaptive\"");
+	
     fixgpu = nullptr;
     
     array_flag = 1;
@@ -238,6 +244,7 @@ FixConstantPH::~FixConstantPH()
    // Closing files if they are open. 
    if (pHStructureFile1 && comm->me == 0) fclose(pHStructureFile1); // I have already closed it.. This is here just to assure it is closed
    if (pHStructureFile2 && comm->me == 0) fclose(pHStructureFile2); // I have already closed it.. This is here just to assure it is closed
+   if (commandsFile && comm->me == 0) fclose(commandsFile);
    if (fp && (comm->me == 0)) fclose(fp);
    if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
    if (lambda_fp && (comm->me == 0)) fclose(lambda_fp);
@@ -262,6 +269,11 @@ FixConstantPH::~FixConstantPH()
 
    // deallocate memories whose size is dependent on natoms
    deallocate_storage();   
+
+   for (int i = 0; i < ncommands; i++) {
+      delete [] commands[i];
+   }
+   delete [] commands;
 }
 
 /* ----------------------------------------------------------------------
@@ -367,6 +379,15 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
          int n_changes;
          fix_adaptive_protonation->get_n_changes(n_changes);
          if (n_changes) {
+	    // add those commands ------>
+            if (flags & COMMANDS) {
+               modify->clearstep_compute();
+	       for (int i = 0; i < ncommands; i++) {
+                  input->one(commands[i]);
+                  modify->addstep_compute(update->ntimestep); // I am not sure about this part yet!
+	       }
+	    }
+	    // <------ add those commands
             int n_protonable;
             fix_adaptive_protonation->get_n_protonable(n_protonable);
             this->n_lambdas = n_protonable;
@@ -806,6 +827,54 @@ void FixConstantPH::read_pH_structure_files()
    MPI_Bcast(pH2qs[0],(ntypes+1)*(pHnStructures2),MPI_DOUBLE,0,world);
 }
 
+/* ----------------------------------------------------------------------
+    Reading the file containing the commands run whenever a lambdas array 
+    is modified.
+   ---------------------------------------------------------------------- */
+
+void FixConstantPH::read_commands_file()
+{
+   /*
+    * The file format
+    * ncommands
+    * comment 1
+    * comment 2
+    * command1
+    * command2
+    * ...
+    * commandn
+    */
+
+   char line[128];
+   if (comm->me == 0) {
+      fgets(line,sizeof(line),commandsFile);
+      line[strcspn(line,"\n")] = '\0';
+      char *token = strtok(line,",");
+      ncommands = std::stoi(token);
+   }
+   MPI_Bcast(&ncommands,1,MPI_INT,0,world);
+   commands = new char*[ncommands];
+   if (comm->me == 0) {
+      fgets(line,sizeof(line),commandsFile); // comment-1
+      fgets(line,sizeof(line),commandsFile); // comment-2
+      for (int i = 0; i < ncommands; i++) {
+         fgets(line,sizeof(line),commandsFile); //command-i
+         line[strcspn(line,"\n")] = '\0';
+	 size_t len = strlen(line) + 1;
+	 commands[i] = new char[len];
+	 strcpy(commands[i],line);
+      }
+      fclose(commandsFile);
+   }
+   commandsFile = nullptr;
+   for (int i = 0; i < ncommands; i++) {
+      int len = strlen(commands[i]) + 1 ;
+      MPI_Bcast(&len,1,MPI_CHAR,0,world);
+      if (comm->me != 0)
+         commands[i] = new char[len];
+      MPI_Bcast(commands[i],len,MPI_CHAR,0,world);
+   }
+}
 
 /* ----------------------------------------------------------------------
    Checking the number of Oxygen and hydrogen atoms of hydronium ions in 
