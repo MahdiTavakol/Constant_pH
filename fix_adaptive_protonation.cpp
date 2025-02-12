@@ -574,8 +574,8 @@ void FixAdaptiveProtonation::get_protonable_molids(int *_molids) const
 
 /* ----------------------------------------------------------------------------------------
    Changing from the protonated to deprotonated states --> Moving from the solvent to the solid phase
-
    ---------------------------------------------------------------------------------------- */
+
 void FixAdaptiveProtonation::modify_protonation_state()
 {
    int nlocal = atom->nlocal;
