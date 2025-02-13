@@ -170,6 +170,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
         flags |= ZEROCHARGE;
         iarg++;
     }
+    else if (strcmp(arg[iarg],"structure_conversion_barrier") == 0) {
+	nStructures1BarrierkT = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	nStructures2BarrierkT = utils::numeric(FLERR,arg[iarg+2],false,lmp);
+	iarg+=3;
+    }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
    }
