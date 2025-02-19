@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.48----- */
+/* ---v0.08.57----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -175,6 +175,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	nStructures2BarrierkT = utils::numeric(FLERR,arg[iarg+2],false,lmp);
 	iarg+=3;
     }
+    else if (strcmp(arg[iarg],"d") == 0) {
+	d = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	if (d < 0) error->warning(FLERR,"d should be positive");
+	iarg+=2;
+    }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
    }
@@ -264,7 +269,7 @@ void FixConstantPH::setup(int /*vflag*/)
     b = 0.002957; //0.005238;
     r = 16.458; 
     m = 0.1507;
-    d = 3.50; //2.0; //The height of the barrier is 2*d
+    //d = 3.50; //2.0; //The height of the barrier is 2*d
 
     // default values for the buffer potential with h = 0 from Donnin J Chem Theory Comput 2016 - Table S2
     w_buff = 200;
