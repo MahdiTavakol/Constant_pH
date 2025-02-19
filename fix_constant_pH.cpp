@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.57----- */
+/* ---v0.08.58----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -96,6 +96,9 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   
   // The default value for the mu
   mu = 0.0;
+
+  // The default value for d
+  d = 3.5;
 
   /* Unset all the flags
      it is an important step since
