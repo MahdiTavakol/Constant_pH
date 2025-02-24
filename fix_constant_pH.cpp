@@ -90,7 +90,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   T = utils::numeric(FLERR, arg[8], false, lmp);
   
 
-
+  // The default values, these could have been put into the constructor defintion too.
   qOWs = -0.834;
   qHWs = 0.278;
   
@@ -107,6 +107,10 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
      zero 
      */
   flags = 0;
+
+  // Default value for the structure conversion barrier
+  nStructures1BarrierkT = 1.0;
+  nStructures2BarrierkT = 1.0;
 
   GFF_flag = false;
   print_Udwp_flag = false;
