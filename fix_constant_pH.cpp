@@ -1144,6 +1144,11 @@ void FixConstantPH::modify_qs(double** scales)
             indx21 -= pHnStructures2;
         while (indx22 > pHnStructures2 - 1)
             indx22 -= pHnStructures2;
+
+	indx11 = 0;
+	indx12 = 0;
+	indx21 = 0;
+	indx22 = 0;
     
 
 	
