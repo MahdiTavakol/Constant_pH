@@ -217,7 +217,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
         } else if (strcmp(arg[iarg],"commands") == 0) {
 	    flags |= COMMANDS;
             if (comm->me == 0) {
-		commandsFile = fopen(arg[iarg+1],"w");
+		commandsFile = fopen(arg[iarg+1],"r");
 		if (commandsFile == nullptr) error->one(FLERR,"Unable to open the commands file");
 	    }
 	    read_commands_file();
