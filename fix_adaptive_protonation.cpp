@@ -178,6 +178,7 @@ void FixAdaptiveProtonation::setup(int /*vflag*/)
    nmax = atom->nmax;
    vector_atom = new double[nmax];
 
+   nmolecules = 0;
    allocate_storage();
 
    if (flags & RESET_MID)
@@ -187,7 +188,7 @@ void FixAdaptiveProtonation::setup(int /*vflag*/)
 
    int nlocal = atom->nlocal;
    int * molecule = atom->molecule;
-   nmolecules = 0;
+   
    int nmolecules_local = 0;
    int nmolecules_total;
    
@@ -197,6 +198,12 @@ void FixAdaptiveProtonation::setup(int /*vflag*/)
    }
    
    MPI_Allreduce(&nmolecules_local,&nmolecules_total,1,MPI_INT,MPI_MAX,world);
+   
+   nmolecules++;
+   for (int i = 0; i < nlocal; i++) {
+      if (molecule[i] == 0)
+         molecule[i] = nmolecules;
+   }
 
    if (nmolecules_total > nmolecules)
    {
@@ -204,12 +211,6 @@ void FixAdaptiveProtonation::setup(int /*vflag*/)
       deallocate_storage();
       allocate_storage();
    }
-
-   for (int i = 0; i < nlocal; i++) {
-      if (molecule[i] == 0)
-         molecule[i] = nmolecules+1;
-   }
-   nmolecules++;
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -234,6 +235,7 @@ void FixAdaptiveProtonation::initial_integrate(int /*vflag*/)
    {
       nmax = atom->nmax;
       if(vector_atom) delete [] vector_atom;
+      vector_atom = nullptr;
       vector_atom = new double[nmax];
    }
    
@@ -387,12 +389,12 @@ void FixAdaptiveProtonation::read_pH_structure_files()
 
 void FixAdaptiveProtonation::deallocate_storage()
 {
-   memory->destroy(protonable_molids);
-   memory->destroy(mark);
-   memory->destroy(mark_prev);
-   memory->destroy(mark_local);
-   memory->destroy(molecule_size);
-   memory->destroy(molecule_size_local);
+   if (protonable_molids) memory->destroy(protonable_molids);
+   if (mark) memory->destroy(mark);
+   if (mark_prev) memory->destroy(mark_prev);
+   if (mark_local) memory->destroy(mark_local);
+   if (molecule_size) memory->destroy(molecule_size);
+   if (molecule_size_local) memory->destroy(molecule_size_local);
    protonable_molids = nullptr;
    mark = nullptr;
    mark_prev = nullptr;
