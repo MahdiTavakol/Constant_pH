@@ -53,7 +53,8 @@ enum {
        ADAPTIVE=1<<1,
        ZEROCHARGE=1<<2,
        CONSTRAIN=1<<3,
-       COMMANDS=1<<4
+       COMMANDS=1<<4,
+       INTERMEDIATE=1<<5
      };
 
 enum {
@@ -72,7 +73,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
     Fix(lmp, narg, arg),
     pHStructureFile1(nullptr), pHStructureFile2(nullptr),
     pH1qs(nullptr), pH2qs(nullptr), typePerProtMol(nullptr), protonable(nullptr),
-    HAs(nullptr), HBs(nullptr), Us(nullptr), dUs(nullptr),
+    HAs(nullptr), HBs(nullptr), Us(nullptr), dUs(nullptr), lambdas_j(nullptr),
     lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr),
     m_lambdas(nullptr), H_lambdas(nullptr), molids(nullptr),
     fs(nullptr), dfs(nullptr), fp(nullptr), GFF(nullptr),
@@ -222,6 +223,12 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
 	    }
 	    read_commands_file();
 	    iarg += 2;
+	} else if (strcmp(arg[iarg],"intermediate_file") == 0) { 
+	    flags |= INTERMEDIATE;
+	    if (comm->me == 0) {
+	        intermediate_file_name = arg[iarg+1];
+	    }
+	    iarg += 2;
 	} else {
             error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
         }
@@ -229,6 +236,7 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg) :
 
     if (!(flags & ADAPTIVE) && (flags & COMMANDS))
         error->warning(FLERR,"The keyword \"commands\" has been used without the keyword \"adaptive\"");
+     
 	
     fixgpu = nullptr;
     
@@ -384,6 +392,14 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
          int n_changes;
          fix_adaptive_protonation->get_n_changes(n_changes);
          if (n_changes) {
+            /* If there is a minimization command
+             * , the update->endstep is set to zero
+             * which causes the t_target to be inf.
+             * So, I have backed up the update->endstep
+             */ 
+            bigint endstep_backup = update->endstep;
+            /* Writing the molids in a file to be read by fix_adaptive_protonation afterwards */
+            fix_adaptive_protonation->write_molids(intermediate_file_name);
 	    // add those commands ------>
             if (flags & COMMANDS) {
                modify->clearstep_compute();
@@ -393,6 +409,8 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 	       }
 	    }
 	    // <------ add those commands
+	    update->endstep = endstep_backup;
+	    
             int n_protonable;
             fix_adaptive_protonation->get_n_protonable(n_protonable);
             this->n_lambdas = n_protonable;
