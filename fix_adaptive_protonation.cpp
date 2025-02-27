@@ -99,6 +99,14 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
 	       error->one(FLERR,"Unable to open the file {}",arg[iarg+1]);
 	 }
 	 iarg += 2;
+      } else if (strcmp(arg[iarg],"intermediate_file") == 0) {
+         flags |= INIT_MID;
+         if (comm->me == 0) {
+            init_molid_file = fopen(arg[iarg+1],"r");
+            if (init_molid_file == nullptr)
+              error->one(FLERR,"Unable to open the intermediate file {}",arg[iarg+1]);
+         }
+         iarg += 2;      
       } else
          error->all(FLERR,"Unknown keyword");
    }
@@ -131,8 +139,6 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
 
    if (flags & RESET_MID)
       set_molecule_id();
-   if (flags & INIT_MID)
-      read_molids_file();
 
    int nlocal = atom->nlocal;
    int * molecule = atom->molecule;
@@ -159,7 +165,16 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
       deallocate_storage();
       allocate_storage();
    }
-
+   
+   
+   if (flags & INIT_MID)
+      read_molids_file();
+      
+   /* Only if it has not read the molids from a file the n_protonable should set to zero.
+    *  Otherwise, it had been set by the read_molids_file()
+    */ 
+   if (!(flags & INIT_MID))
+      n_protonable = 0; 
 }
 
 /* --------------------------------------------------------------------------------------- */
@@ -208,9 +223,6 @@ void FixAdaptiveProtonation::init()
 
    // request for a neighbor list
    neighbor->add_request(this, list_flags);
-   
-   // n_protonable
-   n_protonable = 0;
    
    std::fill(nchanges,nchanges+3,0);
 }
@@ -395,6 +407,28 @@ void FixAdaptiveProtonation::read_pH_structure_files()
 }
 
 /* ----------------------------------------------------------------------------------------
+   Writing molids into a file
+   ---------------------------------------------------------------------------------------- */
+   
+void FixAdaptiveProtonation::write_molids(const char* const file_name ) const
+{
+   if (file_name == nullptr) error->one(FLERR,"The wrong file name in fix adaptive protonation");
+   FILE* output_file = fopen(file_name,"w");
+   if (output_file == nullptr) error->one(FLERR,"Cannot open the file");
+   if (comm->me == 0) {
+      if (output_file == nullptr) error->one(FLERR,"Cannot open the molid files for writing");
+      fprintf(output_file,"%d\n",n_protonable);
+      fprintf(output_file,"The molids file\n");
+      fprintf(output_file,"with the intermediate information of the fix adaptive protonation command\n");   
+      for (int i = 0; i < n_protonable; i++) {
+         fprintf(output_file,"%d\n",protonable_molids[i]);
+      }
+      fclose(output_file);
+   }
+   output_file = nullptr;
+}
+
+/* ----------------------------------------------------------------------------------------
    Deallocating the storage
    ---------------------------------------------------------------------------------------- */
 
@@ -573,6 +607,7 @@ void FixAdaptiveProtonation::read_molids_file()
       line[strcspn(line,"\n")] = '\0';
       token = strtok(line,",");
       n_protonable = std::stoi(token);
+      // Checking that if there is enough space in the allocated arrays
       if (n_protonable > nmolecules) error->one(FLERR,"Unknown error");
       // Skipping the first comment
       fgets(line,sizeof(line),init_molid_file);
