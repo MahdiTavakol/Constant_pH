@@ -116,6 +116,7 @@ namespace LAMMPS_NS {
         // Buffer potential
         double U_buff, dU_buff;
         double HA_buff, HB_buff;
+        
 
 	// Functions needed to communicate with fix adaptive protonation command
 	char * fix_adaptive_protonation_id;
@@ -126,6 +127,10 @@ namespace LAMMPS_NS {
         int fp_flags;
         FILE* lambda_fp, *lambda_1_fp, *lambda_2_fp, *v_lambda_fp, *a_lambda_fp, *H_lambda_fp;
 
+
+        // The name of the intermediate file written by the fix_adaptive_protonation 
+        char* intermediate_file_name;
+        
         // output methods for a variable sized lambdas, v_lambdas, ... 
         void write_lambdas_header();
         void write_lambdas();
