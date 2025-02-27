@@ -52,6 +52,9 @@ namespace LAMMPS_NS {
       {
          _nchanges = this->nchanges[0];
       }
+      
+      // Writes molids information to a file which can be used later with fix constant_pH whenever the commands keyword of the fix_constant_pH is invoked
+      void write_molids(const char* const file_name ) const;
 
    protected:
 
@@ -118,6 +121,7 @@ namespace LAMMPS_NS {
       // maximum number of atoms and number of molecules
       int nmax;
       int nmolecules;
+
 
       // Deallocating storage 
       void deallocate_storage();
