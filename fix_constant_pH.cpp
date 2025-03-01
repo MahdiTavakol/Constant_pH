@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.07.26----- */
+/* ---v0.07.27----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -94,6 +94,9 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
   // The default value for the mu
   mu = 0.0;
 
+  // The default value for the seed number for the creation of v_lambdas
+  random_number_seed = 12347;
+
   /* Unset all the flags
      it is an important step since
      in C++ it is not guaranteed that
@@ -154,6 +157,10 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 	fix_adaptive_protonation_id = utils::strdup(arg[iarg+1]);
 	nevery_fix_adaptive = utils::numeric(FLERR,arg[iarg+2],false,lmp);
 	iarg+=3;
+    }
+    else if (strcmp(arg[iarg],"seed") == 0) {
+	random_number_seed = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	iarg+=2;
     }
     else if (strcmp(arg[iarg],"constrain") == 0) {
         flags |= CONSTRAIN;
@@ -1203,8 +1210,7 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {
     RanPark *random = nullptr;
-    double seed = 1234579;
-    random = new RanPark(lmp,seed);
+    random = new RanPark(lmp,random_number_seed);
 
     
     for (int j = 0; j < n_lambdas; j++) {
