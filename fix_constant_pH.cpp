@@ -241,7 +241,7 @@ void FixConstantPH::setup(int /*vflag*/)
     b = 0.005238; //0.002957; //0.005238;
     r = 16.458; 
     m = 0.1507;
-    d = 2.0; //5.00; //2.0; //The height of the barrier is 2*d
+    d = 2.0; //5.00; //2.0
 
     // default values for the buffer potential with h = 0 from Donnin J Chem Theory Comput 2016 - Table S2
     w_buff = 200;
@@ -1261,7 +1261,9 @@ void FixConstantPH::calculate_T_lambda()
     
     double Nf = static_cast<double>(n_lambdas);
     if (flags & BUFFER)
-    	Nf += static_cast<double>(N_buff);
+	Nf += 1;
+     //	Nf += static_cast<double>(N_buff);
+     
     if (flags & CONSTRAIN)
     	Nf -= 1.0;
     	
