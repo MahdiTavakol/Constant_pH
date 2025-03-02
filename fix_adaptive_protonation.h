@@ -27,6 +27,7 @@ FixStyle(adaptive_protonation,FixAdaptiveProtonation);
 namespace LAMMPS_NS {
 
    class FixAdaptiveProtonation : public Fix {
+   friend FixConstantPH;
    public:
       FixAdaptiveProtonation(class LAMMPS*, int, char**);
       ~FixAdaptiveProtonation() override;
