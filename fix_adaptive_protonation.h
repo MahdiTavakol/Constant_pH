@@ -137,8 +137,6 @@ namespace LAMMPS_NS {
       void modify_protonation_state();
       // Setting the mark for the previous state
       void set_mark_prev();
-      // Setting the charge when a molecule goes into the solid since no longer fix_constant_pH can set its charge
-      void set_solid_charge();
 
    };
 
