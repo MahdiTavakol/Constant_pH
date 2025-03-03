@@ -496,8 +496,6 @@ void FixConstantPH::set_lambdas() {
    for (int i = 0; i < n_lambdas; i++) {
       GFF_lambdas[i] = 0.0;
       H_lambdas[i] = 0.0;
-      if (flags & ADAPTIVE)
-         molids[i] = 0.0;
       for (int j = 0; j < 3; j++) {
          lambdas[i][j] = 0.0;
          v_lambdas[i][j] = 0.0;
