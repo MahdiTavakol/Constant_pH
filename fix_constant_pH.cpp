@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.10.24----- */
+/* ---v0.10.27----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -344,9 +344,6 @@ void FixConstantPH::setup(int /*vflag*/)
       compute_q_total();
    }
 
-   set_lambdas();
-
-
    // Checking if we have correct number of hydronium ions
    if (flags & BUFFER) check_num_OWs_HWs();
 	
@@ -376,12 +373,9 @@ void FixConstantPH::setup(int /*vflag*/)
    read_pH_structure_files();
 
    // I have put this part here on purpose so if the fix_adaptive_protonation reads the initial molids, it is set here
-   int n_protonable;
-   fix_adaptive_protonation->get_n_protonable(n_protonable);
-   this->n_lambdas = n_protonable;
+   fix_adaptive_protonation->get_n_protonable(this->n_lambdas);
+   
    set_lambdas();
-   fix_adaptive_protonation->get_protonable_molids(molids);
-   initialize_v_lambda(this->T);
 }
 
 /* ----------------------------------------------------------------------
@@ -416,13 +410,11 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 	    // <------ add those commands
 	    update->endstep = endstep_backup;
 	    
-            int n_protonable;
-            fix_adaptive_protonation->get_n_protonable(n_protonable);
-            this->n_lambdas = n_protonable;
+            fix_adaptive_protonation->get_n_protonable(this->n_lambdas);
+            
+            
             delete_lambdas();
             set_lambdas();
-            fix_adaptive_protonation->get_protonable_molids(molids);
-            initialize_v_lambda(this->T);
 
             if (!(fp_flags & NONE_FP))
                write_lambdas_header();
@@ -496,7 +488,10 @@ void FixConstantPH::set_lambdas() {
    
    memory->create(lambdas_j,n_lambdas,"constant_pH:lambdas_j");
 
-   if (flags & ADAPTIVE) memory->create(molids,n_lambdas,"constant_pH:molids");
+   if (flags & ADAPTIVE) { 
+      memory->create(molids,n_lambdas,"constant_pH:molids");
+      fix_adaptive_protonation->get_protonable_molids(molids);
+   }
 
    for (int i = 0; i < n_lambdas; i++) {
       GFF_lambdas[i] = 0.0;
@@ -1380,7 +1375,7 @@ void FixConstantPH::modify_qs(double** scales)
 
     MPI_Allreduce(q_changes_local,q_changes,5,MPI_DOUBLE,MPI_SUM,world);
     
-    if (comm->me == 0 && true) {
+    if (comm->me == 0 && false) {
     double sigma_scale = 0.0;
        for (int i = 0; i < n_lambdas; i++)
        sigma_scale += scales[i][0];
