@@ -693,7 +693,7 @@ void FixAdaptiveProtonation::modify_protonation_state()
                case SOLVENT:  // It came from the water ----> deprotonate it
                case NEITHER:  // First step (initial value of mark_prev is -1)
 	          q_init = q[i];
-                  //q[i] = pH1qs[type[i]][0];
+                  q[i] = pH1qs[type[i]][0];
 		  q_change_local += q[i] - q_init;
                   nchanges_local[0]++;
                   nchanges_local[2]++;
