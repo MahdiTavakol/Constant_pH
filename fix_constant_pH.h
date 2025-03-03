@@ -196,6 +196,7 @@ namespace LAMMPS_NS {
         void restore_epsilon();
 	void delete_lambdas();
 	void set_lambdas();
+	void initialize_lambda();
 	void calculate_dq();
 	void calculate_dfs();
 	void calculate_dUs();
