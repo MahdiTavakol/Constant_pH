@@ -641,7 +641,7 @@ void FixAdaptiveProtonation::read_molids_file()
 
 void FixAdaptiveProtonation::get_protonable_molids(int *_molids) const 
 {
-   if (_molids == nullptr) error->all(FLERR,"The _molids array in the fix adaptive protonation get protonable_molids must be allocated");
+   if (_molids == nullptr && n_protonable != 0) error->all(FLERR,"The _molids array in the fix adaptive protonation get protonable_molids must be allocated");
 
    for (int i = 0; i < n_protonable; i++) {
       _molids[i] = protonable_molids[i];
@@ -693,7 +693,7 @@ void FixAdaptiveProtonation::modify_protonation_state()
                case SOLVENT:  // It came from the water ----> deprotonate it
                case NEITHER:  // First step (initial value of mark_prev is -1)
 	          q_init = q[i];
-                  q[i] = pH1qs[type[i]][0];
+                  //q[i] = pH1qs[type[i]][0];
 		  q_change_local += q[i] - q_init;
                   nchanges_local[0]++;
                   nchanges_local[2]++;
