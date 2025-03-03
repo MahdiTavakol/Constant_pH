@@ -546,13 +546,13 @@ void FixConstantPH::initialize_lambda()
       } 
    }
    
-   double* q_local = new double[n_protonable];
-   double* q_total = new double[n_protonable]; 
+   double* q_local = new double[n_lambdas];
+   double* q_total = new double[n_lambdas]; 
    
    for (int j = 0; j < n_lambdas; j++)
    {
-      double q_local[j] = 0.0;
-      double q_total[j] = 0.0;
+      q_local[j] = 0.0;
+      q_total[j] = 0.0;
       int molid_j = molids[j];
       for (int i = 0; i < nlocal; i++)
       {
@@ -563,10 +563,10 @@ void FixConstantPH::initialize_lambda()
       }   
    }
    
-   MPI_Allreduce(q_local,q_total,n_protonable,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(q_local,q_total,n_lambdas,MPI_DOUBLE,MPI_SUM,world);
    
-   for (int j = 0; j < n_protonable; j++)
-      lambdas[j] = (q_total[j] - pH1qtotal)/(pH2qtotal - pH1qtotal);
+   for (int j = 0; j < n_lambdas; j++)
+      lambdas[j][0] = (q_total[j] - pH1qtotal)/(pH2qtotal - pH1qtotal);
       
    delete [] q_local;
    delete [] q_total;  
