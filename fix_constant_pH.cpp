@@ -513,9 +513,63 @@ void FixConstantPH::set_lambdas() {
       }
    } 
    
-   // This would not work in the initialize section as the m_lambda has not been set yet!
+
    if (n_lambdas)
+   {   
+       // Initializing lambdas based on the current charge of protonable molecules so there is no jump in the system total charge
+       initialize_lambda();
+       // This would not work in the initialize section as the m_lambda has not been set yet!
        initialize_v_lambda(this->T);
+   }
+}
+
+/* ----------------------------------------------------------------------
+   Initializing lambdas based on the current charge of protonable molecules 
+   so there is no jump in the system total charge
+   ---------------------------------------------------------------------- */
+   
+void FixConstantPH::initialize_lambda()
+{
+   int ntypes = atom->ntypes;
+   int nlocal = atom->nlocal;
+   double *q = atom->q;
+   
+   double pH1qtotal = 0.0;
+   double pH2qtotal = 0.0;
+   
+   for (int i = 1; i < ntypes+1; i++)
+   {
+      if (protonable[i]) {
+         // Here I suppose that the q_total is the same for all the strutures
+         pH1qtotal += pH1qs[i][0];
+         pH2qtotal += pH2qs[i][0];
+      } 
+   }
+   
+   double* q_local = new double[n_protonable];
+   double* q_total = new double[n_protonable]; 
+   
+   for (int j = 0; j < n_lambdas; j++)
+   {
+      double q_local[j] = 0.0;
+      double q_total[j] = 0.0;
+      int molid_j = molids[j];
+      for (int i = 0; i < nlocal; i++)
+      {
+         if (atom->molecule[i] == molid_j) 
+         {
+            q_local[j] += q[i];
+         }
+      }   
+   }
+   
+   MPI_Allreduce(q_local,q_total,n_protonable,MPI_DOUBLE,MPI_SUM,world);
+   
+   for (int j = 0; j < n_protonable; j++)
+      lambdas[j] = (q_total[j] - pH1qtotal)/(pH2qtotal - pH1qtotal);
+      
+   delete [] q_local;
+   delete [] q_total;  
 }
 
 /* ---------------------------------------------------------------------- */
@@ -531,6 +585,7 @@ void FixConstantPH::update_a_lambda()
 
    //df = 1.0;
    //f = 1.0;
+
 
    for (int i = 0; i < n_lambdas; i++) {
 	double  f_lambda_0 = -(-dfs[i]*kT*log(10)*(pK-pH) + kj2kcal*dUs[i] - GFF_lambdas[i]); // The df sign should be positive if the lambda = 0 is for the protonated state 
@@ -1269,13 +1324,15 @@ void FixConstantPH::modify_qs(double** scales)
     double * q = atom->q;
 
 
-    double * q_changes_local = new double[4]{0.0,0.0,0.0,0.0};
-    double * q_changes = new double[4]{0.0,0.0,0.0,0.0};
+    double * q_changes_local = new double[5]{0.0,0.0,0.0,0.0,0.0};
+    double * q_changes = new double[5]{0.0,0.0,0.0,0.0,0.0};
+    
 
     // update the charges
     for (int j = 0; j < n_lambdas; j++) {
         
         double scale0 = scales[j][0];
+        scale0 = 1.0;
 	int indx11 = std::floor(lambdas[j][1]*pHnStructures1-0.5);
         int indx12 = std::ceil(lambdas[j][1]*pHnStructures1-0.5);
         double scale1 = (lambdas[j][1]*pHnStructures1-0.5 - static_cast<double>(indx11))/(static_cast<double>(indx12)-static_cast<double>(indx11));
@@ -1312,17 +1369,18 @@ void FixConstantPH::modify_qs(double** scales)
                 double pH2q = pH2qs[type[i]][indx21] + scale2 * (pH2qs[type[i]][indx22] - pH2qs[type[i]][indx21]);
                 q[i] = pH1q + scale0 * (pH2q - pH1q); // scale == 1 should be for the protonated state
 	        q_changes_local[0]++;
-	        //q_changes_local[1] += (q[i] - q_init);
-		q_changes_local[1] += pH1q;
+	        q_changes_local[1] += (q[i] - q_init);
+		//q_changes_local[1] += pH1q;
 		q_changes_local[2] += pH2q;
 		q_changes_local[3] += (q[i] - pH1q);
+		q_changes_local[4] += q_init;
             }
         }
     }
 
-    MPI_Allreduce(q_changes_local,q_changes,4,MPI_DOUBLE,MPI_SUM,world);
+    MPI_Allreduce(q_changes_local,q_changes,5,MPI_DOUBLE,MPI_SUM,world);
     
-    if (comm->me == 0 && false) {
+    if (comm->me == 0 && true) {
     double sigma_scale = 0.0;
        for (int i = 0; i < n_lambdas; i++)
        sigma_scale += scales[i][0];
@@ -1331,6 +1389,7 @@ void FixConstantPH::modify_qs(double** scales)
        std::cout << " q_changes = " << q_changes[1] << std::endl;
        std::cout << " q_changes = " << q_changes[2] << std::endl;
        std::cout << " q_changes = " << q_changes[3] << std::endl;
+       std::cout << " q_changes = " << q_changes[4] << std::endl;
        
     }
  
