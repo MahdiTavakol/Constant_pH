@@ -476,6 +476,7 @@ void FixNHConstantPH::constrain_lambdas()
    int cycle = 0;
    
    
+   
    /* The while(true) loop was used on purpose so that even when the loop termination condition
       is satisfied the q_total is calculated for the last time with final values of lambdas */
    while(true) {
@@ -487,6 +488,14 @@ void FixNHConstantPH::constrain_lambdas()
       fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
       
+      /* Checking if the charge content of the N_buff is large enough for n_lambdas
+       * Since there is a possibility that the n_lambdas change during the simulation by 
+       * the fix_adaptive_protonation.cpp command, the check should be done here. 
+       */
+      
+      if (cycle == 0 && comm->me == 0) 
+         if (N_buff < mols_charge_change*n_lambdas)
+            error->one(FLERR,"The charge content of N_buff is not large enough for n_lambdas: Please increase the N_buff");
       
       for (int i = 0; i < n_lambdas; i++) {
          sigma_lambda += x_lambdas[i][0];
