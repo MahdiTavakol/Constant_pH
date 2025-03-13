@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.10.15----------------- */
+/* ---------- v0.10.29----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
@@ -626,7 +626,7 @@ void FixAdaptiveProtonation::read_molids_file()
    // First broadcasting the size;
    MPI_Bcast(&n_protonable,1,MPI_INT,0,world);
    // Then broadcasting the individual molids
-   MPI_Bcast(&protonable_molids,n_protonable,MPI_INT,0,world);
+   MPI_Bcast(protonable_molids,n_protonable,MPI_INT,0,world);
    
    
    std::fill(mark_prev,mark_prev+nmolecules+1,0); // zero is for SOLID
@@ -646,7 +646,70 @@ void FixAdaptiveProtonation::get_protonable_molids(int *_molids) const
    for (int i = 0; i < n_protonable; i++) {
       _molids[i] = protonable_molids[i];
    }
-}
+}/* ----------------------------------------------------------------------
+   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
+   https://www.lammps.org/, Sandia National Laboratories
+   LAMMPS development team: developers@lammps.org
+
+   Copyright (2003) Sandia Corporation.  Under the terms of Contract
+   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
+   certain rights in this software.  This software is distributed under
+   the GNU General Public License.
+
+   See the README file in the top-level LAMMPS directory.
+------------------------------------------------------------------------- */
+/* ---------- v0.10.15----------------- */
+// Please remove unnecessary includes 
+#include "fix_adaptive_protonation.h"
+
+#include "atom.h"
+#include "atom_masks.h"
+#include "domain.h"
+#include "error.h"
+#include "input.h"
+#include "math_const.h"
+#include "memory.h"
+#include "comm.h"
+#include "modify.h"
+#include "region.h"
+#include "neigh_list.h"
+#include "neighbor.h"
+#include "output.h"
+#include "respa.h"
+#include "update.h"
+#include "variable.h"
+
+
+#include "force.h"
+#include "pair.h"
+#include "improper.h"
+#include "dihedral.h"
+#include "kspace.h"
+#include "angle.h"
+#include "bond.h"
+#include "atom.h"
+#include "group.h"
+
+#include "thermo.h"
+#include <cmath>
+#include <cstring>
+#include <stdio.h>
+
+using namespace LAMMPS_NS;
+using namespace FixConst;
+using namespace MathConst;
+
+enum { NONE, CONSTANT, EQUAL, ATOM };
+enum {NEITHER = -1, SOLID = 0, SOLVENT = 1};
+enum {F_NONE,RESET_MID = 1 << 1, INIT_MID = 1 << 2};
+
+/* --------------------------------------------------------------------------------------- */
+
+FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) : Fix(lmp, narg, arg), 
+   pHStructureFile1(nullptr), pHStructureFile2(nullptr),
+   mark(nullptr), mark_local(nullptr),mark_prev(nullptr),
+   molecule_size(nullptr), molecule_size_local(nullptr),
+
 
 /* ----------------------------------------------------------------------------------------
    Changing from the protonated to deprotonated states --> Moving from the solvent to the solid phase
