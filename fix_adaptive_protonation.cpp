@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.10.29----------------- */
+/* ---------- v0.10.30----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
@@ -46,6 +46,8 @@
 #include <cmath>
 #include <cstring>
 #include <stdio.h>
+
+#include <iostream>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -409,10 +411,10 @@ void FixAdaptiveProtonation::read_pH_structure_files()
    
 void FixAdaptiveProtonation::write_molids(const char* const file_name ) const
 {
-   if (file_name == nullptr) error->one(FLERR,"The wrong file name in fix adaptive protonation");
-   FILE* output_file = fopen(file_name,"w");
-   if (output_file == nullptr) error->one(FLERR,"Cannot open the file");
    if (comm->me == 0) {
+      if (file_name == nullptr) error->one(FLERR,"The wrong file name in fix adaptive protonation");
+      FILE* output_file = fopen(file_name,"w");
+      if (output_file == nullptr) error->one(FLERR,"Cannot open the file");
       if (output_file == nullptr) error->one(FLERR,"Cannot open the molid files for writing");
       fprintf(output_file,"%d\n",n_protonable);
       fprintf(output_file,"The molids file\n");
@@ -421,8 +423,8 @@ void FixAdaptiveProtonation::write_molids(const char* const file_name ) const
          fprintf(output_file,"%d\n",protonable_molids[i]);
       }
       fclose(output_file);
+      output_file = nullptr;
    }
-   output_file = nullptr;
 }
 
 /* ----------------------------------------------------------------------------------------
@@ -479,7 +481,7 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
    int inum, jnum;
    int wnum; // number of surrounding water molecules
 
-   inum = list->inum; // I do not ghost atoms for inum. however, I need them in jnum
+   inum = list->inum; // I do not need ghost atoms for inum. however, I need them in jnum
    ilist = list->ilist;
    numneigh = list->numneigh;
    firstneigh = list->firstneigh;
@@ -646,70 +648,7 @@ void FixAdaptiveProtonation::get_protonable_molids(int *_molids) const
    for (int i = 0; i < n_protonable; i++) {
       _molids[i] = protonable_molids[i];
    }
-}/* ----------------------------------------------------------------------
-   LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
-   https://www.lammps.org/, Sandia National Laboratories
-   LAMMPS development team: developers@lammps.org
-
-   Copyright (2003) Sandia Corporation.  Under the terms of Contract
-   DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under
-   the GNU General Public License.
-
-   See the README file in the top-level LAMMPS directory.
-------------------------------------------------------------------------- */
-/* ---------- v0.10.15----------------- */
-// Please remove unnecessary includes 
-#include "fix_adaptive_protonation.h"
-
-#include "atom.h"
-#include "atom_masks.h"
-#include "domain.h"
-#include "error.h"
-#include "input.h"
-#include "math_const.h"
-#include "memory.h"
-#include "comm.h"
-#include "modify.h"
-#include "region.h"
-#include "neigh_list.h"
-#include "neighbor.h"
-#include "output.h"
-#include "respa.h"
-#include "update.h"
-#include "variable.h"
-
-
-#include "force.h"
-#include "pair.h"
-#include "improper.h"
-#include "dihedral.h"
-#include "kspace.h"
-#include "angle.h"
-#include "bond.h"
-#include "atom.h"
-#include "group.h"
-
-#include "thermo.h"
-#include <cmath>
-#include <cstring>
-#include <stdio.h>
-
-using namespace LAMMPS_NS;
-using namespace FixConst;
-using namespace MathConst;
-
-enum { NONE, CONSTANT, EQUAL, ATOM };
-enum {NEITHER = -1, SOLID = 0, SOLVENT = 1};
-enum {F_NONE,RESET_MID = 1 << 1, INIT_MID = 1 << 2};
-
-/* --------------------------------------------------------------------------------------- */
-
-FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) : Fix(lmp, narg, arg), 
-   pHStructureFile1(nullptr), pHStructureFile2(nullptr),
-   mark(nullptr), mark_local(nullptr),mark_prev(nullptr),
-   molecule_size(nullptr), molecule_size_local(nullptr),
-
+}
 
 /* ----------------------------------------------------------------------------------------
    Changing from the protonated to deprotonated states --> Moving from the solvent to the solid phase
