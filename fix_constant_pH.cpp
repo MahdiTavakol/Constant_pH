@@ -495,6 +495,10 @@ void FixConstantPH::set_lambdas()
     // This would not work in the initialize section as the m_lambda has not been set yet!
     initialize_v_lambda(this->T);
   }
+  
+  // Resetting the vector_atom to the default value
+  int nmax = atom->nmax;
+  std::fill(vector_atom,vector_atom+nmax,-1);
 }
 
 /* ----------------------------------------------------------------------
@@ -1223,8 +1227,6 @@ void FixConstantPH::modify_qs(double scale, int j)
   for (int i = 0; i < nlocal; i++) {
     int molid_i = atom->molecule[i];
 
-    vector_atom[i] = -1.0;    // Default value for nonprotonable molecules;
-
     if ((protonable[type[i]] == 1) && (molid_i == molids[j])) {
       double q_init = q_orig[i];
       double pH1q =
@@ -1310,7 +1312,6 @@ void FixConstantPH::modify_qs(double **scales)
     for (int i = 0; i < nlocal; i++) {
       int molid_i = atom->molecule[i];
 
-      vector_atom[i] = -1.0;    // Default value for nonprotonable molecules;
 
       if ((protonable[type[i]] == 1) && (molid_i == molids[j])) {
         double q_init = q_orig[i];
