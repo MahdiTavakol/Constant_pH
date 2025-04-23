@@ -57,6 +57,10 @@ namespace LAMMPS_NS {
         int * typePerProtMol;
         int * protonable;
 
+        // Commands that run whenever the lambdas array is modified
+        int ncommands;
+        char ** commands;
+        FILE *commandsFile;
 
 	// Input variables for constant values
 	double pK, pH, T;
@@ -183,6 +187,7 @@ namespace LAMMPS_NS {
 	void compute_Hs();
         void check_num_OWs_HWs();
         void read_pH_structure_files();
+        void read_commands_file();
         void restore_epsilon();
 	void delete_lambdas();
 	void set_lambdas();
