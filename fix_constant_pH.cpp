@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.10.28----- */
+/* ---v0.10.30----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -408,6 +408,14 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
 	       }
 	    }
 	    // <------ add those commands
+	    
+	    /* If the number of protonable groups have changed, there is a chance 
+	     * that atomic neighbors have changed so there is a need to 
+	     * rebuild the neighbor list
+	     */
+	    neighbor->build();
+	    
+	    // Updating the endstep
 	    update->endstep = endstep_backup;
 	    
             fix_adaptive_protonation->get_n_protonable(this->n_lambdas);
