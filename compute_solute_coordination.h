@@ -26,6 +26,7 @@ ComputeStyle(solute_coordination,ComputeSoluteCoordination);
 namespace LAMMPS_NS {
 
 class ComputeSoluteCoordination : public Compute {
+ friend class FixAdaptiveProtonation;
  public:
   int nchunk, ncoord, compress, idsflag, lockcount;
   int computeflag;    // 1 if this compute invokes other computes
@@ -46,8 +47,10 @@ class ComputeSoluteCoordination : public Compute {
   int nmax;
 
 
-   // Neighborlist is required for accessing neighbors
-   class NeighList* list;
+  // Neighborlist is required for accessing neighbors
+  class NeighList* list;
+  
+  bigint invoked_last; // The last step that this value has been computed.
 
 
 

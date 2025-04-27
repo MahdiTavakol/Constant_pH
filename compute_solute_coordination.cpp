@@ -89,7 +89,7 @@ void ComputeSoluteCoordination::init()
    // request for a neighbor list
    neighbor->add_request(this, list_flags);
 
-
+   invoked_last = 0;
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -105,7 +105,10 @@ void ComputeSoluteCoordination::init_list(int /*id*/, NeighList* ptr)
 
 void ComputeSoluteCoordination::compute_peratom()
 {
-   // Building the neighbor
+  // Keeping the track of the last step when this function has been called
+  invoked_last = update->ntimestep;
+  
+  // Building the neighbor
   neighbor->build_one(list);
  
   int* type = atom->type;
@@ -147,6 +150,5 @@ void ComputeSoluteCoordination::compute_peratom()
      vector_atom[i] = wnum;
    }
 }
-
 
 

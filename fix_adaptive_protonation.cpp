@@ -53,12 +53,12 @@ using namespace MathConst;
 
 enum { NONE, CONSTANT, EQUAL, ATOM };
 enum {NEITHER = -1, SOLID = 0, SOLVENT = 1};
-enum {F_NONE,RESET_MID = 1 << 1};
+enum {F_NONE,RESET_MID = 1 << 1,C_WNUM = 1 << 2};
 
 /* --------------------------------------------------------------------------------------- */
 
 FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) : Fix(lmp, narg, arg), 
-   pHStructureFile1(nullptr), pHStructureFile2(nullptr)
+   pHStructureFile1(nullptr), pHStructureFile2(nullptr), id_wnum(nullptr), c_wnum(nullptr)
 {
    if (narg < 7) utils::missing_cmd_args(FLERR, "fix adaptive_protonation", error);
 
@@ -89,6 +89,11 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
          flags |= RESET_MID;
          iarg++;
       }
+      else if (strcmp(arg[iarg],"compute") == 0) {
+         flags |= C_WNUM;
+         id_wnum = utils::strdup(arg[iarg+1]);
+         iarg += 2;
+      }
       else
          error->all(FLERR,"Unknown keyword");
    }
@@ -105,6 +110,7 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    if (protonable) memory->destroy(protonable);
    if (protonable_molids) memory->destroy(protonable_molids);
    if (vector_atom) delete [] vector_atom;
+   if (id_wnum) delete [] id_wnum;
 
    deallocate_storage(); 
 
@@ -115,6 +121,7 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    protonable = nullptr;
    protonable_molids = nullptr;
    vector_atom = nullptr;
+   id_wnum = nullptr;
 }
 
 /* --------------------------------------------------------------------------------------- */
@@ -146,6 +153,13 @@ void FixAdaptiveProtonation::init()
    
    // n_protonable
    n_protonable = 0;
+   
+   // Getting the compute solute coordination id
+   if (flags & C_WNUM) {
+      c_wnum = dynamic_cast<ComputeSoluteCoordination*>(modify->get_compute_by_id(id_wnum));
+      if (!c_wnum)
+          error->one(FLERR,"Illegal compute type in the fix adaptive protonation");
+   }
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -390,28 +404,35 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
    int * molecule = atom->molecule;
 
    for (int ii = 0; ii < inum; ii++) {
-      wnum = 0.0;
-      int i = ilist[ii];
-      molecule_size_local[molecule[i]]++;
+      if (!c_wnum) {
+         wnum = 0.0;
+         int i = ilist[ii];
+         molecule_size_local[molecule[i]]++;
 
-      // Check if this atom is protonable --> if not do not bother with it.
-      if (protonable[type[i]] == 0) {
-         mark_local[molecule[i]] = NEITHER;
-         continue;
-      }
-      jlist = firstneigh[i];
-      jnum = numneigh[i];
-      for (int jj = 0; jj < jnum; jj++) {
-         int j = jlist[jj];
-         j &= NEIGHMASK;
+         // Check if this atom is protonable --> if not do not bother with it.
+         if (protonable[type[i]] == 0) {
+            mark_local[molecule[i]] = NEITHER;
+            continue;
+         }
+         jlist = firstneigh[i];
+         jnum = numneigh[i];
+         for (int jj = 0; jj < jnum; jj++) {
+            int j = jlist[jj];
+            j &= NEIGHMASK;
 
-         if (type[j] == typeOW)
-            wnum++;  // Just considering the Oxygens. It is possible that both O and H from the same water molecule are close to this atom.
+            if (type[j] == typeOW)
+               wnum++;  // Just considering the Oxygens. It is possible that both O and H from the same water molecule are close to this atom.
+         }
+      } else {
+         if (c_wnum->invoked_last != update->ntimestep) {
+            c_wnum->compute_peratom();
+         }
+         wnum = c_wnum->vector_atom[ii];
       }
       if (wnum >= threshold) {
-         mark_local[molecule[i]] += SOLVENT;
+         mark_local[molecule[ii]] += SOLVENT;
       } else {
-         mark_local[molecule[i]] += SOLID;
+         mark_local[molecule[ii]] += SOLID;
       }
    }
 

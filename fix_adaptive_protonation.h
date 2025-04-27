@@ -23,6 +23,8 @@ FixStyle(adaptive_protonation,FixAdaptiveProtonation);
 
 #include "fix.h"
 #include "atom_vec.h"
+#include "compute_solute_coordination.h"
+
 
 namespace LAMMPS_NS {
 
@@ -73,6 +75,9 @@ namespace LAMMPS_NS {
       
       int flags;
       
+      // the information on the compute_solute_coordination used
+      char *id_wnum;
+      ComputeSoluteCoordination* c_wnum;
 
 
 
