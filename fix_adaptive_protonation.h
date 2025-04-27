@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.10.00----- */
+/* ---v0.10.15----- */
 
 #ifdef FIX_CLASS
 // clang-format off
@@ -72,6 +72,11 @@ namespace LAMMPS_NS {
       // <------ This part is similar to the part in the fix_constant_pH.cpp, so should be a separate class
       
       int flags;
+
+      /* When a huge number of lambdas is added to the system the simulation becomes unstable.
+         So, there might be a need to input the molids of the lambdas
+      */
+      FILE* init_molid_file;
       
 
 
@@ -118,7 +123,10 @@ namespace LAMMPS_NS {
       void deallocate_storage();
       // Allocating storage
       void allocate_storage();
+      // Reseting all the molids 
       void set_molecule_id();
+      // Reading the molids from a file <--> For the file structure please have a look at the implementation file.
+      void read_molids_file();
       // Mark phosphate atoms for protonation/deprotonation
       void mark_protonation_deprotonation();
       // Modifying the protonation state
