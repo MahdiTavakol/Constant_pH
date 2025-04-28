@@ -63,7 +63,7 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    molecule_size(nullptr), molecule_size_local(nullptr),
    pH1qs(nullptr), pH2qs(nullptr),
    typePerProtMol(nullptr),
-   protonable(nullptr), protonable_molids(nullptr),
+   protonable(nullptr), protonable_molids(nullptr), n_protonable(0),
    init_molid_file(nullptr)
 {
    if (narg < 7) utils::missing_cmd_args(FLERR, "fix adaptive_protonation", error);
@@ -135,7 +135,6 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    vector_atom = new double[nmax];
 
    nmolecules = 0;
-   allocate_storage();
 
    if (flags & RESET_MID)
       set_molecule_id();
@@ -152,6 +151,7 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    }
    
    MPI_Allreduce(&nmolecules_local,&nmolecules_total,1,MPI_INT,MPI_MAX,world);
+   nmolecules = nmolecules_total;
    
    nmolecules++;
    for (int i = 0; i < nlocal; i++) {
@@ -159,13 +159,9 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
          molecule[i] = nmolecules;
    }
 
-   if (nmolecules_total > nmolecules)
-   {
-      nmolecules = nmolecules_total;
-      deallocate_storage();
-      allocate_storage();
-   }
    
+   // The allocate_storage() function needs to know the nmolecules to set the arrays
+   allocate_storage();
    
    if (flags & INIT_MID)
       read_molids_file();
@@ -175,6 +171,7 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
     */ 
    if (!(flags & INIT_MID))
       n_protonable = 0; 
+     
 }
 
 /* --------------------------------------------------------------------------------------- */
@@ -463,10 +460,12 @@ void FixAdaptiveProtonation::allocate_storage()
    memory->create(molecule_size_local,nmolecules+1,"AdaptiveProtonation:molecule_size_local");
    std::fill(protonable_molids,protonable_molids+nmolecules,-1);
    std::fill(mark,mark+nmolecules+1,0);
-   std::fill(mark_prev,mark_prev+nmolecules+1,-1); // I put it on purpose so in the first step every molecule changes
    std::fill(mark_local,mark_local+nmolecules+1,0);
    std::fill(molecule_size,molecule_size+nmolecules+1,0);
    std::fill(molecule_size_local,molecule_size_local+nmolecules+1,0);
+   std::fill(mark_prev,mark_prev+nmolecules+1,-1); /* I put it on purpose so in the first step every molecule changes unless 
+                                                    * INIT_MIDS is set in which case the read_init_mids() function rewrites this.
+                                                    */
 }
 
 /* ----------------------------------------------------------------------------------------
@@ -627,7 +626,12 @@ void FixAdaptiveProtonation::read_molids_file()
    // First broadcasting the size;
    MPI_Bcast(&n_protonable,1,MPI_INT,0,world);
    // Then broadcasting the individual molids
-   MPI_Bcast(&protonable_molids,n_protonable,MPI_INT,0,world);	
+   MPI_Bcast(&protonable_molids,n_protonable,MPI_INT,0,world);
+   
+   
+   std::fill(mark_prev,mark_prev+nmolecules+1,0); // zero is for SOLID
+   for (int i = 0; i < n_protonable; i++)
+      mark_prev[protonable_molids[i]] = SOLVENT; // protonable molecules are exposed to the SOLVENT.	
 }
 
 /* ----------------------------------------------------------------------------------------
