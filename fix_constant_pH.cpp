@@ -273,6 +273,36 @@ int FixConstantPH::setmask()
    
 void FixConstantPH::init()
 {
+   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
+   w = 200;
+   s = 0.3;
+   h = 7.0;
+   k = 4.417; //2.553;
+   a = 0.04208; //0.03401;
+   b = 0.002957; //0.005238;
+   r = 16.458; 
+   m = 0.1507;
+   d = 3.50; //2.0; //The height of the barrier is 2*d
+
+   // default values for the buffer potential with h = 0 from Donnin J Chem Theory Comput 2016 - Table S2
+   w_buff = 200;
+   s_buff = 0.3;
+   h_buff = 0.0;
+   k_buff = 0.0;
+   a_buff = 0.04764;
+   b_buff = -0.09706;
+   r_buff = 16.458;
+   m_buff = 0.1507;
+   d_buff = 0.0;
+	
+   // Reading the structure of protonable states before and after protonation.
+   read_pH_structure_files();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixConstantPH::setup(int /*vflag*/)
+{
    if (flags & ADAPTIVE) {
       fix_adaptive_protonation->get_n_protonable(n_lambdas);
    }
@@ -287,61 +317,31 @@ void FixConstantPH::init()
    }
 
    set_lambdas();
-}
 
-/* ---------------------------------------------------------------------- */
 
-void FixConstantPH::setup(int /*vflag*/)
-{
-   // default values from Donnini, Ullmann, J Chem Theory Comput 2016 - Table S2
-    w = 200;
-    s = 0.3;
-    h = 7.0;
-    k = 4.417; //2.553;
-    a = 0.04208; //0.03401;
-    b = 0.002957; //0.005238;
-    r = 16.458; 
-    m = 0.1507;
-    d = 3.50; //2.0; //The height of the barrier is 2*d
-
-    // default values for the buffer potential with h = 0 from Donnin J Chem Theory Comput 2016 - Table S2
-    w_buff = 200;
-    s_buff = 0.3;
-    h_buff = 0.0;
-    k_buff = 0.0;
-    a_buff = 0.04764;
-    b_buff = -0.09706;
-    r_buff = 16.458;
-    m_buff = 0.1507;
-    d_buff = 0.0;
+   // Checking if we have correct number of hydronium ions
+   if (flags & BUFFER) check_num_OWs_HWs();
 	
-    // Reading the structure of protonable states before and after protonation.
-    read_pH_structure_files();
+   fixgpu = modify->get_fix_by_id("package_gpu");
 
-
-    // Checking if we have correct number of hydronium ions
-    if (flags & BUFFER) check_num_OWs_HWs();
-	
-    fixgpu = modify->get_fix_by_id("package_gpu");
-
-    /* 
-     * As it is hypothesized that the initial values for 
-     * lambdas are zero the initial value for the lambda_buff
-     * should be one so there is enough protons to be exchanged
-     * between the lambdas and buffer due to the contraint on
-     * the lambas[0] + ... + lambdas[n] + lambda_buff
-     */
+   /* 
+    * As it is hypothesized that the initial values for 
+    * lambdas are zero the initial value for the lambda_buff
+    * should be one so there is enough protons to be exchanged
+    * between the lambdas and buffer due to the contraint on
+    * the lambas[0] + ... + lambdas[n] + lambda_buff
+    */
     
        
-    if (GFF_flag)
-	init_GFF();
+   if (GFF_flag)
+      init_GFF();
 
-    if (print_Udwp_flag)
-	print_Udwp();
+   if (print_Udwp_flag)
+      print_Udwp();
 
 
-    nmax = atom->nmax;
-    allocate_storage();
+   nmax = atom->nmax;
+   allocate_storage();
 
 }
 
@@ -456,7 +456,8 @@ void FixConstantPH::set_lambdas() {
    } 
 
    // This would not work in the initialize section as the m_lambda has not been set yet!
-   initialize_v_lambda(this->T);
+   if (n_lambdas)
+       initialize_v_lambda(this->T);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -620,6 +621,7 @@ void FixConstantPH::return_T_lambda(double& _T_lambda, int component)
 void FixConstantPH::reset_params(double** const _x_lambdas, double** const _v_lambdas, 
                                  double** const _a_lambdas, double** const _m_lambdas, const int mode)
 {
+    if (n_lambdas <= 0) return;
     for (int i = 0; i < n_lambdas; i++) {
         for (int j = 0; j < 3; j++) {
 	    lambdas[i][j]   = _x_lambdas[i][j];
@@ -1388,7 +1390,7 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
       // You need to add the kspace contribution too
    }
 
-   MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(energy_local, energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
    for (int i = 0; i < n_lambdas; i++) { 
       double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
       a_lambdas[i][0] = 4.184*0.0001*force_i / m_lambdas[i][0]; 
@@ -1565,14 +1567,19 @@ void FixConstantPH::calculate_T_lambda()
             KE_lambdas[2] += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
         } 
 
-	if (Nfs[0] == 0 || Nfs[1] == 0 || Nfs[2] == 0) error->one(FLERR,"The number of degrees of freedom is zero");
+	if (Nfs[0] == 0 || Nfs[1] == 0 || Nfs[2] == 0) {
+	    //error->one(FLERR,"The number of degrees of freedom is zero");
+	    T_lambdas[0] = 0.0;
+	    T_lambdas[1] = 0.0;
+	    T_lambdas[2] = 0.0;
+	}
         if (k == 0) error->one(FLERR,"The k value is zero");
         T_lambdas[0] = 2*KE_lambdas[0] / (Nfs[0] * k);
         T_lambdas[1] = 2*KE_lambdas[1] / (Nfs[1] * k);
         T_lambdas[2] = 2*KE_lambdas[2] / (Nfs[2] * k);
     }
     
-    MPI_Bcast(&T_lambdas,3,MPI_DOUBLE,0,world);
+    MPI_Bcast(T_lambdas,3,MPI_DOUBLE,0,world);
 }
 
    

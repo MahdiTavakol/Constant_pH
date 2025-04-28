@@ -136,16 +136,6 @@ void FixAdaptiveProtonation::init()
    // Checking if the atom style contains the molecules information
    if (atom->molecular != 1) error->all(FLERR,"Illegal atom style in the fix adpative protonation");
 
-   nmax = atom->nmax;
-   nmolecules = atom->nmolecule;
-
-   allocate_storage();
-
-   if (flags & RESET_MID)
-      set_molecule_id();
-
-   nmax = atom->nmax;
-   vector_atom = new double[nmax];
 
    // Request a full neighbor list
    int list_flags = NeighConst::REQ_OCCASIONAL | NeighConst::REQ_FULL;
@@ -164,14 +154,14 @@ void FixAdaptiveProtonation::init()
    
 void FixAdaptiveProtonation::setup(int /*vflag*/)
 {
-   // Counting the number of water molecules surrounding the protonable molecules
-   mark_protonation_deprotonation();
+   nmax = atom->nmax;
+   vector_atom = new double[nmax];
 
-   // This is required since the fix_constant_pH.cpp does not deal with those molecules in the solid
-   modify_protonation_state();
+   allocate_storage();
 
-   // Resetting the mark_prev parameter to help us keep the track of which molecule moves from solid to solvent and vice versa
-   set_mark_prev();
+   if (flags & RESET_MID)
+      set_molecule_id();
+
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -187,21 +177,31 @@ void FixAdaptiveProtonation::init_list(int /*id*/, NeighList* ptr)
 
 void FixAdaptiveProtonation::initial_integrate(int /*vflag*/)
 {
+   if ( update->ntimestep % nevery ) return;
+   
    // Building the neighbor
    neighbor->build_one(list);
-	
-   if(update->ntimestep != next_reneighbor) return;
 
    if (atom->nmax > nmax)
    {
       nmax = atom->nmax;
-      delete [] vector_atom;
+      if(vector_atom) delete [] vector_atom;
       vector_atom = new double[nmax];
    }
+   
+   int nmolecules_local = 0;
+   int nmolecules_total;
+   
+   for (int i = 0; i < atom->nlocal; i++) {
+       if (atom->molecule[i] > nmolecules_local)
+           nmolecules_local = atom->molecule[i];
+   }
+   
+   MPI_Allreduce(&nmolecules_local,&nmolecules_total,1,MPI_INT,MPI_MAX,world);
 
-   if (atom->nmolecule > nmolecules)
+   if (nmolecules_total > nmolecules)
    {
-      nmolecules = atom->nmolecule;
+      nmolecules = nmolecules_total;
       deallocate_storage();
       allocate_storage();
    }
@@ -417,11 +417,15 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
 
 
    // Reducing the values from various cpus
-   MPI_Allreduce(&mark_local,&mark,nmolecules+1,MPI_DOUBLE,MPI_SUM,world);
-   MPI_Allreduce(&molecule_size_local,&molecule_size,nmolecules+1,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(mark_local,mark,nmolecules+1,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(molecule_size_local,molecule_size,nmolecules+1,MPI_DOUBLE,MPI_SUM,world);
 
    for (int i = 1; i < nmolecules+1; i++)
    {
+      if (molecule_size[i] == 0) {
+         mark[i] = NEITHER;
+         continue;
+      }
       double test_condition = mark[i]/molecule_size[i];
       if (test_condition >= 0 && test_condition <= 0.5 ) mark[i] = SOLID;
       else if (test_condition > 0.5 && test_condition <= 1) mark[i] = SOLVENT;
