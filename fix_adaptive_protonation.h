@@ -14,7 +14,7 @@
 
 #ifdef FIX_CLASS
 // clang-format off
-FixStyle(AdaptiveProtonation,FixAdaptiveProtonation);
+FixStyle(adaptive_protonation,FixAdaptiveProtonation);
 // clang-format on
 #else
 
@@ -32,7 +32,8 @@ namespace LAMMPS_NS {
       ~FixAdaptiveProtonation() override;
       int setmask() override;
       void init() override;
-      void pre_exchange() override;
+      void setup(int) override;
+      void initial_integrate(int) override;
       double compute_scalar() override;
       double compute_vector(int) override;
       double memory_usage() override;
@@ -69,6 +70,10 @@ namespace LAMMPS_NS {
       void read_pH_structure_files();
 
       // <------ This part is similar to the part in the fix_constant_pH.cpp, so should be a separate class
+      
+      int flags;
+      
+
 
 
       // I need to detect water molecules
@@ -113,8 +118,6 @@ namespace LAMMPS_NS {
       void deallocate_storage();
       // Allocating storage
       void allocate_storage();
-      // Setting the same molecule id for atoms connected to each other
-      bool molecule_id_flag;
       void set_molecule_id();
       // Mark phosphate atoms for protonation/deprotonation
       void mark_protonation_deprotonation();
