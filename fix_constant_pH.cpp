@@ -170,6 +170,11 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
         flags |= ZEROCHARGE;
         iarg++;
     }
+    else if (strcmp(arg[iarg],"structure_conversion_barrier") == 0) {
+	nStructures1BarrierkT = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+	nStructures2BarrierkT = utils::numeric(FLERR,arg[iarg+2],false,lmp);
+	iarg+=3;
+    }
     else
        error->all(FLERR, "Unknown fix constant_pH keyword: {}", arg[iarg]);
    }
@@ -417,8 +422,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 0.5*kT;
-   double nStructures2Barrier = 0.5*kT;
+   double nStructures1Barrier = nStructures1BarrierkT*kT;
+   double nStructures2Barrier = nStructures2BarrierkT*kT;
 
    //df = 1.0;
    //f = 1.0;
