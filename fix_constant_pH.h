@@ -68,6 +68,9 @@ namespace LAMMPS_NS {
 	// parameter for shifting the minima of the potential near lambda = 0 and lambda = 1
 	double mu;
 
+	// Free energy barriers for the structure conversion
+	double nStructures1BarrierkT, nStructures2BarrierkT; 
+
         // Random number seed for the creation of initial v_lambdas
         double random_number_seed;
 
