@@ -58,14 +58,16 @@ enum {F_NONE,RESET_MID = 1 << 1};
 /* --------------------------------------------------------------------------------------- */
 
 FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) : Fix(lmp, narg, arg), 
-   pHStructureFile1(nullptr), pHStructureFile2(nullptr)
+   pHStructureFile1(nullptr), pHStructureFile2(nullptr),
+   mark(nullptr), mark_local(nullptr),mark_prev(nullptr),
+   molecule_size(nullptr), molecule_size_local(nullptr),
+   pH1qs(nullptr), pH2qs(nullptr),
+   typePerProtMol(nullptr),
+   protonable(nullptr), protonable_molids(nullptr)
 {
    if (narg < 7) utils::missing_cmd_args(FLERR, "fix adaptive_protonation", error);
 
-   dynamic_group_allow = 0;
-   scalar_flag = 1; 
-   vector_flag = 1;
-   peratom_flag = 1;
+
 
    
    nevery = utils::numeric(FLERR, arg[3], false, lmp);
@@ -92,6 +94,14 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
       else
          error->all(FLERR,"Unknown keyword");
    }
+   
+   dynamic_group_allow = 0;
+   scalar_flag = 1; 
+   vector_flag = 1;
+   peratom_flag = 1;
+   size_vector = 3;
+   size_peratom_cols = 0;
+   peratom_freq = nevery;
 
 }
 
@@ -103,7 +113,6 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    if (pH2qs) memory->destroy(pH2qs);
    if (typePerProtMol) memory->destroy(typePerProtMol);
    if (protonable) memory->destroy(protonable);
-   if (protonable_molids) memory->destroy(protonable_molids);
    if (vector_atom) delete [] vector_atom;
 
    deallocate_storage(); 
@@ -113,7 +122,6 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    pH2qs = nullptr;
    typePerProtMol = nullptr;
    protonable = nullptr;
-   protonable_molids = nullptr;
    vector_atom = nullptr;
 }
 
@@ -146,6 +154,8 @@ void FixAdaptiveProtonation::init()
    
    // n_protonable
    n_protonable = 0;
+   
+   std::fill(nchanges,nchanges+3,0);
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -189,6 +199,8 @@ void FixAdaptiveProtonation::initial_integrate(int /*vflag*/)
       vector_atom = new double[nmax];
    }
    
+   // If I do not put this to zero, it will have a very large value making the if statement false.
+   nmolecules = 0;
    int nmolecules_local = 0;
    int nmolecules_total;
    
@@ -339,11 +351,13 @@ void FixAdaptiveProtonation::read_pH_structure_files()
 
 void FixAdaptiveProtonation::deallocate_storage()
 {
+   memory->destroy(protonable_molids);
    memory->destroy(mark);
    memory->destroy(mark_prev);
    memory->destroy(mark_local);
    memory->destroy(molecule_size);
    memory->destroy(molecule_size_local);
+   protonable_molids = nullptr;
    mark = nullptr;
    mark_prev = nullptr;
    mark_local = nullptr;
@@ -358,11 +372,13 @@ void FixAdaptiveProtonation::deallocate_storage()
 
 void FixAdaptiveProtonation::allocate_storage()
 {
+   memory->create(protonable_molids,nmolecules,"AdaptiveProtonation:protonable_molids");
    memory->create(mark,nmolecules+1,"AdaptiveProtontation:mark");
    memory->create(mark_prev,nmolecules+1,"AdaptiveProtonation:mark_prev");
    memory->create(mark_local,nmolecules+1,"AdaptiveProtonation:mark_local");
    memory->create(molecule_size,nmolecules+1,"AdaptiveProtonation:molecule_size");
    memory->create(molecule_size_local,nmolecules+1,"AdaptiveProtonation:molecule_size_local");
+   std::fill(protonable_molids,protonable_molids+nmolecules,-1);
    std::fill(mark,mark+nmolecules+1,0);
    std::fill(mark_prev,mark_prev+nmolecules+1,-1); // I put it on purpose so in the first step every molecule changes
    std::fill(mark_local,mark_local+nmolecules+1,0);
@@ -389,10 +405,11 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
    int * type = atom->type;
    int * molecule = atom->molecule;
 
+
    for (int ii = 0; ii < inum; ii++) {
       wnum = 0.0;
       int i = ilist[ii];
-      molecule_size_local[molecule[i]]++;
+      molecule_size_local[molecule[i]] = molecule_size_local[molecule[i]] + 1;
 
       // Check if this atom is protonable --> if not do not bother with it.
       if (protonable[type[i]] == 0) {
@@ -413,12 +430,13 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
       } else {
          mark_local[molecule[i]] += SOLID;
       }
+      vector_atom[i] = static_cast<double>(wnum);
    }
 
 
    // Reducing the values from various cpus
-   MPI_Allreduce(mark_local,mark,nmolecules+1,MPI_DOUBLE,MPI_SUM,world);
-   MPI_Allreduce(molecule_size_local,molecule_size,nmolecules+1,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(mark_local,mark,nmolecules+1,MPI_INT,MPI_SUM,world);
+   MPI_Allreduce(molecule_size_local,molecule_size,nmolecules+1,MPI_INT,MPI_SUM,world);
 
    for (int i = 1; i < nmolecules+1; i++)
    {
@@ -426,7 +444,7 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
          mark[i] = NEITHER;
          continue;
       }
-      double test_condition = mark[i]/molecule_size[i];
+      double test_condition = static_cast<double>(mark[i])/static_cast<double>(molecule_size[i]);
       if (test_condition >= 0 && test_condition <= 0.5 ) mark[i] = SOLID;
       else if (test_condition > 0.5 && test_condition <= 1) mark[i] = SOLVENT;
       else if (test_condition > 1 || test_condition < -1) 
@@ -507,34 +525,55 @@ void FixAdaptiveProtonation::modify_protonation_state()
    int nchanges_local[3] = {0,0,0};
 
 
-   // You have take care of the situation in which one of the atoms of a molecule has mark[i] == 1
-   for (int i; i < nlocal; i++) {
-      switch(mark[molecule[i]])
-      {
+   for (int i = 0; i < nlocal; i++) {
+      switch (mark[molecule[i]]) {
          case NEITHER: // Not protonable --> nothing to do here
             break;
-         case SOLVENT: // In the water
-            // It came from the solid --> protonate it
-            if (mark_prev[molecule[i]] == SOLID) {
-               q[i] = pH2qs[type[i]][0]; // I just chose the first structure the fix constant pH itself selects the appropriate one
-               nchanges_local[0]++;
-               nchanges_local[1]++;
+
+         case SOLVENT: // The molecule is in the water
+            switch (mark_prev[molecule[i]]) {
+               case SOLID:   // The molecule was in the solid before
+               case NEITHER: // First step (initial value of mark_prev is -1)
+                  q[i] = pH2qs[type[i]][0]; 
+                  nchanges_local[0]++;
+                  nchanges_local[1]++;
+                  break;
+
+               case SOLVENT: // The molecule was already in water → do nothing
+                  break;
+
+               default:  // Catch unexpected values
+                  error->all(FLERR, "Unexpected value in mark_prev[molecule[i]] for SOLVENT case");
+                  break;
             }
-            else
-            {} // It used to be in the water --> do nothing
+            break;  //  Prevent fall-through
+
+         case SOLID: // The molecule is in the solid
+            switch (mark_prev[molecule[i]]) {
+               case SOLVENT:  // It came from the water → deprotonate it
+               case NEITHER:  // First step (initial value of mark_prev is -1)
+                  q[i] = pH1qs[type[i]][0]; 
+                  nchanges_local[0]++;
+                  nchanges_local[2]++;
+                  break;
+
+               case SOLID:  // It was already in the solid → do nothing
+                  break;
+
+               default:  // Catch unexpected values
+                  error->all(FLERR, "Unexpected value in mark_prev[molecule[i]] for SOLID case");
+                  break;
+            }
+            break;  //  Prevent fall-through
+
+        default:  // Catch unexpected values in `mark[molecule[i]]`
+            error->all(FLERR, "Unexpected value in mark[molecule[i]]");
             break;
-         case SOLID: // In the solid
-            // It came from the water --> deprotonate it
-            if (mark_prev[molecule[i]] == SOLVENT) {
-               q[i] = pH1qs[type[i]][0]; // I would expect that there is just one structure in the solid state
-               nchanges_local[0]++;
-               nchanges_local[2]++;
-            }
-            else
-            {} // It used to be in the solid --> do nothing 
       }
    }
-
+   
+   
+   
    MPI_Allreduce(nchanges_local,nchanges,3,MPI_INT,MPI_SUM,world);
    
    
@@ -546,18 +585,12 @@ void FixAdaptiveProtonation::modify_protonation_state()
     * and it reinitializes the v_lambdas.
     */
    if (nchanges[0]) {
-      n_protonable += nchanges[1]-nchanges[2];
-      
-      if (protonable_molids) memory->destroy(protonable_molids);
-      protonable_molids = nullptr;
-      memory->create(protonable_molids,nmolecules+1,"constant_pH:protonable_molids"); 
-
-      int j = 0;      
-      for (int i = 0; i < nmolecules+1; i++)
-         if (mark[i] == SOLVENT) {
-            protonable_molids[j] = i;
-            j++;
-         }
+      int j = 0;
+      for (int i = 1; i <=nmolecules; i++)
+         if (mark[i] == SOLVENT)
+            protonable_molids[j++] = i;
+   
+      n_protonable = j;
    }
 }
 
@@ -587,8 +620,17 @@ double FixAdaptiveProtonation::compute_scalar()
 
 double FixAdaptiveProtonation::compute_vector(int n)
 {
-   int *molecule = atom->molecule;
-    
+   switch(n)
+   {
+      // 1
+      case 0:
+         return static_cast<double>(nchanges[0]);
+      case 1:
+         return static_cast<double>(nchanges[1]);
+      case 2:
+         return static_cast<double>(nchanges[2]);
+   }
+   return -1;  
 }
 
 /* --------------------------------------------------------------------------
