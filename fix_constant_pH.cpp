@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.10.01----- */
+/* ---v0.10.24----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -325,8 +325,6 @@ void FixConstantPH::init()
    m_buff = 0.1507;
    d_buff = 0.0;
 	
-   // Reading the structure of protonable states before and after protonation.
-   //read_pH_structure_files();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -377,6 +375,13 @@ void FixConstantPH::setup(int /*vflag*/)
    // Reading the structure of protonable states before and after protonation.
    read_pH_structure_files();
 
+   // I have put this part here on purpose so if the fix_adaptive_protonation reads the initial molids, it is set here
+   int n_protonable;
+   fix_adaptive_protonation->get_n_protonable(n_protonable);
+   this->n_lambdas = n_protonable;
+   set_lambdas();
+   fix_adaptive_protonation->get_protonable_molids(molids);
+   initialize_v_lambda(this->T);
 }
 
 /* ----------------------------------------------------------------------
