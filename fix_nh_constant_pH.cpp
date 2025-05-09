@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.08.13
+   v0.05.19
 ------------------------------------------------------------------------- */
 #include <iostream>
 
@@ -258,23 +258,24 @@ void FixNHConstantPH::nh_v_temp()
 
     if (which == NOBIAS) {
       // Dealing with lambdas
-      for (int i = 0; i < 3 * n_lambdas; i++) {
-        double r = static_cast<double>(rand())/ RAND_MAX;
-        if (r < P) {
-           double mean = 0.0;
-           double sigma = std::sqrt(kT/(m_lambdas[i%n_lambdas]*mvv2e));
-           v_lambdas[i%n_lambdas][i/n_lambdas] = random_normal(mean, sigma);
-        }
-        if (i/n_lambdas == 0) {
-           if (x_lambdas[i%n_lambdas][0] < -0.1 || x_lambdas[i%n_lambdas][0] > 1.1)
-              v_lambdas[i%n_lambdas][0] = -(x_lambdas[i%n_lambdas][0]/std::abs(x_lambdas[i%n_lambdas][0]))*std::abs(v_lambdas[i%n_lambdas][0]);
-        }
-        if (i/n_lambdas > 0) {
-           if (x_lambdas[i%n_lambdas][i/n_lambdas] < 0.0 && v_lambdas[i%n_lambdas][i/n_lambdas] < 0.0)
-              x_lambdas[i%n_lambdas][i/n_lambdas] += 1.0;
-           if (x_lambdas[i%n_lambdas][i/n_lambdas] > 1.0 && v_lambdas[i%n_lambdas][i/n_lambdas] > 0.0)
-              x_lambdas[i%n_lambdas][i/n_lambdas] -= 1.0;            
-        }
+      for (int i = 0; i < n_lambdas; i++) 
+        for (int j = 0; j < 3; j++) {
+           double r = static_cast<double>(rand())/ RAND_MAX;
+           if (r < P) {
+              double mean = 0.0;
+              double sigma = std::sqrt(kT/(m_lambdas[i]*mvv2e));
+              v_lambdas[i][j] = random_normal(mean, sigma);
+           }
+           if (j == 0) {
+              if (x_lambdas[i][j] < -0.1 || x_lambdas[i][j] > 1.1)
+                 v_lambdas[i][j] = -(x_lambdas[i][j]/std::abs(x_lambdas[i][j]))*std::abs(v_lambdas[i][j]);
+           }
+           if (j > 0) {
+              if (x_lambdas[i][j] < 0.0 && v_lambdas[i][j] < 0.0)
+                 x_lambdas[i][j] += 1.0;
+              if (x_lambdas[i][j] > 1.0 && v_lambdas[i][j] > 0.0)
+                 x_lambdas[i][j] -= 1.0;            
+           }
       }
       // Dealing with the buffer
       if (lambda_integration_flags & BUFFER) {
@@ -315,20 +316,20 @@ void FixNHConstantPH::nh_v_temp()
     if (which == NOBIAS) {
 
        // first, the lambdas
-       for (int i = 0; i < 3*n_lambdas; i++) {
-          v_lambdas[i%n_lambdas][i/n_lambdas] *= alpha_bussi;
+       for (int i = 0; i < n_lambdas; i++)
+          for (int j = 0; j < 3; j++) {
+             v_lambdas[i][j] *= alpha_bussi;
 
-          if (i / n_lambdas == 0) {
-             if (x_lambdas[i%n_lambdas][i/n_lambdas] < -0.1 || x_lambdas[i%n_lambdas][i/n_lambdas] > 1.1)
-               v_lambdas[i%n_lambdas][i/n_lambdas] = -(x_lambdas[i%n_lambdas][i/n_lambdas]/std::abs(x_lambdas[i%n_lambdas][i/n_lambdas]))*std::abs(v_lambdas[i%n_lambdas][i/n_lambdas]);
+             if (j == 0) {
+               if (x_lambdas[i][j] < -0.1 || x_lambdas[i][j] > 1.1)
+                 v_lambdas[i][j] = -(x_lambdas[i][j]/std::abs(x_lambdas[i][j]))*std::abs(v_lambdas[i][j]);
+             } else {
+               if (x_lambdas[i][j] < 0.0 && v_lambdas[i][j] < 0.0)
+                 x_lambdas[i][j] += 1.0;
+               if (x_lambdas[i][j] > 1.0 && v_lambdas[i][j] > 0.0)
+                 x_lambdas[i][j] -= 1.0;
+             }
           }
-          else {
-             if (x_lambdas[i%n_lambdas][i/n_lambdas] < 0.0 && v_lambdas[i%n_lambdas][i/n_lambdas] < 0.0)
-               x_lambdas[i%n_lambdas][i/n_lambdas] += 1.0;
-             if (x_lambdas[i%n_lambdas][i/n_lambdas] > 1.0 && v_lambdas[i%n_lambdas][i/n_lambdas] > 0.0)
-               x_lambdas[i%n_lambdas][i/n_lambdas] -= 1.0;
-          }
-       }
        // and then the buffer 
        if (lambda_integration_flags & BUFFER) {
           v_lambda_buff *= alpha_bussi;
@@ -344,18 +345,19 @@ void FixNHConstantPH::nh_v_temp()
 
      if (which == NOBIAS) {
         // first the lambdas
-        for (int i = 0; i < 3*n_lambdas; i++) {
-           v_lambdas[i%n_lambdas][i/n_lambdas] *= std::exp(-zeta_nose_hoover * dt);
+        for (int i = 0; i < n_lambdas; i++) 
+           for (int j = 0; j < 3; j++) {
+              v_lambdas[i][j] *= std::exp(-zeta_nose_hoover * dt);
            
-           if (i / n_lambdas == 0) {
-              if (x_lambdas[i%n_lambdas][i/n_lambdas] < -0.1 || x_lambdas[i%n_lambdas][i/n_lambdas] > 1.1)
-                v_lambdas[i%n_lambdas][i/n_lambdas] = -(x_lambdas[i%n_lambdas][i/n_lambdas]/std::abs(x_lambdas[i%n_lambdas][i/n_lambdas]))*std::abs(v_lambdas[i%n_lambdas][i/n_lambdas]);
-           }
-           else {
-              if (x_lambdas[i%n_lambdas][i/n_lambdas] < 0.0 && v_lambdas[i%n_lambdas][i/n_lambdas] < 0.0)
-                x_lambdas[i%n_lambdas][i/n_lambdas] += 1.0;
-              if (x_lambdas[i%n_lambdas][i/n_lambdas] > 1.0 && v_lambdas[i%n_lambdas][i/n_lambdas] > 0.0)
-                x_lambdas[i%n_lambdas][i/n_lambdas] -= 1.0;
+              if (i / n_lambdas == 0) {
+                if (x_lambdas[i][j] < -0.1 || x_lambdas[i][j] > 1.1)
+                  v_lambdas[i][j] = -(x_lambdas[i][j]/std::abs(x_lambdas[i][j]))*std::abs(v_lambdas[i][j]);
+              }
+              else {
+                if (x_lambdas[i][j] < 0.0 && v_lambdas[i][j] < 0.0)
+                  x_lambdas[i][j] += 1.0;
+                if (x_lambdas[i][j] > 1.0 && v_lambdas[i][j] > 0.0)
+                  x_lambdas[i][j] -= 1.0;
            }
         }
         // and then the buffer
@@ -368,7 +370,7 @@ void FixNHConstantPH::nh_v_temp()
      }
   }
 
-  MPI_Bcast(v_lambdas,n_lambdas,MPI_DOUBLE,0,world);
+  MPI_Bcast(v_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
   if (lambda_integration_flags & BUFFER)
      MPI_Bcast(&v_lambda_buff,1,MPI_DOUBLE,0,world);  
    
