@@ -112,8 +112,8 @@ void ComputeGFFConstantPH::compute_array()
    if (0) {
       // Calculating the HA, HB, HC and dH_dLambda
       for (int i = 0; i < n_lambdas; i++) {
-         fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-         std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
+         for (int j = 0; j < n_lambdas; j++)
+            x_lambdas[j][0] = lambda;
       
          if (flags & BUFFER) {
             double lambda_buff_temp, v_lambda_buff_temp, a_lambda_buff_temp, m_lambda_buff_temp;
@@ -128,17 +128,17 @@ void ComputeGFFConstantPH::compute_array()
          fix_constant_pH->calculate_H_once();
          fix_constant_pH->return_H_lambdas(HCs);
 	   
-         x_lambdas[i] = lambda - dlambda;
+         x_lambdas[i][0] = lambda - dlambda;
          fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
          fix_constant_pH->calculate_H_once();
          fix_constant_pH->return_H_lambdas(HAs);
 
-         x_lambdas[i] = lambda + dlambda;
+         x_lambdas[i][0] = lambda + dlambda;
          fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
          fix_constant_pH->calculate_H_once();
          fix_constant_pH->return_H_lambdas(HBs);
          
-         x_lambdas[i] = lambda;
+         x_lambdas[i][0] = lambda;
          fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
          
          array[0][i] = HAs[i];
@@ -149,7 +149,8 @@ void ComputeGFFConstantPH::compute_array()
    }
    else {
       fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-      std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
+      for (int i = 0; i < n_lambdas; i++)
+         x_lambdas[i][0] = lambda;
       
       if (flags & BUFFER) {
          double lambda_buff_temp, v_lambda_buff_temp, a_lambda_buff_temp, m_lambda_buff_temp;
@@ -162,17 +163,20 @@ void ComputeGFFConstantPH::compute_array()
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HCs);
       
-      std::fill(x_lambdas,x_lambdas+n_lambdas,lambda-dlambda);
+      for (int i = 0; i < n_lambdas; i++)
+         x_lambdas[i][0] = lambda - dlambda;
       fix_constant_pH->reset_params(x_lambdas, v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HAs);
       
-      std::fill(x_lambdas,x_lambdas+n_lambdas,lambda+dlambda);
+      for (int i = 0; i < n_lambdas; i++)
+         x_lambdas[i][0] = lambda + dlambda;
       fix_constant_pH->reset_params(x_lambdas, v_lambdas,a_lambdas,m_lambdas);
       fix_constant_pH->calculate_H_once();
       fix_constant_pH->return_H_lambdas(HBs);
       
-      std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
+      for (int i = 0; i < n_lambdas; i++)
+         x_lambdas[i][0] = lambda;
       fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       
       array[0] = HAs;

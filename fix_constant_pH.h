@@ -51,7 +51,7 @@ namespace LAMMPS_NS {
         FILE *pHStructureFile1, *pHStructureFile2;
 
 	// Atom types and charges that change due to protonation
-        int pHnStructures1, pHnStructures1;
+        int pHnStructures1, pHnStructures2;
         int pHnTypes1, pHnTypes2;
         double **pH1qs, **pH2qs;
         int * typePerProtMol;
@@ -143,10 +143,10 @@ namespace LAMMPS_NS {
 
         // Functions for accessing or reseting the lambda dynamics parameters
         void return_nparams(int& _n_params) const;
-        void return_params(double* const _x_lambdas, double* const _v_lambdas, 
-                           double* const _a_lambdas, double* const _m_lambdas) const;
-        void reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
-                          const double* const _a_lambdas, const double* const _m_lambdas);
+        void return_params(double** const _x_lambdas, double** const _v_lambdas, 
+                           double** const _a_lambdas, double* const _m_lambdas) const;
+        void reset_params(double** const _x_lambdas, double** const _v_lambdas, 
+                          double** const _a_lambdas, const double* const _m_lambdas);
         void return_H_lambdas(double* _H_lambdas) const;
         void return_T_lambda(double& _T_lambda);
 

@@ -185,14 +185,15 @@ FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg): Fix(lmp, narg, 
 FixConstantPH::~FixConstantPH()
 {
    // Closing files if they are open. 
-   if (pHStructureFile && comm->me == 0) fclose(pHStructureFile); // I have already closed it.. This is here just to assure it is closed
+   if (pHStructureFile1 && comm->me == 0) fclose(pHStructureFile1); // I have already closed it.. This is here just to assure it is closed
+   if (pHStructureFile2 && comm->me == 0) fclose(pHStructureFile2); // I have already closed it.. This is here just to assure it is closed
    if (fp && (comm->me == 0)) fclose(fp);
    if (Udwp_fp && (comm->me == 0)) fclose(Udwp_fp); // We should never reach that point as this file is writting just at the setup stage and then it will be closed
 
    // deallocate char* variables
    if (fix_adaptive_protonation_id) delete [] fix_adaptive_protonation_id; // Since it is allocated with lmp->utils->strdup, it must be deallocated with delete [] 
 
-   // deallocating the variables whose size depend on the ntypes and as the ntypes does not change during the simulation there is no need for reallocation of them
+   // deallocating the variables whose size depend on the ntypes andfix_constant_pH.cp as the ntypes does not change during the simulation there is no need for reallocation of them
    if (pH1qs) memory->destroy(pH1qs);
    if (pH2qs) memory->destroy(pH2qs);
    if (typePerProtMol) memory->destroy(typePerProtMol);
@@ -385,14 +386,16 @@ void FixConstantPH::set_lambdas() {
    if (flags & ADAPTIVE) memory->create(molids,n_lambdas,"constant_pH:molids");
 
    for (int i = 0; i < n_lambdas; i++) {
-      lambdas[i] = 0.0;
-      v_lambdas[i] = 0.0;
-      a_lambdas[i] = 0.0;
+      GFF_lambdas[i] = 0.0;
       m_lambdas[i] = 20.0; // m_lambda == 20.0u taken from https://www.mpinat.mpg.de/627830/usage
       H_lambdas[i] = 0.0;
-      GFF_lambdas[i] = 0.0;
       if (flags & ADAPTIVE)
          molids[i] = 0.0;
+      for (int j = 0; j < 3; j++) {
+         lambdas[i][j] = 0.0;
+         v_lambdas[i][j] = 0.0;
+         a_lambdas[i][j] = 0.0;
+      }
    } 
 
    // This would not work in the initialize section as the m_lambda has not been set yet!
@@ -486,14 +489,16 @@ void FixConstantPH::return_nparams(int& _n_params) const
    The memories for these should be allocated before hands
    ---------------------------------------------------------------------- */
 
-void FixConstantPH::return_params(double* const _x_lambdas, double* const _v_lambdas, 
-                           double* const _a_lambdas, double* const _m_lambdas) const 
+void FixConstantPH::return_params(double** const _x_lambdas, double** const _v_lambdas, 
+                           double** const _a_lambdas, double* const _m_lambdas) const 
 {
     for (int i = 0; i < n_lambdas; i++) {
-	_x_lambdas[i] = lambdas[i];
-	_v_lambdas[i] = v_lambdas[i];
-	_a_lambdas[i] = a_lambdas[i];
-	_m_lambdas[i] = m_lambdas[i];
+        _m_lambdas[i] = m_lambdas[i];
+        for (int j = 0; j < 3; j++) {
+	    _x_lambdas[i][j] = lambdas[i][j];
+	    _v_lambdas[i][j] = v_lambdas[i][j];
+	    _a_lambdas[i][j] = a_lambdas[i][j];
+        }
     }
 }
 
@@ -549,14 +554,16 @@ void FixConstantPH::return_T_lambda(double& _T_lambda)
     fix styles
     --------------------------------------------------------------------- */
 
-void FixConstantPH::reset_params(const double* const _x_lambdas, const double* const _v_lambdas, 
-                          const double* const _a_lambdas, const double* const _m_lambdas)
+void FixConstantPH::reset_params(double** const _x_lambdas, double** const _v_lambdas, 
+                                 double** const _a_lambdas, const double* const _m_lambdas)
 {
     for (int i = 0; i < n_lambdas; i++) {
-	lambdas[i] = _x_lambdas[i];
-	v_lambdas[i] = _v_lambdas[i];
-	a_lambdas[i] = _a_lambdas[i];
-	m_lambdas[i] = _m_lambdas[i];
+        m_lambdas[i] = _m_lambdas[i];
+        for (int j = 0; j < 3; j++) {
+	    lambdas[i][j]   = _x_lambdas[i][j];
+	    v_lambdas[i][j] = _v_lambdas[i][j];
+	    a_lambdas[i][j] = _a_lambdas[i][j];
+        }
     }
 }
 
@@ -631,13 +638,13 @@ void FixConstantPH::read_pH_structure_files()
        fgets(line,sizeof(line),pHStructureFile1);
        line[strcspn(line,"\n")] = '\0';
        char *token = strtok(line,",");   
-       pHnStructures1 = std::stoir(token);
+       pHnStructures1 = std::stoi(token);
 
        // pHnStructures
        fgets(line,sizeof(line),pHStructureFile2);
        line[strcspn(line,"\n")] = '\0';
-       char *token = strtok(line,",");   
-       pHnStructures2 = std::stoir(token);
+       token = strtok(line,",");   
+       pHnStructures2 = std::stoi(token);
 
        // check if both the pHnTypes1 == pHnTypes2
    }
@@ -657,7 +664,7 @@ void FixConstantPH::read_pH_structure_files()
 
        fgets(line,sizeof(line),pHStructureFile2);
        line[strcspn(line,"\n")] = '\0';
-       char *token = strtok(line,",");    
+       token = strtok(line,",");    
        pHnTypes2 = std::stoi(token);
 	
        for (int i = 1; i < ntypes+1; i++)
@@ -689,7 +696,7 @@ void FixConstantPH::read_pH_structure_files()
 	       error->all(FLERR,"Error in reading the pH structure file in fix constant_pH");
 	  line[strcspn(line,"\n")] = '\0';
 	  token = strtok(line,",");
-	  int type = std::stoi(token);
+	  type = std::stoi(token);
 	  protonable[type] = 1;
 	  token = strtok(NULL,",");
 	  typePerProtMol[type] = std::stoi(token);
@@ -996,8 +1003,8 @@ void FixConstantPH::modify_qs(double scale, int j)
         if ((protonable[type[i]] == 1) && (molid_i == molids[j]))
         {
             double q_init = q_orig[i];
-            int indx1 = static_cast<int>(round(scales[j][1]*pHnTypes1-0.5));
-	    int indx2 = static_cast<int>(round(scales[j][2]*pHnTypes2-0.5));
+            int indx1 = static_cast<int>(round(lambdas[j][1]*pHnTypes1-0.5));
+	    int indx2 = static_cast<int>(round(lambdas[j][2]*pHnTypes2-0.5));
             q[i] = pH1qs[type[i]][indx1] + scale * (pH2qs[type[i]][indx2] - pH1qs[type[i]][indx1]); // scale == 1 should be for the protonated state
 	    q_changes_local[0]++;
 	    q_changes_local[1] += (q[i] - q_init);
@@ -1161,19 +1168,19 @@ void FixConstantPH::calculate_GFFs()
 {
    for (int j = 0; j < n_lambdas; j++) {
    	int i = 0;
-   	while (i < GFF_size && GFF[i][0] < lambdas[j]) i++;
+   	while (i < GFF_size && GFF[i][0] < lambdas[j][0]) i++;
 
    	if (i == 0)
    	{
-      	    error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambdas[j]);
-            GFF_lambdas[j] = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambdas[j] - GFF[0][0]);
+      	    error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambdas[j][0]);
+            GFF_lambdas[j] = GFF[0][1] + ((GFF[1][1]-GFF[0][1])/(GFF[1][0]-GFF[0][0]))*(lambdas[j][0] - GFF[0][0]);
         }
         if (i > 0 && i < GFF_size - 1)
-            GFF_lambdas[j] = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j] - GFF[i-1][0]);
+            GFF_lambdas[j] = GFF[i-1][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j][0] - GFF[i-1][0]);
         if (i == GFF_size - 1)
         {
-            error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambdas[j]);
-            GFF_lambdas[j] = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j] - GFF[i][0]);
+            error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambdas[j][0]);
+            GFF_lambdas[j] = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambdas[j][0] - GFF[i][0]);
         }
    }
 }
@@ -1253,7 +1260,7 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
    MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
    for (int i = 0; i < n_lambdas; i++) { 
       double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
-      a_lambdas[i] = 4.184*0.0001*force_i / m_lambdas[i]; 
+      a_lambdas[i][0] = 4.184*0.0001*force_i / m_lambdas[i]; 
    }
 
    delete [] energy_local;
@@ -1273,9 +1280,11 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     if (flags & BUFFER) ke_lambdas_target += 0.5*N_buff*kT;
     for (int j = 0; j < n_lambdas; j++) {
 	double stddev = std::sqrt(kT/m_lambdas[j]);
-	v_lambdas[j] = distribution(rng);
-	ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j];
-	v_lambdas[j] *= std::sqrt(4184/10.0)/1000.0; // A/fs
+	for (int k = 0; k < 3; k++) {
+	    v_lambdas[j][k] = distribution(rng);
+	    ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j][k]*v_lambdas[j][k];
+	    v_lambdas[j][k] *= std::sqrt(4184/10.0)/1000.0; // A/fs
+	}
     }
     if (flags & BUFFER) {
         double stddev = std::sqrt(kT/m_lambda_buff);
@@ -1286,20 +1295,23 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     double scaling_factor = std::sqrt(ke_lambdas_target/ke_lambdas);
 
     for (int j = 0; j < n_lambdas; j++)
-	v_lambdas[j] *= scaling_factor;
+        for (int k = 0; k < 3; k++)
+	    v_lambdas[j][k] *= scaling_factor;
     if (flags & BUFFER)
         v_lambda_buff *= scaling_factor;
 
     double v_cm = 0.0;
     for (int j = 0; j < n_lambdas; j++)
-	v_cm += v_lambdas[j];
+        for (int k = 0; k < 3; k++)
+	    v_cm += v_lambdas[j][k];
     if (flags & BUFFER)
         v_cm += N_buff*v_lambda_buff;
     double n_cm = static_cast<double>(n_lambdas);
     if (flags & BUFFER) n_cm += static_cast<double>(N_buff);
     v_cm /= static_cast<double>(n_cm);
     for (int j = 0; j < n_lambdas; j++)
-	v_lambdas[j] -= v_cm;
+        for (int k = 0; k < 3; k++)
+	    v_lambdas[j][k] -= v_cm;
 }
 
 /* --------------------------------------------------------------------- */
@@ -1310,14 +1322,15 @@ void FixConstantPH::calculate_T_lambda()
     double k = force->boltz;
     double mvv2e = force->mvv2e;
     
-    double Nf = static_cast<double>(n_lambdas);
+    double Nf = static_cast<double>(3.0*n_lambdas);
     if (flags & BUFFER)
     	Nf += static_cast<double>(N_buff);
     if (flags & CONSTRAIN)
     	Nf -= 1.0;
     	
     for (int j = 0; j < n_lambdas; j++)
-        KE_lambda += 0.5*m_lambdas[j]*v_lambdas[j]*v_lambdas[j]*mvv2e;
+        for (int k = 0; k < 3; k++)
+            KE_lambda += 0.5*m_lambdas[j]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
     if (flags & BUFFER)
         KE_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
     
@@ -1422,25 +1435,25 @@ double FixConstantPH::compute_array(int i, int j)
            return -1.0;
       case 5:
         // 6
-        if (j < n_lambdas)
-           return lambdas[j];
-        else if (j == n_lambdas)
+        if (j < 3*n_lambdas)
+           return lambdas[j%n_lambdas][j/n_lambdas];
+        else if (j == 3*n_lambdas)
            return lambda_buff;
         else
            return -1.0;
       case 6:
         // 7
-        if (j < n_lambdas)
-           return v_lambdas[j];
-        else if (j == n_lambdas)
+        if (j < 3*n_lambdas)
+           return v_lambdas[j%n_lambdas][j/n_lambdas];
+        else if (j == 3*n_lambdas)
            return v_lambda_buff;
         else
            return -1.0;
       case 7:
         // 8
-        if (j < n_lambdas)
-           return a_lambdas[j];
-        else if (j == n_lambdas)
+        if (j < 3*n_lambdas)
+           return a_lambdas[j%n_lambdas][j/n_lambdas];
+        else if (j == 3*n_lambdas)
            return a_lambda_buff;
         else
            return -1.0;
