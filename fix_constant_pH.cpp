@@ -1045,6 +1045,11 @@ void FixConstantPH::modify_qs(double scale, int j)
     int indx21 = std::floor(lambdas[j][2]*pHnStructures2-0.5);
     int indx22 = std::ceil(lambdas[j][2]*pHnStructures2-0.5);
     double scale2 = (lambdas[j][2]*pHnStructures2-0.5 - static_cast<double>(indx21))/(static_cast<double>(indx22)-static_cast<double>(indx21));
+
+    indx11 = 0;
+    indx12 = 0;
+    indx21 = 0;
+    indx22 = 0;
     
 
 	
@@ -1139,6 +1144,11 @@ void FixConstantPH::modify_qs(double** scales)
             indx21 -= pHnStructures2;
         while (indx22 > pHnStructures2 - 1)
             indx22 -= pHnStructures2;
+
+	indx11 = 0;
+	indx12 = 0;
+	indx21 = 0;
+	indx22 = 0;
     
 
 	
