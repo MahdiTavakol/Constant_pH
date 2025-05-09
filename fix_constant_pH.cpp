@@ -551,11 +551,15 @@ void FixConstantPH::return_H_lambdas(double* _H_lambdas) const
     This one just returns the value of T_lambda
    --------------------------------------------------------------------- */
    
-void FixConstantPH::return_T_lambda(double& _T_lambda)
+void FixConstantPH::return_T_lambda(double& _T_lambda, int component)
 {
     calculate_T_lambda();
-    _T_lambda = this->T_lambda;
+    
+    if (component < 0 || component > 2)
+        error->one(FLERR,"Illegal input variable");
+    _T_lambda = this->T_lambdas[component];
 }
+
 
 /* ---------------------------------------------------------------------
     sets the values of the x_lambdas, v_lambdas, ... possibly by the intergrating
@@ -1349,7 +1353,6 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 {    
     RanPark *random = nullptr;
-    double seed = 1234579;
     random = new RanPark(lmp,random_number_seed);
 
     for (int i = 0; i < n_lambdas; i++) 
@@ -1361,7 +1364,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 
     this->calculate_T_lambda();
 
-    double scaling_factor = std::sqrt(_T_lambda/T_lambda);
+    double scaling_factor = std::sqrt(_T_lambda/T_lambdas[2]);
 
     for (int i = 0; i < n_lambdas; i++)
 	for (int j = 0; j < 3; j++)
@@ -1371,7 +1374,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
         v_lambda_buff *= scaling_factor;
 
     this->calculate_T_lambda();    
-    scaling_factor = std::sqrt(_T_lambda/T_lambda);
+    scaling_factor = std::sqrt(_T_lambda/T_lambdas[2]);
 
     double v_cm;
     for (int i = 0; i < n_lambdas; i++)
@@ -1401,27 +1404,43 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 
 void FixConstantPH::calculate_T_lambda()
 {
-    double KE_lambda = 0.0;
+    double KE_lambdas[3] = {0.0,0.0,0.0}; // lambdas[0][;], lambdas[1:][;], lambdas[;][;]
+    double Nfs[3];
     double k = force->boltz;
     double mvv2e = force->mvv2e;
-    double Nf = static_cast<double>(3.0*n_lambdas);
+    
+    Nfs[0] = static_cast<double>(n_lambdas);
+    Nfs[1] = static_cast<double>(2*n_lambdas);
+    Nfs[2] = Nfs[0] + Nfs[1];
     
     if (comm->me == 0) {
-        if (flags & BUFFER)
-    	    Nf += 1.0;
-        if (flags & CONSTRAIN)
-    	    Nf -= 1.0;
+        if (flags & BUFFER) {
+    	    Nfs[0] += 1.0;
+    	    Nfs[2] += 1.0;
+    	}
+        if (flags & CONSTRAIN) {
+    	    Nfs[0] -= 1.0;
+    	    Nfs[0] -= 1.0;
+    	}
     	
-        for (int j = 0; j < n_lambdas; j++)
+        for (int j = 0; j < n_lambdas; j++) {
+            KE_lambdas[0] += 0.5*m_lambdas[j][0]*v_lambdas[j][0]*v_lambdas[j][0]*mvv2e; 
             for (int k = 0; k < 3; k++)
-                KE_lambda += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
-        if (flags & BUFFER)
-            KE_lambda += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
-    
-        T_lambda = 2*KE_lambda / (Nf * k);
+                KE_lambdas[2] += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
+            KE_lambdas[1] = KE_lambdas[2]-KE_lambdas[0];
+        }
+        
+        if (flags & BUFFER) {
+            KE_lambdas[0] += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
+            KE_lambdas[2] += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
+        } 
+        
+        T_lambdas[0] = 2*KE_lambdas[0] / (Nfs[0] * k);
+        T_lambdas[1] = 2*KE_lambdas[1] / (Nfs[1] * k);
+        T_lambdas[2] = 2*KE_lambdas[2] / (Nfs[2] * k);
     }
     
-    MPI_Bcast(&T_lambda,1,MPI_DOUBLE,0,world);
+    MPI_Bcast(&T_lambdas,3,MPI_DOUBLE,0,world);
 }
 
    
@@ -1547,7 +1566,7 @@ double FixConstantPH::compute_array(int i, int j)
       case 8:
         // 9
         calculate_T_lambda();
-        return T_lambda;
+        return T_lambdas[j];
       case 9:
         // 10
         if (j < n_lambdas)
