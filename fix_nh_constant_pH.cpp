@@ -420,7 +420,7 @@ void FixNHConstantPH::constrain_lambdas()
    double N_buff_double = static_cast<double>(N_buff);
    
 
-   
+   int maxCycles = 10000;
    int cycle = 0;
    
    /* The while(true) loop was used on purpose so that even when the loop termination condition
@@ -449,8 +449,10 @@ void FixNHConstantPH::constrain_lambdas()
       else error->one(FLERR,"You should never have reached here!!!");
 
 
-      if (std::abs(q_total) < etol || cycle++ > 1000) {
+      if (std::abs(q_total) < etol || cycle++ > maxCycles) {
          break;
+         if (comm->me == 0 && cycle > maxCycles)
+             error->warning(FLERR,"The charge constrain did not reach convergence after {} iterations",maxCycles);
       }
       
       domega = -q_total \ 
