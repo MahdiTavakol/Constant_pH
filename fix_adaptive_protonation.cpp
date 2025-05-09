@@ -113,6 +113,52 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    size_vector = 3;
    size_peratom_cols = 0;
    peratom_freq = nevery;
+   
+   
+   
+   
+   /* This part used to be in the setup() function, 
+    * however since this fix adaptive protonation is
+    * deleted and added everytime the number of protonation
+    * state changes this part has to be inside the constructor
+    */
+    
+   nmax = atom->nmax;
+   vector_atom = new double[nmax];
+
+   nmolecules = 0;
+   allocate_storage();
+
+   if (flags & RESET_MID)
+      set_molecule_id();
+   if (flags & INIT_MID)
+      read_molids_file();
+
+   int nlocal = atom->nlocal;
+   int * molecule = atom->molecule;
+   
+   int nmolecules_local = 0;
+   int nmolecules_total;
+   
+   for (int i = 0; i < nlocal; i++) {
+       if (atom->molecule[i] > nmolecules_local)
+           nmolecules_local = atom->molecule[i];
+   }
+   
+   MPI_Allreduce(&nmolecules_local,&nmolecules_total,1,MPI_INT,MPI_MAX,world);
+   
+   nmolecules++;
+   for (int i = 0; i < nlocal; i++) {
+      if (molecule[i] == 0)
+         molecule[i] = nmolecules;
+   }
+
+   if (nmolecules_total > nmolecules)
+   {
+      nmolecules = nmolecules_total;
+      deallocate_storage();
+      allocate_storage();
+   }
 
 }
 
@@ -175,42 +221,7 @@ void FixAdaptiveProtonation::init()
    
 void FixAdaptiveProtonation::setup(int /*vflag*/)
 {
-   nmax = atom->nmax;
-   vector_atom = new double[nmax];
 
-   nmolecules = 0;
-   allocate_storage();
-
-   if (flags & RESET_MID)
-      set_molecule_id();
-   if (flags & INIT_MID)
-      read_molids_file();
-
-   int nlocal = atom->nlocal;
-   int * molecule = atom->molecule;
-   
-   int nmolecules_local = 0;
-   int nmolecules_total;
-   
-   for (int i = 0; i < nlocal; i++) {
-       if (atom->molecule[i] > nmolecules_local)
-           nmolecules_local = atom->molecule[i];
-   }
-   
-   MPI_Allreduce(&nmolecules_local,&nmolecules_total,1,MPI_INT,MPI_MAX,world);
-   
-   nmolecules++;
-   for (int i = 0; i < nlocal; i++) {
-      if (molecule[i] == 0)
-         molecule[i] = nmolecules;
-   }
-
-   if (nmolecules_total > nmolecules)
-   {
-      nmolecules = nmolecules_total;
-      deallocate_storage();
-      allocate_storage();
-   }
 }
 
 /* ---------------------------------------------------------------------------------------

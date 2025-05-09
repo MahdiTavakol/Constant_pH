@@ -318,7 +318,7 @@ void FixConstantPH::init()
    d_buff = 0.0;
 	
    // Reading the structure of protonable states before and after protonation.
-   read_pH_structure_files();
+   //read_pH_structure_files();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -364,6 +364,10 @@ void FixConstantPH::setup(int /*vflag*/)
 
    nmax = atom->nmax;
    allocate_storage();
+   
+   
+   // Reading the structure of protonable states before and after protonation.
+   read_pH_structure_files();
 
 }
 
@@ -485,7 +489,7 @@ void FixConstantPH::set_lambdas() {
          else m_lambdas[i][j] = 20.0; // To see if the hot-cold spot problem is solved.
       }
    } 
-
+   
    // This would not work in the initialize section as the m_lambda has not been set yet!
    if (n_lambdas)
        initialize_v_lambda(this->T);
@@ -832,7 +836,6 @@ void FixConstantPH::read_pH_structure_files()
     Reading the file containing the commands run whenever a lambdas array 
     is modified.
    ---------------------------------------------------------------------- */
-
 void FixConstantPH::read_commands_file()
 {
    /*
@@ -845,35 +848,52 @@ void FixConstantPH::read_commands_file()
     * ...
     * commandn
     */
-
-   char line[128];
+    
+   char line[512];  // Increased buffer size for long commands
    if (comm->me == 0) {
-      fgets(line,sizeof(line),commandsFile);
-      line[strcspn(line,"\n")] = '\0';
-      char *token = strtok(line,",");
+      if (!fgets(line, sizeof(line), commandsFile))
+         error->all(FLERR, "Error reading commands file");
+
+      line[strcspn(line, "\n")] = '\0';  // Remove newline
+      char *token = strtok(line, ",");
       ncommands = std::stoi(token);
    }
-   MPI_Bcast(&ncommands,1,MPI_INT,0,world);
+   MPI_Bcast(&ncommands, 1, MPI_INT, 0, world);
+
    commands = new char*[ncommands];
+
    if (comm->me == 0) {
-      fgets(line,sizeof(line),commandsFile); // comment-1
-      fgets(line,sizeof(line),commandsFile); // comment-2
+      fgets(line, sizeof(line), commandsFile); // comment-1
+      fgets(line, sizeof(line), commandsFile); // comment-2
+
       for (int i = 0; i < ncommands; i++) {
-         fgets(line,sizeof(line),commandsFile); //command-i
-         line[strcspn(line,"\n")] = '\0';
-	 size_t len = strlen(line) + 1;
-	 commands[i] = new char[len];
-	 strcpy(commands[i],line);
+         if (!fgets(line, sizeof(line), commandsFile))
+            error->all(FLERR, "Error reading command line");
+
+         line[strcspn(line, "\n")] = '\0';  // Remove newline
+
+         // Trim leading and trailing whitespace
+         char *start = line + strspn(line, " \t");  // Skip leading spaces
+         char *end = start + strlen(start) - 1;
+         while (end > start && (*end == ' ' || *end == '\t')) *end-- = '\0';
+
+         size_t len = strlen(start) + 1;
+         commands[i] = new char[len];
+         strcpy(commands[i], start);  // Copy trimmed command
       }
       fclose(commandsFile);
    }
-   commandsFile = nullptr;
+
+   commandsFile = nullptr;  // Ensure it's null after closing
+
    for (int i = 0; i < ncommands; i++) {
-      int len = strlen(commands[i]) + 1 ;
-      MPI_Bcast(&len,1,MPI_CHAR,0,world);
+      int len = (comm->me == 0) ? strlen(commands[i]) + 1 : 0;
+      MPI_Bcast(&len, 1, MPI_INT, 0, world);  // Use MPI_INT for length broadcast
+
       if (comm->me != 0)
          commands[i] = new char[len];
-      MPI_Bcast(commands[i],len,MPI_CHAR,0,world);
+
+      MPI_Bcast(commands[i], len, MPI_CHAR, 0, world);
    }
 }
 
@@ -1647,15 +1667,17 @@ void FixConstantPH::calculate_T_lambda()
         } 
 
 	if (Nfs[0] == 0 || Nfs[1] == 0 || Nfs[2] == 0) {
-	    //error->one(FLERR,"The number of degrees of freedom is zero");
 	    T_lambdas[0] = 0.0;
 	    T_lambdas[1] = 0.0;
 	    T_lambdas[2] = 0.0;
 	}
         if (k == 0) error->one(FLERR,"The k value is zero");
-        T_lambdas[0] = 2*KE_lambdas[0] / (Nfs[0] * k);
-        T_lambdas[1] = 2*KE_lambdas[1] / (Nfs[1] * k);
-        T_lambdas[2] = 2*KE_lambdas[2] / (Nfs[2] * k);
+        if (Nfs[0]) T_lambdas[0] = 2*KE_lambdas[0] / (Nfs[0] * k);
+        else T_lambdas[0] = 0.0;
+        if (Nfs[1]) T_lambdas[1] = 2*KE_lambdas[1] / (Nfs[1] * k);
+        else T_lambdas[1] = 0.0;
+        if (Nfs[2]) T_lambdas[2] = 2*KE_lambdas[2] / (Nfs[2] * k);
+        else T_lambdas[2] = 0.0;
     }
     
     MPI_Bcast(T_lambdas,3,MPI_DOUBLE,0,world);
