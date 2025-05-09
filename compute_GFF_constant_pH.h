@@ -33,7 +33,7 @@ class ComputeGFFConstantPH : public Compute {
   ~ComputeGFFConstantPH() override;
   void setup() override;
   void init() override;
-  void compute_vector() override;
+  void compute_array() override;
   void compute_peratom() override {}; // I just wanted LAMMPS to consider this as peratom compute so the peratom energies be tallied in this timestep.
   
   
@@ -46,7 +46,7 @@ class ComputeGFFConstantPH : public Compute {
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;
   char *fix_constant_pH_id;
-  double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas;
+  double* x_lambdas, *v_lambdas, *a_lambdas, *m_lambdas, *H_lambdas;
   double x_lambda_buff, v_lambda_buff, a_lambda_buff, m_lambda_buff;
   double T_lambda;
   int n_lambdas;
@@ -64,8 +64,9 @@ class ComputeGFFConstantPH : public Compute {
   double *HAs, *HBs, *HCs, *dH_dLambda;
   
 
-  // Energy of each atom computed for states A and B
-  double *energy_peratom;
+  // Memory allocation and deallocation
+  void allocate_storage();
+  void deallocate_storage();
 
 };
 
