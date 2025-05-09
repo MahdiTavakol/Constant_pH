@@ -118,6 +118,14 @@ namespace LAMMPS_NS {
 	int nevery_fix_adaptive;
 	FixAdaptiveProtonation* fix_adaptive_protonation;
 
+        // Output files when we have adaptive protonation
+        int fp_flags;
+        FILE* lambda_fp, *lambda_1_fp, *lambda_2_fp, *v_lambda_fp, *a_lambda_fp, *H_lambda_fp;
+
+        // output methods for a variable sized lambdas, v_lambdas, ... 
+        void write_lambdas_header();
+        void write_lambdas();
+
         // Function required to be called by the compute_GFF
         void calculate_H_once();
 
