@@ -54,7 +54,6 @@ fix_constant_pH_id(nullptr), x_lambdas(nullptr), v_lambdas(nullptr), a_lambdas(n
 
 ComputeTempConstantPH::~ComputeTempConstantPH()
 {
-  if (!copymode) delete[] vector;
   if (x_lambdas) delete[] x_lambdas;
   if (v_lambdas) delete[] v_lambdas;
   if (a_lambdas) delete[] a_lambdas;
