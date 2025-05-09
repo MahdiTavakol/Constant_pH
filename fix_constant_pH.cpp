@@ -1279,7 +1279,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 
     for (int i = 0; i < n_lambdas; i++) 
         for (int j = 0; j < 3; j++)
-	    v_lambdas[j] = random->gaussian()/std::sqrt(m_lambdas[j]);
+	    v_lambdas[i][j] = random->gaussian()/std::sqrt(m_lambdas[j]);
 
     if (flags & BUFFER) 
         v_lambda_buff = random->gaussian()/std::sqrt(m_lambda_buff);
@@ -1290,7 +1290,7 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
 
     for (int i = 0; i < n_lambdas; i++)
 	for (int j = 0; j < 3; j++)
-	    v_lambdas[j] *= scaling_factor;
+	    v_lambdas[i][j] *= scaling_factor;
 
     if (flags & BUFFER)
         v_lambda_buff *= scaling_factor;
@@ -1298,28 +1298,24 @@ void FixConstantPH::initialize_v_lambda(const double _T_lambda)
     this->calculate_T_lambda();    
     scaling_factor = std::sqrt(_T_lambda/T_lambda);
 
-    double vcm[3]{0.0,0.0,0.0};
+    double v_cm;
     for (int i = 0; i < n_lambdas; i++)
-	for (int j = 0; j < 3; j++)
-	    v_cm[j] += v_lambdas[i][j];
+	v_cm += v_lambdas[i][0];
 
     if (flags & BUFFER)
-        v_cm[0] += N_buff*v_lambda_buff;
+        v_cm += N_buff*v_lambda_buff;
 
     double n_cm = static_cast<double>(n_lambdas);
 
     if (flags & BUFFER) n_cm += 1.0;
 
-    v_cm[0] /= n_cm;
-    v_cm[1] /= (n_cm-1);
-    v_cm[2] /= (n_cm-1);
+    v_cm /= n_cm;
 
     for (int i = 0; i < n_lambdas; i++)
-        for (int j = 0; j < 3; j++)
-	    v_lambdas[i][j] -= v_cm[j];
+	v_lambdas[i][0] -= v_cm;
 
     if (flags & BUFFER) 
-        v_lambda_buff -= v_cm[0];
+        v_lambda_buff -= v_cm;
 
     delete random;
 }
