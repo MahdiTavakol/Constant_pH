@@ -372,9 +372,9 @@ void FixConstantPH::delete_lambdas()
    ----------------------------------------------------------------------  */
 
 void FixConstantPH::set_lambdas() {
-   memory->create(lambdas,n_lambdas,"constant_pH:lambdas");
-   memory->create(v_lambdas,n_lambdas,"constant_pH:v_lambdas");
-   memory->create(a_lambdas,n_lambdas,"constant_pH:a_lambdas");
+   memory->create(lambdas,n_lambdas,3,"constant_pH:lambdas");
+   memory->create(v_lambdas,n_lambdas,3,"constant_pH:v_lambdas");
+   memory->create(a_lambdas,n_lambdas,3,"constant_pH:a_lambdas");
    memory->create(m_lambdas,n_lambdas,"constant_pH:m_lambdas");
    memory->create(H_lambdas,n_lambdas,"constant_pH:H_lambdas");
 
