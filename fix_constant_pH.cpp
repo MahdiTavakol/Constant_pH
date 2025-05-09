@@ -416,8 +416,8 @@ void FixConstantPH::update_a_lambda()
    double mvv2e = force->mvv2e;
    double kj2kcal = 0.239006;
    double kT = force->boltz * T;
-   double nStructures1Barrier = 0.4*kT;
-   double nStructures2Barrier = 0.4*kT;
+   double nStructures1Barrier = 0.8*kT;
+   double nStructures2Barrier = 0.8*kT;
 
    //df = 1.0;
    //f = 1.0;
@@ -563,7 +563,7 @@ void FixConstantPH::return_T_lambda(double& _T_lambda)
     --------------------------------------------------------------------- */
 
 void FixConstantPH::reset_params(double** const _x_lambdas, double** const _v_lambdas, 
-                                 double** const _a_lambdas, double** const _m_lambdas)
+                                 double** const _a_lambdas, double** const _m_lambdas, const int mode)
 {
     for (int i = 0; i < n_lambdas; i++) {
         for (int j = 0; j < 3; j++) {
@@ -572,6 +572,13 @@ void FixConstantPH::reset_params(double** const _x_lambdas, double** const _v_la
 	    a_lambdas[i][j] = _a_lambdas[i][j];
 	    m_lambdas[i][j] = _m_lambdas[i][j];
         }
+    }
+    
+    if (mode == 1) {
+        MPI_Bcast(lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
+        MPI_Bcast(v_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
+        MPI_Bcast(a_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
+        MPI_Bcast(m_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
     }
 }
 
@@ -600,7 +607,7 @@ void FixConstantPH::return_buff_params(double& _x_lambda_buff, double& _v_lambda
    ---------------------------------------------------------------------- */
 
 void FixConstantPH::reset_buff_params(const double _x_lambda_buff, const double _v_lambda_buff, 
-                                        const double _a_lambda_buff, const double _m_lambda_buff) 
+                                        const double _a_lambda_buff, const double _m_lambda_buff, const int mode) 
 {
     if (!(flags & BUFFER)) {
 	error->warning(FLERR,"There is no buffer in the fix constant pH so you should not have reached here");
@@ -610,6 +617,13 @@ void FixConstantPH::reset_buff_params(const double _x_lambda_buff, const double 
     this->v_lambda_buff = _v_lambda_buff;
     this->a_lambda_buff = _a_lambda_buff;
     this->m_lambda_buff = _m_lambda_buff;
+    
+    if (mode == 1) {
+        MPI_Bcast(&lambda_buff,1,MPI_DOUBLE,0,world);
+        MPI_Bcast(&v_lambda_buff,1,MPI_DOUBLE,0,world);
+        MPI_Bcast(&a_lambda_buff,1,MPI_DOUBLE,0,world);
+        MPI_Bcast(&m_lambda_buff,1,MPI_DOUBLE,0,world);
+    }
 }
 
 /* ---------------------------------------------------------------------- */

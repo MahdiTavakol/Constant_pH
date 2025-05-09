@@ -149,7 +149,11 @@ namespace LAMMPS_NS {
         void return_params(double** const _x_lambdas, double** const _v_lambdas, 
                            double** const _a_lambdas, double** const _m_lambdas) const;
         void reset_params(double** const _x_lambdas, double** const _v_lambdas, 
-                          double** const _a_lambdas, double** const _m_lambdas);
+                          double** const _a_lambdas, double** const _m_lambdas, const int mode);
+        void reset_params(double** const _x_lambdas, double** const _v_lambdas, 
+                          double** const _a_lambdas, double** const _m_lambdas) {
+            reset_params(_x_lambdas,_v_lambdas,_a_lambdas,_m_lambdas,1);              
+        }
         void return_H_lambdas(double* _H_lambdas) const;
         void return_T_lambda(double& _T_lambda);
 
@@ -158,7 +162,11 @@ namespace LAMMPS_NS {
 	void return_buff_params(double& _x_lambda_buff, double& _v_lambda_buff, 
                                   double& _a_lambda_buff, double& _m_lambda_buff, int& _N_buff) const;
 	void reset_buff_params(const double _x_lambda_buff, const double _v_lambda_buff, 
-                                 const double _a_lambda_buff, const double _m_lambda_buff);
+                                 const double _a_lambda_buff, const double _m_lambda_buff, const int mode);
+        void reset_buff_params(const double _x_lambda_buff, const double _v_lambda_buff,
+                                 const double _a_lambda_buff, const double _m_lambda_buff) {
+            reset_buff_params(_x_lambda_buff,_v_lambda_buff,_a_lambda_buff,_m_lambda_buff,1);
+        }
            
         // Function to set the charges based on the lambdas and lambda_buff values
         void reset_qs();
