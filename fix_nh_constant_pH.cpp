@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.05.19
+   v0.08.21
 ------------------------------------------------------------------------- */
 #include <iostream>
 
@@ -151,7 +151,7 @@ void FixNHConstantPH::init()
   memory->create(x_lambdas,n_lambdas,3,"nh_constant_pH:x_lambdas");
   memory->create(v_lambdas,n_lambdas,3,"nh_constant_pH:v_lambdas");
   memory->create(a_lambdas,n_lambdas,3,"nh_constant_pH:a_lambdas");
-  memory->create(m_lambdas,n_lambdas,"nh_constant_pH:m_lambdas");
+  memory->create(m_lambdas,n_lambdas,3,"nh_constant_pH:m_lambdas");
 
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
@@ -263,7 +263,7 @@ void FixNHConstantPH::nh_v_temp()
            double r = static_cast<double>(rand())/ RAND_MAX;
            if (r < P) {
               double mean = 0.0;
-              double sigma = std::sqrt(kT/(m_lambdas[i]*mvv2e));
+              double sigma = std::sqrt(kT/(m_lambdas[i][j]*mvv2e));
               v_lambdas[i][j] = random_normal(mean, sigma);
            }
            if (j == 0) {
@@ -436,8 +436,8 @@ void FixNHConstantPH::constrain_lambdas()
       
       for (int i = 0; i < n_lambdas; i++) {
          sigma_lambda += x_lambdas[i][0];
-         if (m_lambdas[i] == 0) error->all(FLERR,"m_lambdas[{}] is zero in fix_nh_constant_pH",i);
-         sigma_mass_inverse += (1.0/m_lambdas[i]);
+         if (m_lambdas[i][0] == 0) error->all(FLERR,"m_lambdas[{},0] is zero in fix_nh_constant_pH",i);
+         sigma_mass_inverse += (1.0/m_lambdas[i][0]);
       }
 
       if (m_lambda_buff == 0) error->all(FLERR,"Buffer mass is zero in fix_nh_constant_pH");
@@ -459,7 +459,7 @@ void FixNHConstantPH::constrain_lambdas()
       omega += domega;
       
       for (int i = 0; i < n_lambdas; i++)
-         x_lambdas[i][0] += (omega * mols_charge_change / m_lambdas[i]);
+         x_lambdas[i][0] += (omega * mols_charge_change / m_lambdas[i][0]);
 
       x_lambda_buff += buff_charge_change * omega / m_lambda_buff;
       

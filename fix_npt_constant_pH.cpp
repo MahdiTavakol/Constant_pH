@@ -18,7 +18,7 @@
 
 /* ----------------------------------------------------------------------
    Constant pH support added by: Mahdi Tavakol (Oxford)
-   v0.05.19
+   v0.08.21
 ------------------------------------------------------------------------- */
 #include <iostream>
 
@@ -151,7 +151,7 @@ void FixNHConstantPH::init()
   memory->create(x_lambdas,n_lambdas,3,"nh_constant_pH:x_lambdas");
   memory->create(v_lambdas,n_lambdas,3,"nh_constant_pH:v_lambdas");
   memory->create(a_lambdas,n_lambdas,3,"nh_constant_pH:a_lambdas");
-  memory->create(m_lambdas,n_lambdas,"nh_constant_pH:m_lambdas");
+  memory->create(m_lambdas,n_lambdas,3,"nh_constant_pH:m_lambdas");
 
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
@@ -238,7 +238,10 @@ void FixNHConstantPH::nh_v_temp()
      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      
   // The number of degrees of freedom
-  double Nf_lambdas = static_cast<double>(3*n_lambdas+N_buff);
+  double Nf_lambdas = static_cast<double>(3*n_lambdas);
+
+  if (lambda_integration_flags & BUFFER)
+     Nf_lambdas += 1.0;
   
   if (lambda_integration_flags & CONSTRAIN)
      Nf_lambdas -= 1.0;
@@ -249,36 +252,37 @@ void FixNHConstantPH::nh_v_temp()
   double t_lambda_target = t_target;
   fix_constant_pH->return_T_lambda(t_lambda_current);
   
-  if (lambda_thermostat_type == LAMBDA_ANDERSEN) {
+  if (lambda_thermostat_type == LAMBDA_ANDERSEN && comm->me == 0) {
     double P = dt/t_andersen;
    
 
     if (which == NOBIAS) {
       // Dealing with lambdas
-      for (int i = 0; i < 3 * n_lambdas; i++) {
-        double r = static_cast<double>(rand())/ RAND_MAX;
-        if (r < P) {
-           double mean = 0.0;
-           double sigma = std::sqrt(kT/(m_lambdas[i%n_lambdas]*mvv2e));
-           v_lambdas[i%n_lambdas][i/n_lambdas] = random_normal(mean, sigma);
-        }
-        if (i/n_lambdas == 0) {
-           if (x_lambdas[i%n_lambdas][0] < -0.1 || x_lambdas[i%n_lambdas][0] > 1.1)
-              v_lambdas[i%n_lambdas][0] = -(x_lambdas[i%n_lambdas][0]/std::abs(x_lambdas[i%n_lambdas][0]))*std::abs(v_lambdas[i%n_lambdas][0]);
-        }
-        if (i/n_lambdas > 0) {
-           if (x_lambdas[i%n_lambdas][i/n_lambdas] < 0.0 && v_lambdas[i%n_lambdas][i/n_lambdas] < 0.0)
-              x_lambdas[i%n_lambdas][i/n_lambdas] += 1.0;
-           if (x_lambdas[i%n_lambdas][i/n_lambdas] > 1.0 && v_lambdas[i%n_lambdas][i/n_lambdas] > 0.0)
-              x_lambdas[i%n_lambdas][i/n_lambdas] -= 1.0;            
-        }
+      for (int i = 0; i < n_lambdas; i++) 
+        for (int j = 0; j < 3; j++) {
+           double r = static_cast<double>(rand())/ RAND_MAX;
+           if (r < P) {
+              double mean = 0.0;
+              double sigma = std::sqrt(kT/(m_lambdas[i][j]*mvv2e));
+              v_lambdas[i][j] = random_normal(mean, sigma);
+           }
+           if (j == 0) {
+              if (x_lambdas[i][j] < -0.1 || x_lambdas[i][j] > 1.1)
+                 v_lambdas[i][j] = -(x_lambdas[i][j]/std::abs(x_lambdas[i][j]))*std::abs(v_lambdas[i][j]);
+           }
+           if (j > 0) {
+              if (x_lambdas[i][j] < 0.0 && v_lambdas[i][j] < 0.0)
+                 x_lambdas[i][j] += 1.0;
+              if (x_lambdas[i][j] > 1.0 && v_lambdas[i][j] > 0.0)
+                 x_lambdas[i][j] -= 1.0;            
+           }
       }
       // Dealing with the buffer
       if (lambda_integration_flags & BUFFER) {
         double r = static_cast<double>(rand())/ RAND_MAX;
         if (r < P) {
            double mean = 0.0;
-           double sigma = std::sqrt(kT/(m_lambda_buff*mvv2e));
+           double sigma = std::sqrt(kT/(N_buff*m_lambda_buff*mvv2e));
            v_lambda_buff = random_normal(mean,sigma);
         }
         if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
@@ -288,7 +292,7 @@ void FixNHConstantPH::nh_v_temp()
       // This needs to be implemented
       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  } else if (lambda_thermostat_type == LAMBDA_BUSSI) {
+  } else if (lambda_thermostat_type == LAMBDA_BUSSI  && comm->me == 0) {
     //tau_t_bussi should be 1000
      
 
@@ -312,20 +316,20 @@ void FixNHConstantPH::nh_v_temp()
     if (which == NOBIAS) {
 
        // first, the lambdas
-       for (int i = 0; i < 3*n_lambdas; i++) {
-          v_lambdas[i%n_lambdas][i/n_lambdas] *= alpha_bussi;
+       for (int i = 0; i < n_lambdas; i++)
+          for (int j = 0; j < 3; j++) {
+             v_lambdas[i][j] *= alpha_bussi;
 
-          if (i / n_lambdas == 0) {
-             if (x_lambdas[i%n_lambdas][i/n_lambdas] < -0.1 || x_lambdas[i%n_lambdas][i/n_lambdas] > 1.1)
-               v_lambdas[i%n_lambdas][i/n_lambdas] = -(x_lambdas[i][0]/std::abs(x_lambdas[i%n_lambdas][i/n_lambdas]))*std::abs(v_lambdas[i%n_lambdas][i/n_lambdas]);
+             if (j == 0) {
+               if (x_lambdas[i][j] < -0.1 || x_lambdas[i][j] > 1.1)
+                 v_lambdas[i][j] = -(x_lambdas[i][j]/std::abs(x_lambdas[i][j]))*std::abs(v_lambdas[i][j]);
+             } else {
+               if (x_lambdas[i][j] < 0.0 && v_lambdas[i][j] < 0.0)
+                 x_lambdas[i][j] += 1.0;
+               if (x_lambdas[i][j] > 1.0 && v_lambdas[i][j] > 0.0)
+                 x_lambdas[i][j] -= 1.0;
+             }
           }
-          else {
-             if (x_lambdas[i%n_lambdas][i/n_lambdas] < 0.0 && v_lambdas[i%n_lambdas][i/n_lambdas] < 0.0)
-               x_lambdas[i%n_lambdas][i/n_lambdas] += 1.0;
-             if (x_lambdas[i%n_lambdas][i/n_lambdas] > 1.0 && v_lambdas[i%n_lambdas][i/n_lambdas] > 0.0)
-               x_lambdas[i%n_lambdas][i/n_lambdas] -= 1.0;
-          }
-       }
        // and then the buffer 
        if (lambda_integration_flags & BUFFER) {
           v_lambda_buff *= alpha_bussi;
@@ -336,34 +340,40 @@ void FixNHConstantPH::nh_v_temp()
        // This needs to be implemented
        error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER) {  
+  } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER && comm->me == 0) {  
      zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
 
      if (which == NOBIAS) {
         // first the lambdas
-        for (int i = 0; i < 3*n_lambdas; i++) {
-           v_lambdas[i%n_lambdas][i/n_lambdas] *= std::exp(-zeta_nose_hoover * dt);
-           if (i / n_lambdas == 0) {
-              if (x_lambdas[i%n_lambdas][i/n_lambdas] < -0.1 || x_lambdas[i%n_lambdas][i/n_lambdas] > 1.1)
-                v_lambdas[i%n_lambdas][i/n_lambdas] = -(x_lambdas[i][0]/std::abs(x_lambdas[i%n_lambdas][i/n_lambdas]))*std::abs(v_lambdas[i%n_lambdas][i/n_lambdas]);
+        for (int i = 0; i < n_lambdas; i++) 
+           for (int j = 0; j < 3; j++) {
+              v_lambdas[i][j] *= std::exp(-zeta_nose_hoover * dt);
+           
+              if (i / n_lambdas == 0) {
+                if (x_lambdas[i][j] < -0.1 || x_lambdas[i][j] > 1.1)
+                  v_lambdas[i][j] = -(x_lambdas[i][j]/std::abs(x_lambdas[i][j]))*std::abs(v_lambdas[i][j]);
+              }
+              else {
+                if (x_lambdas[i][j] < 0.0 && v_lambdas[i][j] < 0.0)
+                  x_lambdas[i][j] += 1.0;
+                if (x_lambdas[i][j] > 1.0 && v_lambdas[i][j] > 0.0)
+                  x_lambdas[i][j] -= 1.0;
            }
-           else {
-              if (x_lambdas[i%n_lambdas][i/n_lambdas] < 0.0 && v_lambdas[i%n_lambdas][i/n_lambdas] < 0.0)
-                x_lambdas[i%n_lambdas][i/n_lambdas] += 1.0;
-              if (x_lambdas[i%n_lambdas][i/n_lambdas] > 1.0 && v_lambdas[i%n_lambdas][i/n_lambdas] > 0.0)
-                x_lambdas[i%n_lambdas][i/n_lambdas] -= 1.0;
-          }
         }
         // and then the buffer
-        if (lambda_integration_flags & BUFFER) {
+        if (lambda_integration_flags & BUFFER)
            v_lambda_buff *= std::exp(-zeta_nose_hoover * dt);
-        }
+           
      } else if (which == BIAS) {
         // This needs to be implemented
         error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
      }
   }
-  
+
+  MPI_Bcast(v_lambdas[0],n_lambdas*3,MPI_DOUBLE,0,world);
+  if (lambda_integration_flags & BUFFER)
+     MPI_Bcast(&v_lambda_buff,1,MPI_DOUBLE,0,world);  
+   
   for (int i = 0; i < n_lambdas; i++) {
      v_cm += v_lambdas[i][0]*mols_charge_change;
   }
@@ -375,8 +385,8 @@ void FixNHConstantPH::nh_v_temp()
   else
      v_cm /= (static_cast<double>(n_lambdas)*mols_charge_change);
      
-  for (int i = 0; i < 3*n_lambdas; i++)
-     v_lambdas[i%n_lambdas][i/n_lambdas] -= v_cm;
+  for (int i = 0; i < n_lambdas; i++)
+     v_lambdas[i][0] -= v_cm;
   if (lambda_integration_flags & BUFFER)
      v_lambda_buff -= v_cm; 
   
@@ -426,8 +436,8 @@ void FixNHConstantPH::constrain_lambdas()
       
       for (int i = 0; i < n_lambdas; i++) {
          sigma_lambda += x_lambdas[i][0];
-         if (m_lambdas[i] == 0) error->all(FLERR,"m_lambdas[{}] is zero in fix_nh_constant_pH",i);
-         sigma_mass_inverse += (1.0/m_lambdas[i]);
+         if (m_lambdas[i][0] == 0) error->all(FLERR,"m_lambdas[{},{}] is zero in fix_nh_constant_pH",i,j);
+         sigma_mass_inverse += (1.0/m_lambdas[i][0]);
       }
 
       if (m_lambda_buff == 0) error->all(FLERR,"Buffer mass is zero in fix_nh_constant_pH");
@@ -449,7 +459,7 @@ void FixNHConstantPH::constrain_lambdas()
       omega += domega;
       
       for (int i = 0; i < n_lambdas; i++)
-         x_lambdas[i][0] += (omega * mols_charge_change / m_lambdas[i]);
+         x_lambdas[i][0] += (omega * mols_charge_change / m_lambdas[i][0]);
 
       x_lambda_buff += buff_charge_change * omega / m_lambda_buff;
       
