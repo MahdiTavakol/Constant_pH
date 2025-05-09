@@ -83,11 +83,13 @@ ComputeSoluteCoordination::~ComputeSoluteCoordination()
 void ComputeSoluteCoordination::init()
 {
    // Request a fulintl neighbor list
-   int list_flags = NeighConst::REQ_OCCASIONAL | NeighConst::REQ_FULL;
+   int list_flags = NeighConst::REQ_OCCASIONAL; // | NeighConst::REQ_FULL;
 
 
    // request for a neighbor list
    neighbor->add_request(this, list_flags);
+
+
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -103,6 +105,9 @@ void ComputeSoluteCoordination::init_list(int /*id*/, NeighList* ptr)
 
 void ComputeSoluteCoordination::compute_peratom()
 {
+   // Building the neighbor
+  neighbor->build_one(list);
+ 
   int* type = atom->type;
   invoked_peratom = update->ntimestep;
 
