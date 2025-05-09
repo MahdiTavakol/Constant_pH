@@ -145,6 +145,13 @@ void FixAdaptiveProtonation::init()
 
    nmax = atom->nmax;
    vector_atom = new double[nmax];
+
+   // Request a full neighbor list
+   int list_flags = NeighConst::REQ_OCCASIONAL | NeighConst::REQ_FULL;
+
+
+   // request for a neighbor list
+   neighbor->add_request(this, list_flags);
 }
 
 /* ---------------------------------------------------------------------------------------
