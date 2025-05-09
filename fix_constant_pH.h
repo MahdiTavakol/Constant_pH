@@ -48,11 +48,12 @@ namespace LAMMPS_NS {
      protected:
         int flags;
 	// Sturcture files
-        FILE *pHStructureFile;
+        FILE *pHStructureFile1, *pHStructureFile2;
 
 	// Atom types and charges that change due to protonation
-        int pHnTypes;
-        double *pH1qs, *pH2qs;
+        int pHnStructures1, pHnStructures1;
+        int pHnTypes1, pHnTypes2;
+        double **pH1qs, **pH2qs;
         int * typePerProtMol;
         int * protonable;
 
@@ -72,10 +73,11 @@ namespace LAMMPS_NS {
 	
 
         // Lambda arrays
-        double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas, * H_lambdas;
+        double ** lambdas, ** v_lambdas, ** a_lambdas, * m_lambdas, * H_lambdas;
         double T_lambda;
         int * molids;
         int n_lambdas;
+        
         
         // Temp array to change lambdas in order to get HAs and HBs
         double * lambdas_j;
@@ -185,7 +187,7 @@ namespace LAMMPS_NS {
 	void init_GFF();
 	void calculate_GFFs();
 	void modify_qs(double scale, int j);
-	void modify_qs(double *scales);
+	void modify_qs(double **scales);
         void modify_q_buff(const double scale);
 	void update_lmp();
         void compute_f_lambda_charge_interpolation();
