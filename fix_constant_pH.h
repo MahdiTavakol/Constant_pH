@@ -29,6 +29,7 @@ namespace LAMMPS_NS {
 
   class FixConstantPH: public Fix {
      friend class FixNHConstantPH;
+     friend class ComputeGFFConstantPH;
      public:
 	FixConstantPH(class LAMMPS*, int, char**);
 	~FixConstantPH() override;
@@ -90,9 +91,6 @@ namespace LAMMPS_NS {
         // Temp array to change lambdas in order to get HAs and HBs
         double * lambdas_j;
 
-         
-	
-
 	// The smoothing function 
 	double * fs, * dfs;
 
@@ -125,6 +123,9 @@ namespace LAMMPS_NS {
 	char * fix_adaptive_protonation_id;
 	int nevery_fix_adaptive;
 	FixAdaptiveProtonation* fix_adaptive_protonation;
+
+        // Function required to be called by the compute_GFF
+        void calculate_H_once();
 
         // The q_total used to calculate the HW charges
         double q_total;

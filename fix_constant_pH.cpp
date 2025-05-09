@@ -417,6 +417,19 @@ void FixConstantPH::update_a_lambda()
 	this->H_lambda_buff = kj2kcal*U_buff + N_buff*(m_lambda_buff/2.0)*(v_lambda_buff*v_lambda_buff)*mvv2e;
    }
 }
+
+/* ----------------------------------------------------------------------- 
+    This function is called by compute_GFF for thermodynamic integration 
+    of the GFF value.
+   ----------------------------------------------------------------------- */
+
+void FixConstantPH::calculate_H_once()
+{
+   compute_Hs();
+   calculate_dfs();
+   calculate_dUs();
+   update_a_lambda();
+}
 	
 /* ----------------------------------------------------------------------- */
 
