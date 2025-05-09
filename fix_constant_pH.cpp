@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.37----- */
+/* ---v0.08.46----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -233,6 +233,17 @@ void FixConstantPH::init()
       fix_adaptive_protonation = static_cast<FixAdaptiveProtonation*>(modify->get_fix_by_id(fix_adaptive_protonation_id));
       fix_adaptive_protonation->get_n_protonable(n_lambdas);
    }
+   
+   if (flags & BUFFER) {
+      lambda_buff = 1.0;
+      v_lambda_buff = 0.0;
+      m_lambda_buff = 20.0;
+        
+      modify_q_buff(lambda_buff);
+      compute_q_total();
+   }
+
+   set_lambdas();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -278,16 +289,6 @@ void FixConstantPH::setup(int /*vflag*/)
      * the lambas[0] + ... + lambdas[n] + lambda_buff
      */
     
-    if (flags & BUFFER) {
-        lambda_buff = 1.0;
-        v_lambda_buff = 0.0;
-        m_lambda_buff = 20.0;
-        
-        modify_q_buff(lambda_buff);
-        compute_q_total();
-    }
-
-    set_lambdas();
        
     if (GFF_flag)
 	init_GFF();
@@ -556,7 +557,7 @@ void FixConstantPH::return_T_lambda(double& _T_lambda, int component)
     calculate_T_lambda();
     
     if (component < 0 || component > 2)
-        error->one(FLERR,"Illegal input variable");
+        error->one(FLERR,"Illegal function input");
     _T_lambda = this->T_lambdas[component];
 }
 
@@ -1420,15 +1421,15 @@ void FixConstantPH::calculate_T_lambda()
     	}
         if (flags & CONSTRAIN) {
     	    Nfs[0] -= 1.0;
-    	    Nfs[0] -= 1.0;
+    	    Nfs[2] -= 1.0;
     	}
     	
         for (int j = 0; j < n_lambdas; j++) {
             KE_lambdas[0] += 0.5*m_lambdas[j][0]*v_lambdas[j][0]*v_lambdas[j][0]*mvv2e; 
             for (int k = 0; k < 3; k++)
-                KE_lambdas[2] += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
-            KE_lambdas[1] = KE_lambdas[2]-KE_lambdas[0];
+                KE_lambdas[1] += 0.5*m_lambdas[j][k]*v_lambdas[j][k]*v_lambdas[j][k]*mvv2e;
         }
+        KE_lambdas[2] = KE_lambdas[0]+KE_lambdas[1];
         
         if (flags & BUFFER) {
             KE_lambdas[0] += 0.5*N_buff*m_lambda_buff*v_lambda_buff*v_lambda_buff*mvv2e;
@@ -1566,6 +1567,7 @@ double FixConstantPH::compute_array(int i, int j)
       case 8:
         // 9
         calculate_T_lambda();
+        if (j < 0 || j > 2) error->one(FLERR,"Out of range access");
         return T_lambdas[j];
       case 9:
         // 10
