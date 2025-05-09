@@ -46,16 +46,21 @@ namespace LAMMPS_NS {
       }
       // Getting the protonable molids (The molids array must be allocated otherwise an error is produced)
       void get_protonable_molids(int * molids) const;
+      // Changes in the environment which is needed in the fix_constant_pH to check if it needs to get the protonable_molids or not.
+      void get_n_changes(int & _nchanges) const
+      {
+         _nchanges = this->nchanges[0];
+      }
 
    protected:
 
       /// -----> This part is similar to the part in the fix_constant_pH.cpp, so should be a separate class
       // The input files 
-      FILE* pHstructureFile3, * pHstructureFile4;
+      FILE* pHStructureFile1, * pHStructureFile2;
 
    
       // The information on the protonable species
-      int pHnStructures3, pHnStructures4;
+      int pHnStructures1, pHnStructures2;
       int pHnTypes1, pHnTypes2;
       double **pH1qs, **pH2qs;
       int * typePerProtMol;
@@ -70,21 +75,7 @@ namespace LAMMPS_NS {
       int typeOW;
       // The threshold for the number of neighboring water molecules
       double threshold;
-
-      // pKa and pH values
-      int pKa, pH;
-      
-      // How many hydrogen atoms should there be
-      int req_numHs;
-    
-
-      // Input variables for variable values
-      char* typePstr, *typeOstr, *typeHstr, *typeOHstr, *typePOHstr;
-
-      //
-      int typePvar, typeOvar, typeHvar, typeOHvar, typePOHvar;
-      int typePstyle, typeOstyle, typeHstyle, typeOHstyle, typePOHstyle;
-
+   
 
       // Neighborlist is required for accessing neighbors
       class NeighList* list;
@@ -95,7 +86,7 @@ namespace LAMMPS_NS {
        *  0 ---> SOLID
        *  1 ---> SOLVENT
        */
-       
+
       int * mark;
       int * mark_local;
       int * mark_prev; // For the previous step
@@ -104,35 +95,33 @@ namespace LAMMPS_NS {
       int * molecule_size; // used to average the mark for each molecule
       int * molecule_size_local;
       
-      // track changes in the natoms, nbonds and nangles
-      int natoms_change, natoms_change_total;
-      int nbonds_change, nbonds_change_total;
-      int nangles_change, nangles_change_total;
-
 
 
       // array to access the molids of the protonable molecules
       int * protonable_molids;
       int n_protonable;
 
+      // Changes in the environment which is needed in the fix_constant_pH to check if it needs to get the protonable_molids or not.
+      int nchanges[3]; // changes, solid_to_water, water_to_solid
+
+
+      // maximum number of atoms and number of molecules
       int nmax;
       int nmolecules;
 
-
+      // Deallocating storage 
+      void deallocate_storage();
+      // Allocating storage
+      void allocate_storage();
       // Setting the same molecule id for atoms connected to each other
+      bool molecule_id_flag;
       void set_molecule_id();
-      // Allocates the protonable_molids array based on the number of molecule_ids obtained from set_molecule_id()
-      void set_protonable_molids();
       // Mark phosphate atoms for protonation/deprotonation
       void mark_protonation_deprotonation();
-      // Fills out the array of the molids of the protonable molecules
-      void reset_protonable_molids();
-      // Add/Remove hydrogens for all the phosphates in the system based on the output of the mark_protonation_deprotonation() function
-      void modify_protonable_hydrogens();
-      // Add hydrogen atoms to the phosphate with a P atom having an index of i
-      void add_hydrogens(const int& i, const int& req_numHs, const int oAtoms[3], const int hAtoms[3]);
-      // Remove hydrogen atoms from the phosphate with a P atom having an index of i
-      void remove_hydrogens(const int i, int numHs_2_del, const int oAtoms[3], const int hAtoms[3]);
+      // Modifying the protonation state
+      void modify_protonation_state();
+      // Setting the mark for the previous state
+      void set_mark_prev();
 
    };
 

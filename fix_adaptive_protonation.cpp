@@ -52,14 +52,14 @@ using namespace FixConst;
 using namespace MathConst;
 
 enum { NONE, CONSTANT, EQUAL, ATOM };
-enum {NEITHER = -1, SOLID = 0, SOLVENT = 1}
+enum {NEITHER = -1, SOLID = 0, SOLVENT = 1};
 
 /* --------------------------------------------------------------------------------------- */
 
 FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg) : Fix(lmp, narg, arg), 
-   pHstructureFile3(nullptr), pHstructureFile4(nullptr)
+   pHStructureFile1(nullptr), pHStructureFile2(nullptr)
 {
-   if (narg < 10) utils::missing_cmd_args(FLERR, "fix adaptive_protonation", error);
+   if (narg < 7) utils::missing_cmd_args(FLERR, "fix adaptive_protonation", error);
 
    dynamic_group_allow = 0;
    scalar_flag = 1; 
@@ -79,21 +79,25 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    if (nevery < 0) error->all(FLERR,"Illegal fix adaptive_protonation every value {}", nevery);
 
    if (comm->me == 0) {
-      pHstructureFile3 = fopen(arg[4],"r"); // The structure in the solid state
-      if (pHstructureFile1 == nullptr) error->one(FLERR,"Unable to open the file");
-      pHstructureFile4 = fopen(arg[5],"r"); // The structure in the solvent phase ==> It should be modified based on the pKa and pH values by the fix constant_pH command
-      if (pHstructureFile2 == nullptr) error->one(FLERR,"Unable to open the file");
+      pHStructureFile1 = fopen(arg[4],"r"); // The structure in the solid state
+      if (pHStructureFile1 == nullptr) error->one(FLERR,"Unable to open the file");
+      pHStructureFile2 = fopen(arg[5],"r"); // The structure in the solvent phase ==> It should be modified based on the pKa and pH values by the fix constant_pH command
+      if (pHStructureFile2 == nullptr) error->one(FLERR,"Unable to open the file");
    }
 
    typeOW = utils::numeric(FLERR,arg[6],false,lmp);
-
    threshold = utils::numeric(FLERR,arg[7],false,lmp);
 
-   // Are these variables really necessary?
-   pKa = utils::numeric(FLERR,arg[8],false,lmp);
-   pH   = utils::numeric(FLERR,arg[9],false,lmp);
-   req_numHs = utils::numeric(FLERR,arg[10],false,lmp);
-   
+   molecule_id_flag = false;
+   int iarg = 8;
+   while (iarg < narg) {
+      if (strcmp(arg[iarg], "reset_molecule_ids") == 0) {
+         molecule_id_flag = true;
+         iarg++;
+      }
+      else
+         error->all(FLERR,"Unknown keyword");
+   }
 
 }
 
@@ -105,24 +109,16 @@ FixAdaptiveProtonation::~FixAdaptiveProtonation()
    if (pH2qs) memory->destroy(pH2qs);
    if (typePerProtMol) memory->destroy(typePerProtMol);
    if (protonable) memory->destroy(protonable);
-   if (mark) memory->destroy(mark);
-   if (mark_prev) memory->destroy(mark_prev);
-   if (mark_local) memory->destroy(mark_local);
-   if (molecule_size) memory->destroy(molecule_size);
-   if (molecule_size_local) memory->destroy(molecule_size_loca); 
    
    if (protonable_molids) delete [] protonable_molids;
+
+   deallocate_storage(); 
 
    // It is a good practice to put the deallocated pointers to nullptr
    pH1qs = nullptr;
    pH2qs = nullptr;
    typePerProtMol = nullptr;
    protonable = nullptr;
-   mark = nullptr;
-   mark_prev = nullptr;
-   mark_local = nullptr;
-   molecule_size = nullptr;
-   molecule_size_local = nullptr;
 
    protonable_molids = nullptr;
 }
@@ -147,19 +143,12 @@ void FixAdaptiveProtonation::init()
    if (atom->molecular != 1) error->all(FLERR,"Illegal atom style in the fix adpative protonation");
 
    nmax = atom->nmax;
-   nmolecules = atom->nmolecules;
+   nmolecules = atom->nmolecule;
 
-   //It could be separate function
-   memory->create(mark,nmolecules+1,"AdaptiveProtontation:mark");
-   memory->create(mark_prev,nmolecules+1,"AdaptiveProtonation:mark_prev");
-   memory->create(mark_local,nmolecules+1,"AdaptiveProtonation:mark_local");
-   memory->create(molecule_size,nmolecules+1,"AdaptiveProtonation:molecule_size");
-   memory->create(molecule_size_local,nmolecules+1,"AdaptiveProtonation:molecule_size_local");
-   std::fill(mark,mark+nmolecules+1,0);
-   std::fill(mark_prev,mark_prev+nmolecules+1,-1); // I put it on purpose so in the first step every molecule changes
-   std::fill(mark_local,mark_local+nmolecules+1,0);
-   std::fill(molecule_size,molecule_size+nmolecules+1,0);
-   std::fill(molecule_size_local,molecule_size_local+nmolecules+1,0);
+   allocate_storage();
+
+   if (molecule_id_flag)
+      set_molecule_id();
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -177,31 +166,22 @@ void FixAdaptiveProtonation::pre_exchange()
 {
    if(update->ntimestep != next_reneighbor) return;
 
-   if (atom->nmolecules > nmolecules)
+   if (atom->nmolecule > nmolecules)
    {
-      memory->destroy(mark);
-      memory->destroy(mark_prev);
-      memory->destroy(mark_local);
-      memory->destroy(molecule_size);
-      memory->destroy(molecule_size_local);
-
-      nmolecules = atom->nmolecules;
-      
-      memory->create(mark,nmolecules+1,"AdaptiveProtontation:mark");
-      memory->create(mark_prev,nmolecules+1,"AdaptiveProtonation:mark_prev");
-      memory->create(mark_local,nmolecules+1,"AdaptiveProtonation:mark_local");
-      memory->create(molecule_size,nmolecules+1,"AdaptiveProtonation:molecule_size");
-      memory->create(molecule_size_local,nmolecules+1,"AdaptiveProtonation:molecule_size_local");
-      std::fill(mark,mark+nmolecules+1,0);
-      std::fill(mark_prev,mark_prev+nmolecules+1,-1); // I put it on purpose so in the first step every molecule changes
-      std::fill(mark_local,mark_local+nmolecules+1,0);
-      std::fill(molecule_size,molecule_size+nmolecules+1,0);
-      std::fill(molecule_size_local,molecule_size_local+nmolecules+1,0);
+      nmolecules = atom->nmolecule;
+      deallocate_storage();
+      allocate_storage();
    }
 
+   // Counting the number of water molecules surrounding the protonable molecules
    mark_protonation_deprotonation();
-   modify_protonable_hydrogens();
-   set_protonable_molids();
+
+   // This is required since the fix_constant_pH.cpp does not deal with those molecules in the solid
+   modify_protonation_state();
+
+   // Resetting the mark_prev parameter to help us keep the track of which molecule moves from solid to solvent and vice versa
+   set_mark_prev();
+
 }
 
 /* ----------------------------------------------------------------------------------------
@@ -246,8 +226,11 @@ void FixAdaptiveProtonation::read_pH_structure_files()
        fgets(line,sizeof(line),pHStructureFile2);
        line[strcspn(line,"\n")] = '\0';
        token = strtok(line,",");   
-       pHnStructures2 = s9es2,1,MPI_INT,0,world);
+       pHnStructures2 = std::stoi(token);
    }
+
+   MPI_Bcast(&pHnStructures1,1,MPI_INT,0,world);
+   MPI_Bcast(&pHnStructures2,1,MPI_INT,0,world);
 
    memory->create(pH1qs,ntypes+1,pHnStructures1, "constant_pH:pH1qs");
    memory->create(pH2qs,ntypes+1,pHnStructures2, "constant_pH:pH2qs");
@@ -317,6 +300,44 @@ void FixAdaptiveProtonation::read_pH_structure_files()
 }
 
 /* ----------------------------------------------------------------------------------------
+   Deallocating the storage
+
+   ---------------------------------------------------------------------------------------- */
+
+void FixAdaptiveProtonation::deallocate_storage()
+{
+   memory->destroy(mark);
+   memory->destroy(mark_prev);
+   memory->destroy(mark_local);
+   memory->destroy(molecule_size);
+   memory->destroy(molecule_size_local);
+   mark = nullptr;
+   mark_prev = nullptr;
+   mark_local = nullptr;
+   molecule_size = nullptr;
+   molecule_size_local = nullptr;
+}
+
+/* ----------------------------------------------------------------------------------------
+   Allocating the storage
+
+   ---------------------------------------------------------------------------------------- */
+
+void FixAdaptiveProtonation::allocate_storage()
+{
+   memory->create(mark,nmolecules+1,"AdaptiveProtontation:mark");
+   memory->create(mark_prev,nmolecules+1,"AdaptiveProtonation:mark_prev");
+   memory->create(mark_local,nmolecules+1,"AdaptiveProtonation:mark_local");
+   memory->create(molecule_size,nmolecules+1,"AdaptiveProtonation:molecule_size");
+   memory->create(molecule_size_local,nmolecules+1,"AdaptiveProtonation:molecule_size_local");
+   std::fill(mark,mark+nmolecules+1,0);
+   std::fill(mark_prev,mark_prev+nmolecules+1,-1); // I put it on purpose so in the first step every molecule changes
+   std::fill(mark_local,mark_local+nmolecules+1,0);
+   std::fill(molecule_size,molecule_size+nmolecules+1,0);
+   std::fill(molecule_size_local,molecule_size_local+nmolecules+1,0);
+}
+
+/* ----------------------------------------------------------------------------------------
    getting the number of water molecules near phosphates and 
    flag them for protonation/deprotonation
    ---------------------------------------------------------------------------------------- */
@@ -360,8 +381,6 @@ void FixAdaptiveProtonation::mark_protonation_deprotonation()
          mark_local[molecule[i]] += SOLID;
       }
    }
-
-
 
 
    // Reducing the values from various cpus
@@ -425,68 +444,6 @@ void FixAdaptiveProtonation::set_molecule_id()
 }
 
 /* ----------------------------------------------------------------------------------------
-   Setting the molids for protonable molecules
-   ---------------------------------------------------------------------------------------- */
-
-void FixAdaptiveProtonation::set_protonable_molids()
-{
-   int nlocal = atom->nlocal;
-   int * molecule = atom->molecule;
-   int n_protonable_local = 0;
-   n_protonable = 0;
-   int * protonable_molids_local = new int[nlocal];
-   int * protonable_molids;
-
-   int nprocs = comm->nprocs;
-   int * recv_counts = new int[nprocs];
-   int * displs = new int[nprocs];
-
-   
-   for (int i = 0; i < nlocal; i++) {
-      if (mark[i] == 1) {
-         protonable_molids_local[n_protonable_local++] = molecule[i];
-      }
-   }
-
-
-   /* Extracting the unique molecule_ids so that I would know the 
-      n_molecule_ids and the required size of the molids array*/
-   
-    // Collect all molecule IDs from all processes
-    MPI_Allreduce(&n_protonable_local,&n_protonable, 1, MPI_INT, MPI_SUM, world);
-
-    protonable_molids = new int[n_protonable];
-    
-
-    MPI_Allgather(&n_protonable, 1, MPI_INT, recv_counts, 1, MPI_INT, world);
-
-    displs[0] = 0;
-    for (int i = 1; i < nprocs; i++) {
-        displs[i] = displs[i - 1] + recv_counts[i - 1];
-    }
-
-    MPI_Allgatherv(protonable_molids_local, n_protonable_local, MPI_INT, protonable_molids, recv_counts, displs, MPI_INT, world);
-
-    std::set<int> unique_molids(protonable_molids, protonable_molids + n_protonable);
-
-    delete [] protonable_molids;
-
-    n_protonable = unique_molids.size();
-
-    protonable_molids = new int[n_protonable];
-
-    int i = 0;
-    for (const int &mol_id : unique_molids) {
-        protonable_molids[i++] = mol_id;
-    }
-
-    delete [] protonable_molids_local;
-    delete [] recv_counts;
-    delete [] displs;
-   
-}
-
-/* ----------------------------------------------------------------------------------------
    Getting the molids for protonable molecules
    The molids must be allocated otherwise an error occurs
    ---------------------------------------------------------------------------------------- */
@@ -510,6 +467,7 @@ void FixAdaptiveProtonation::modify_protonation_state()
    double* q = atom->q;
    int * type = atom->type;
    int * molecule = atom->molecule;
+   int nchanges_local[3] = {0,0,0};
 
 
    // You have take care of the situation in which one of the atoms of a molecule has mark[i] == 1
@@ -519,18 +477,28 @@ void FixAdaptiveProtonation::modify_protonation_state()
          case NEITHER: // Not protonable --> nothing to do here
             break;
          case SOLVENT: // In the water
-            if (mark_prev[molecule[i]] == SOLID) // It came from the solid --> protonate it
-               q[i] = pH2qs[type[i]][0];
+            // It came from the solid --> protonate it
+            if (mark_prev[molecule[i]] == SOLID) {
+               q[i] = pH2qs[type[i]][0]; // I just chose the first structure the fix constant pH itself selects the appropriate one
+               nchanges_local[0]++;
+               nchanges_local[1]++;
+            }
             else
             {} // It used to be in the water --> do nothing
             break;
          case SOLID: // In the solid
-            if (make_prev[molecule[i]] == SOLVENT) // It came from the water --> deprotonate it
-               q[i] = pH1qs[type[i]][0];
+            // It came from the water --> deprotonate it
+            if (mark_prev[molecule[i]] == SOLVENT) {
+               q[i] = pH1qs[type[i]][0]; // I would expect that there is just one structure in the solid state
+               nchanges_local[0]++;
+               nchanges_local[2]++;
+            }
             else
             {} // It used to be in the solid --> do nothing 
       }
    }
+
+   MPI_Allreduce(nchanges_local,nchanges,3,MPI_INT,MPI_SUM,world);
 }
 
 
@@ -550,7 +518,6 @@ void FixAdaptiveProtonation::set_mark_prev()
 
 double FixAdaptiveProtonation::compute_scalar()
 {
-   return static_cast<double>(natoms_change_total);
 }
 
 /* --------------------------------------------------------------------------
@@ -559,14 +526,10 @@ double FixAdaptiveProtonation::compute_scalar()
 
 double FixAdaptiveProtonation::compute_vector(int n)
 {
-   switch (n)
-   {
-      case 1:
-         return static_cast<double>(nbonds_change_total);
-      case 2:
-         return static_cast<double>(nangles_change_total);
-   }
-   error->all(FLERR,"Undefined error");
+   if (n < 3)
+      return nchanges[n];
+   else
+      error->one(FLERR,"Out of bound access");
 }
 
 /* --------------------------------------------------------------------------
