@@ -222,14 +222,22 @@ void FixNHConstantPH::nh_v_temp()
   double kT = force->boltz * t_target;
   // remove the center of mass velocity
   double v_cm = 0.0;
+  // unit conversion
+  double mvv2e = force->mvv2e;
 
   // Lets extract the parameters from the fix_constant_pH again
   fix_constant_pH->return_nparams(n_lambdas);
   fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
-
+  
   // and the buffer if present
   if (lambda_integration_flags & BUFFER)
      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
+     
+  // The number of degrees of freedom
+  double Nf_lambdas = static_cast<double>(n_lambdas+N_buff);
+  
+  if (lambda_integration_flags & CONSTRAIN)
+     Nf_lambdas -= 1.0;
 
   // Temperature
   double t_lambda_current;
@@ -246,7 +254,7 @@ void FixNHConstantPH::nh_v_temp()
         double r = static_cast<double>(rand()) / RAND_MAX;
         if (r < P) {
            double mean = 0.0;
-           double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambdas[i]))/1000.0;
+           double sigma = std::sqrt(kT/(m_lambdas[i]*mvv2e));
            v_lambdas[i] = random_normal(mean, sigma);
         }
         if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
@@ -254,14 +262,14 @@ void FixNHConstantPH::nh_v_temp()
       }
       // Dealing with the buffer
       if (lambda_integration_flags & BUFFER) {
-         double r = static_cast<double>(rand())/ RAND_MAX;
-         if (r < P) {
-            double mean = 0.0;
-            double sigma = std::sqrt(0.0019872041*4184.0*kT/ (10.0* m_lambda_buff))/1000.0;
-            v_lambda_buff = random_normal(mean,sigma);
-         }
-         if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
-            v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
+        double r = static_cast<double>(rand())/ RAND_MAX;
+        if (r < P) {
+           double mean = 0.0;
+           double sigma = std::sqrt(kT/(m_lambda_buff*mvv2e));
+           v_lambda_buff = random_normal(mean,sigma);
+        }
+        if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
+           v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
       }
     } else if (which == BIAS) {
       // This needs to be implemented
@@ -275,22 +283,33 @@ void FixNHConstantPH::nh_v_temp()
     std::normal_distribution<> dist(0.0, 1.0);
 
     // Calculate the Bussi scaling factor
-    zeta_bussi = std::sqrt(1.0 + (dt / tau_t_bussi) * (t_lambda_target / t_lambda_current - 1.0));
-    double noise_factor = std::sqrt(t_lambda_target * (1.0 - zeta_bussi * zeta_bussi));
+    zeta_bussi = std::exp(-dt/tau_t_bussi);
+    
+    double r1 = dist(rng);
+    double sum_r2 = 0;
+    
+    for (int j = 0; j < Nf_lambdas; j++) {
+       double r = dist(rng);
+       sum_r2 += r*r;
+    }
+    
+    double t_lambda_new = t_lambda_current;
+    t_lambda_new +=  (1-zeta_bussi)*(t_lambda_target*(r1*r1+sum_r2)/Nf_lambdas-t_lambda_current);
+    t_lambda_new += 2*r1*std::sqrt((t_lambda_target*t_lambda_current/Nf_lambdas)*(1-zeta_bussi)*zeta_bussi);
+    double alpha_bussi = std::sqrt(t_lambda_new / t_lambda_current);
+    
 
     if (which == NOBIAS) {
 
        // first, the lambdas
        for (int i = 0; i < n_lambdas; i++) {
-          v_lambdas[i] *= zeta_bussi;
-          v_lambdas[i] += dist(rng) * noise_factor;
+          v_lambdas[i] *= alpha_bussi;
           if (x_lambdas[i] < -0.1 || x_lambdas[i] > 1.1)
              v_lambdas[i] = -(x_lambdas[i]/std::abs(x_lambdas[i]))*std::abs(v_lambdas[i]);
        }
        // and then the buffer 
        if (lambda_integration_flags & BUFFER) {
-          v_lambda_buff *= zeta_bussi;
-          v_lambda_buff += dist(rng) * noise_factor;
+          v_lambda_buff *= alpha_bussi;
           if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
              v_lambda_buff = -(x_lambda_buff/std::abs(x_lambda_buff))*std::abs(v_lambda_buff);
        }
