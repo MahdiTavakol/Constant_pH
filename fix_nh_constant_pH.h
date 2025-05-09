@@ -1,4 +1,3 @@
-
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
@@ -42,8 +41,9 @@ class FixNHConstantPH : public FixNH {
   void nve_v() override;
   void nh_v_temp() override;
   double random_normal(double mean, double stddev);
-  void contrain_lambdas();
-  void compute_q_total();
+  template <int mode>
+  void constrain_lambdas();
+  double compute_q_total();
 
   // lambda variables from the fix constant pH  
   FixConstantPH *fix_constant_pH;

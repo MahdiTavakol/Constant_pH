@@ -20,6 +20,8 @@
    Constant pH support added by: Mahdi Tavakol (Oxford)
    v0.05.19
 ------------------------------------------------------------------------- */
+#include <iostream>
+
 #include "fix_constant_pH.h"
 #include "fix_nh_constant_pH.h"
 
@@ -191,7 +193,7 @@ void FixNHConstantPH::nve_x()
   if (lambda_integration_flags & BUFFER) {
      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      x_lambda_buff += dtv * v_lambda_buff;
-     if (lambda_integration_flags & CONSTRAIN) constrain_lambdas();
+     if (lambda_integration_flags & CONSTRAIN) constrain_lambdas<1 >();
      fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
   }
    
@@ -199,6 +201,10 @@ void FixNHConstantPH::nve_x()
 
   // This function sets the charges (qs) in the system based on the current value of x_lambdas and x_lambda_buffs
   fix_constant_pH->reset_qs();
+  
+  // Just to check the total charge again
+  double q_total_3 = fix_constant_pH->compute_q_total();
+  if (comm->me == 0) std::cout << "q_total_3 == " << q_total_3 << std::endl;
 }
 
 /* ----------------------------------------------------------------------
@@ -318,53 +324,98 @@ void FixNHConstantPH::nh_v_temp()
    It adds a  constraint according to the Donnine et al JCTC 2016 
    equation (13).
 
-   The contraint equations were taken from the Tuckerman statistical mechanics
+   The constraint equations were taken from the Tuckerman statistical mechanics
    book 2nd edition pages 106.
 
    Just one step of the shake iteration is enough as the constraint is very simple.
    
    --------------------------------------------------------------------- */
-
+   
+template <int mode>
 void FixNHConstantPH::constrain_lambdas()
 {
-   double sigma_lambda = 0.0;
-   double sigma_mass_inverse  = 0.0;
-   double domega; 
+   double omega = 0.0;
+   double domega;
+   double etol = 1e-6;
+   double q_total;
+   double sigma_lambda;
+   double sigma_mass_inverse;
+   double N_buff_double = static_cast<double>(N_buff);
+   
+   double q_total_1; // based on the simga_lambdas
+   double q_total_2; // based on the q_total calculated from atoms
+   
+   int cycle = 0;
+   
+   /* The while(true) loop was used on purpose so that even when the loop termination condition
+      is satisfied the q_total is calculated for the last time with final values of lambdas */
+   while(true) {
+      sigma_lambda = 0.0;
+      sigma_mass_inverse = 0.0;
+      
+      
+      for (int i = 0; i < n_lambdas; i++) {
+         sigma_lambda += x_lambdas[i];
+         if (m_lambdas[i] == 0) error->all(FLERR,"m_lambdas[{}] is zero in fix_nh_constant_pH",i);
+         sigma_mass_inverse += (1.0/m_lambdas[i]);
+      }
 
-   for (int i = 0; i < n_lambdas; i++) {
-      sigma_lambda += x_lambdas[i];
-      sigma_mass_inverse += (1.0/m_lambdas[i]);
+      if (m_lambda_buff == 0) error->all(FLERR,"Buffer mass is zero in fix_nh_constant_pH");
+      
+      if (mode == 1)
+         q_total = mols_charge_change*sigma_lambda+buff_charge_change*N_buff_double*x_lambda_buff-total_charge;
+      else if (mode == 2) 
+         q_total = compute_q_total();
+      else error->one(FLERR,"You should never have reached here!!!");
+
+         
+      domega = -q_total \ 
+         / (mols_charge_change*mols_charge_change*sigma_mass_inverse + (N_buff_double*buff_charge_change*buff_charge_change/m_lambda_buff));
+
+      omega += domega;
+
+      if (std::abs(q_total) < etol || cycle++ > 1000) {
+         q_total_1 = mols_charge_change*sigma_lambda+buff_charge_change*N_buff_double*x_lambda_buff-total_charge;
+         q_total_2 = compute_q_total();
+         if (comm->me == 0) error->warning(FLERR,"q_total_1=={},q_total_2=={}",q_total_1,q_total_2);
+         fix_constant_pH->reset_qs();
+         break;
+      }
+      
+      for (int i = 0; i < n_lambdas; i++)
+         x_lambdas[i] += (omega * mols_charge_change / m_lambdas[i]);
+
+      x_lambda_buff += buff_charge_change * omega / m_lambda_buff;
+      
+      if (mode == 2) {
+      	 fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+      	 fix_constant_pH->reset_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff, m_lambda_buff);
+      	 fix_constant_pH->reset_qs();
+      }
    }
-
-
-   domega = -(mols_charge_change*sigma_lambda+buff_charge_change*N_buff*x_lambda_buff-total_charge)\ 
-      / (mols_charge_change*sigma_mass_inverse + (static_cast<double>(N_buff*N_buff)*buff_charge_change*buff_charge_change/m_lambda_buff));
-
-   for (int i = 0; i < n_lambdas; i++)
-      x_lambdas[i] += (domega * mols_charge_change /m_lambdas[i]);
-
-   x_lambda_buff += static_cast<double>(N_buff) * buff_charge_change * domega / m_lambda_buff;
-
+   
+   
+   //if (comm->me == 0 && (std::abs(q_total_1) > etol || std::abs(q_total_2) > etol )) error->warning(FLERR,"q_total_1=={},q_total_2=={}",q_total_1,q_total_2);
+   if (comm->me == 0) std::cout << "q_total_1 == " << q_total_1 << " q_total_2 == " << q_total_2 << " "; 
 }
 
 /* ----------------------------------------------------------------------
-   checking the total system charge after applying the constraint on the total charge
+   computes the q_total to be used in the constrain_lambdas() function
    ---------------------------------------------------------------------- */
-
-void FixNHConstantPH::compute_q_total()
+double FixNHConstantPH::compute_q_total()
 {
    double * q = atom->q;
    double nlocal = atom->nlocal;
    double q_local = 0.0;
-   double tolerance = 0.000001; //0.001;
+   double q_total = 0.0;
+   double tolerance = 1e-6; //0.001;
 
    for (int i = 0; i <nlocal; i++)
-       q_local += q[i];
+      q_local += q[i];
 
-    MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
-
-    if ((q_total >= tolerance || q_total <= -tolerance) && comm->me == 0)
-    	error->warning(FLERR,"q_total in fix constant-pH is non-zero: {} from {}",q_total,comm->me);
+   MPI_Allreduce(&q_local,&q_total,1,MPI_DOUBLE,MPI_SUM,world);
+   
+   return q_total;
 }
 
 /* ----------------------------------------------------------------------
