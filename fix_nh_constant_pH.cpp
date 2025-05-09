@@ -196,6 +196,9 @@ void FixNHConstantPH::nve_x()
   }
    
   fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
+
+  // This function sets the charges (qs) in the system based on the current value of x_lambdas and x_lambda_buffs
+  fix_constant_pH->reset_qs();
 }
 
 /* ----------------------------------------------------------------------
