@@ -32,16 +32,36 @@
 
 using namespace LAMMPS_NS;
 
+
+enum { 
+       NONE=0,
+       BUFFER=1<<0, 
+     };
+
 /* ---------------------------------------------------------------------------- */
 
 ComputeGFFConstantPH::ComputeGFFConstantPH(LAMMPS* lmp, int narg, char** arg) : Compute(lmp, narg, arg), 
        fix_constant_pH_id(nullptr)
 {
-   if (narg < 5) error->all(FLERR, "Illegal number of arguments in compute GFF constant pH");
+   if (narg < 5) error->all(FLERR, "Illegal number of arguments in compute constant_pH/GFF");
    fix_constant_pH_id = utils::strdup(arg[3]);
    lambda = utils::numeric(FLERR,arg[4],false,lmp);
    dlambda = utils::numeric(FLERR,arg[5],false,lmp);
-   if (dlambda < 0) error->all(FLERR,"Illegal compute GFF constant pH dlambda value {}", dlambda);
+   if (dlambda < 0) error->all(FLERR,"Illegal compute constant_pH/GFF dlambda value {}", dlambda);
+   
+   int iarg = 6;
+   
+   while (iarg < narg) {
+      if (strcmp(arg[iarg],"buffer") == 0) {
+         if (iarg + 1 >= narg)
+            error->all(FLERR, "Illegal compute constant_pH/GFF");
+         lambda_buff = utils::numeric(FLERR,arg[iarg+1],false,lmp);
+         flags |= BUFFER;
+         iarg+=2;
+      }
+      else
+         error->all(FLERR, "Illegal compute constant_pH/GFF");
+   }
 
     
     
@@ -91,6 +111,14 @@ void ComputeGFFConstantPH::compute_array()
    for (int i = 0; i < n_lambdas; i++) {
       fix_constant_pH->return_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
       std::fill(x_lambdas,x_lambdas+n_lambdas,lambda);
+      
+      if (flags & BUFFER) {
+         double lambda_buff_temp, v_lambda_buff_temp, a_lambda_buff_temp, m_lambda_buff_temp;
+         int N_lambda_buff_temp;
+         fix_constant_pH->return_buff_params(lambda_buff_temp, v_lambda_buff_temp,a_lambda_buff_temp,m_lambda_buff_temp,N_lambda_buff_temp);
+         fix_constant_pH->reset_buff_params(lambda_buff,v_lambda_buff_temp,a_lambda_buff_temp,m_lambda_buff_temp);
+      }
+         
 
       
       fix_constant_pH->reset_params(x_lambdas,v_lambdas,a_lambdas,m_lambdas);
