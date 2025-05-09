@@ -11,7 +11,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.02.09----- */
+/* ---v0.02.10----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -47,7 +47,7 @@ using namespace MathConst;
 /* ---------------------------------------------------------------------- */
 
 FixConstantPH::FixConstantPH(LAMMPS *lmp, int narg, char **arg):
-  Fix(lmp, narg, arg)
+  Fix(lmp, narg, arg), lambdas(nullptr), v_lambdas(nullptr), a_lambdas(nullptr), m_lambdas(nullptr)
 {
   if (narg < 9) utils::missing_cmd_args(FLERR,"fix constant_pH", error);
   nevery = utils::inumeric(FLERR,arg[3],false,lmp);
@@ -141,6 +141,12 @@ FixConstantPH::~FixConstantPH()
    memory->destroy(typePerProtMol);
    memory->destroy(protonable);
 
+
+   if (lambdas) delete [] lambdas;
+   if (v_lambdas) delete [] v_lambdas;
+   if (a_lambdas) delete [] a_lambdas;
+   if (m_lambdas) delete [] m_lambdas;
+
    deallocate_storage();
 
    if (fp && (comm->me == 0)) fclose(fp);
@@ -212,8 +218,8 @@ void FixConstantPH::init()
    if (pair_params.find(pstyle) == pair_params.end())
       error->all(FLERR,"The pair style {} is not currently supported in fix constant_pH",pstyle);
    
-   pparam1 = new char[pair_params[pstyle].length()+1];
-   std::strcpy(pparam1,pair_params[pstyle].c_str());
+    = new char[pair_params[pstyle].length()+1];
+   std::strcpy(,pair_params[pstyle].c_str());
    
 }
 
@@ -786,6 +792,48 @@ void FixConstantPH::calculate_GFF()
       error->warning(FLERR,"Warning lambda of {} in Fix constant_pH out of the range, it usually should not happen",lambda);
       GFF_lambda = GFF[i][1] + ((GFF[i][1]-GFF[i-1][1])/(GFF[i][0]-GFF[i-1][0]))*(lambda - GFF[i][0]);
    }
+}
+
+/* ----------------------------------------------------------------------
+   The linear charge interpolation method in Aho et al JCTC 2022
+   --------------------------------------------------------------------- */
+
+void FixConstantPH::compute_f_lambda_charge_interpolation()
+{
+   /* Two different approaches can be used
+      either I can go with copying the compute_group_group
+      code with factor_lj = 0 or I can use the eng->coul
+      I prefer the second one as it is tidier and I guess 
+      it should be faster
+      */
+
+  double * energy_local = new double[n_lambdas];
+  double * energy = new double[n_lambdas];
+
+  for (int i = 0; i < n_lambdas; i++) {
+      for (int j = 0; j < n_lambda_atoms[i]; j++) {
+	  double delta_q = q_prot[j] - q_deprot[j];
+	  // I need to figure out how to identify those atoms
+      }
+      for (int k = 0; k < n_lambdas; k++) {
+	  if (k == i) continue;
+	  for (int l = 0; l < n_lambda_atoms[k]; l++) {
+	      double q = (1-lambdas[k])*q_prot[l] + lambdas[k] * q_deprot[l];
+              // Double check if the q_prot and q_deprot are in the right place
+	      // how should I identify those atoms
+	  }
+      }
+      energy_local[i] = 0.0;
+      if (force->pair) energy_local[i] += force->pair->eng_coul;
+      // You need to add the kspace contribution too
+  }
+
+  MPI_Allreduce(&energy_local, &energy, n_lambdas,MPI_DOUBLE,MPI_SUM,world);
+  for (int i = 0; i < n_lambdas; i++) { 
+      double force_i = energy[i] / static_cast<double> (natoms); // convert to kcal/mol
+      a_lambdas[i] = force_i / m_lambdas[i]; 
+  }
+  delete [] energy_local;     
 }
 
 /* ---------------------------------------------------------------------- */

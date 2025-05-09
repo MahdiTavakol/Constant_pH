@@ -67,7 +67,14 @@ namespace LAMMPS_NS {
 	int pdim1;
 
 	// Lambda dynamics
-	double lambda, v_lambda, a_lambda, m_lambda;	
+	double lambda, v_lambda, a_lambda, m_lambda;
+
+        // Lambda arrays
+        double * lambdas, * v_lambdas, * a_lambdas, * m_lambdas;
+
+        // The protonable groups
+        int *protonable_molecule_ids;
+         
 
 	// Protonation and hydronium group parameters
 	double qHs, qHWs;
@@ -139,6 +146,7 @@ namespace LAMMPS_NS {
 	void modify_epsilon_q(const double& scale);
 	void modify_water();
 	void update_lmp();
+        void compute_f_lambda_charge_interpolation();
 	double compute_epair();
 	void update_a_lambda();
 	void update_v_lambda();
