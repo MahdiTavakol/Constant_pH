@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.10.30----------------- */
+/* ---------- v0.10.31----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
@@ -250,7 +250,10 @@ void FixAdaptiveProtonation::initial_integrate(int /*vflag*/)
 {
    if ( update->ntimestep % nevery ) return;
    
-   // Building the neighbor
+   /* 
+    * Building the neighbor list
+    * every nevery steps 
+    */
    neighbor->build_one(list);
 
    if (atom->nmax > nmax)
