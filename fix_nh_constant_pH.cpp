@@ -513,9 +513,9 @@ void FixNHConstantPH::constrain_lambdas()
 
 
       if (std::abs(q_total) < etol || cycle++ > maxCycles) {
-         break;
          if (comm->me == 0 && cycle > maxCycles)
              error->warning(FLERR,"The charge constrain did not reach convergence after {} iterations",maxCycles);
+         break;
       }
       
       domega = -q_total \ 
