@@ -182,11 +182,6 @@ FixConstantPH::~FixConstantPH()
    if (protonable) memory->destroy(protonable);
    if (GFF) memory->destroy(GFF);
 
-   
-   
-
-
-
    // deallocate the memories with size dependent on the n_lambda	
    delete_lambdas();
 
@@ -304,7 +299,12 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
          }       
       }
    }
-   compute_Hs();
+   
+   // This function is very expensive so it does not make sense to call it every step.
+   if (!(update->ntimestep % 100))
+   	compute_Hs();
+   	
+   	
    calculate_dfs();
    calculate_dUs();
    update_a_lambda();
@@ -316,7 +316,6 @@ void FixConstantPH::initial_integrate(int /*vflag*/)
    
 void FixConstantPH::post_force(int /*vflag*/)
 {
-   compute_Hs();
    calculate_dfs();
    calculate_dUs();
    update_a_lambda();
@@ -342,6 +341,8 @@ void FixConstantPH::delete_lambdas()
    if (dfs) memory->destroy(dfs);
    if (Us) memory->destroy(Us);
    if (dUs) memory->destroy(dUs);
+   
+   if (lambdas_j) memory->destroy(lambdas_j);
 
    if (molids) memory->destroy(molids);
 }
@@ -365,6 +366,8 @@ void FixConstantPH::set_lambdas() {
    memory->create(dfs,n_lambdas,"constant_pH:df");
    memory->create(Us,n_lambdas,"constant_pH:Us");
    memory->create(dUs,n_lambdas,"constant_pH:dUs");
+   
+   memory->create(lambdas_j,n_lambdas,"constant_pH:lambdas_j");
 
    if (flags & ADAPTIVE) memory->create(molids,n_lambdas,"constant_pH:molids");
 
@@ -404,9 +407,9 @@ void FixConstantPH::update_a_lambda()
    }
 
    if (flags & BUFFER) {
-	double f_lambda_buff = -(0.0*HB_buff - 0.0*HA_buff + kj2kcal*dU_buff);
+	double f_lambda_buff = -(kj2kcal*dU_buff);
 	this->a_lambda_buff = f_lambda_buff / m_lambda_buff; // the fix_nh_constant_pH itself takes care of units
-	this->H_lambda_buff = (1-lambda_buff)*HA_buff + lambda_buff *HB_buff + kj2kcal*U_buff + (m_lambda_buff/2.0)*(v_lambda_buff*v_lambda_buff);
+	this->H_lambda_buff = kj2kcal*U_buff + N_buff*(m_lambda_buff/2.0)*(v_lambda_buff*v_lambda_buff);
    }
 }
 	
@@ -420,36 +423,24 @@ void FixConstantPH::compute_Hs()
       allocate_storage();
       deallocate_storage();
    }
+   
+   backup_restore_qfev<1>();
    // computing the HA and HB for each lambda
    for (int j = 0; j < n_lambdas; j++) {
-      double* lambdas_j = new double[n_lambdas];
       std::fill(lambdas_j,lambdas_j+n_lambdas,0.0);
-      backup_restore_qfev<1>();
       lambdas_j[j] = 0.0;
-      modify_qs(lambdas_j);
       update_lmp();
       HAs[j] = compute_epair();
+      HAs[j] = 0;
       backup_restore_qfev<-1>();
       lambdas_j[j] = 1.0;
       modify_qs(lambdas_j);
-      HBs[j] = compute_epair();
-      backup_restore_qfev<-1>();
-      delete [] lambdas_j;
-   }
-   // Now calculate the HA_buff and HB_buff
-   if (flags & BUFFER) {
-      double temp_lambda_buff;
-      backup_restore_qfev<1>();
-      temp_lambda_buff = 0.0;
-      modify_q_buff(temp_lambda_buff);
       update_lmp();
-      HA_buff = compute_epair()/N_buff; // Because we have changed N_buff molecules and we just want HB_buff-HA-buff due to that.
-      backup_restore_qfev<-1>();
-      temp_lambda_buff = 1.0;
-      modify_q_buff(temp_lambda_buff);
-      HB_buff = compute_epair()/N_buff;
+      HBs[j] = compute_epair();
+      HBs[j] = 0;
       backup_restore_qfev<-1>();
    }
+
 }
 
 /* ----------------------------------------------------------------------
@@ -1224,7 +1215,7 @@ double FixConstantPH::compute_array(int i, int j)
         if (j < n_lambdas)
            return HAs[j];
         else if (j == n_lambdas)
-           return HA_buff;
+           return N_buff*HA_buff;
         else
            return -1.0;
       case 1:
@@ -1232,7 +1223,7 @@ double FixConstantPH::compute_array(int i, int j)
         if (j < n_lambdas)
            return HBs[j];
         else if (j == n_lambdas)
-           return HB_buff;
+           return N_buff*HB_buff;
         else
            return -1.0;
       case 2:
@@ -1292,7 +1283,7 @@ double FixConstantPH::compute_array(int i, int j)
         if (j < n_lambdas)
            return H_lambdas[j];
         else if (j == n_lambdas)
-           return N_buff*H_lambda_buff;
+           return H_lambda_buff;
         else
            return -1.0;
       case 10:

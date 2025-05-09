@@ -36,6 +36,7 @@ namespace LAMMPS_NS {
 	void init() override;
 	void setup(int) override;
 	void initial_integrate(int) override;
+	void post_force(int) override;
         double compute_array(int, int) override;
 	double memory_usage() override;
 
@@ -85,6 +86,9 @@ namespace LAMMPS_NS {
         double T_lambda;
         int * molids;
         int n_lambdas;
+        
+        // Temp array to change lambdas in order to get HAs and HBs
+        double * lambdas_j;
 
          
 	
