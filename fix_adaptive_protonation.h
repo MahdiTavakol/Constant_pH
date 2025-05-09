@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.05.07----- */
+/* ---v0.10.00----- */
 
 #ifdef FIX_CLASS
 // clang-format off
@@ -48,8 +48,27 @@ namespace LAMMPS_NS {
       void get_protonable_molids(int * molids) const;
 
    protected:
-      // Input variables for constant values
-      int typeP, typeO, typeH, typeOH, typePOH;
+
+      /// -----> This part is similar to the part in the fix_constant_pH.cpp, so should be a separate class
+      // The input files 
+      FILE* pHstructureFile3, * pHstructureFile4;
+
+   
+      // The information on the protonable species
+      int pHnStructures3, pHnStructures4;
+      int pHnTypes1, pHnTypes2;
+      double **pH1qs, **pH2qs;
+      int * typePerProtMol;
+      int *protonable;
+
+      void read_pH_structure_files();
+
+      // <------ This part is similar to the part in the fix_constant_pH.cpp, so should be a separate class
+
+
+      // I need to detect water molecules
+      int typeOW;
+      // The threshold for the number of neighboring water molecules
       double threshold;
 
       // pKa and pH values
@@ -71,10 +90,19 @@ namespace LAMMPS_NS {
       class NeighList* list;
 
 
-      // mark 0  -> not type P
-      // mark 1  -> in water or on surface (protonable)
-      // mark -1 -> in solid
+      /*
+       * -1 ---> NEITHER
+       *  0 ---> SOLID
+       *  1 ---> SOLVENT
+       */
+       
       int * mark;
+      int * mark_local;
+      int * mark_prev; // For the previous step
+      int * mark_per_mol; // If one atom have mark == 1 all the atoms of that molecule should have mark == 1
+
+      int * molecule_size; // used to average the mark for each molecule
+      int * molecule_size_local;
       
       // track changes in the natoms, nbonds and nangles
       int natoms_change, natoms_change_total;
@@ -88,6 +116,7 @@ namespace LAMMPS_NS {
       int n_protonable;
 
       int nmax;
+      int nmolecules;
 
 
       // Setting the same molecule id for atoms connected to each other
