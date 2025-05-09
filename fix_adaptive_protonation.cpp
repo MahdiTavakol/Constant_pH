@@ -10,7 +10,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---------- v0.10.00----------------- */
+/* ---------- v0.10.02----------------- */
 // Please remove unnecessary includes 
 #include "fix_adaptive_protonation.h"
 
@@ -64,15 +64,8 @@ FixAdaptiveProtonation::FixAdaptiveProtonation(LAMMPS* lmp, int narg, char** arg
    dynamic_group_allow = 0;
    scalar_flag = 1; 
    vector_flag = 1;
-   size_vector = 2;
-   global_freq = 1; // What is this?
-   extscalar = 1; // What is this?
-   extvector = 1; // What is this?
-   energy_global_flag = 1;
-   virial_global_flag = 1;
-      int typeP, typeO, typeH, typeOH, typePOH;
-   virial_peratom_flag = 1;
-   respa_level_support = 1;
+   peratom_flag = 1;
+
    
    nevery = utils::numeric(FLERR, arg[3], false, lmp);
 
@@ -149,6 +142,9 @@ void FixAdaptiveProtonation::init()
 
    if (molecule_id_flag)
       set_molecule_id();
+
+   nmax = atom->nmax;
+   vector_atom = new double[nmax];
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -165,6 +161,13 @@ void FixAdaptiveProtonation::init_list(int /*id*/, NeighList* ptr)
 void FixAdaptiveProtonation::pre_exchange()
 {
    if(update->ntimestep != next_reneighbor) return;
+
+   if (atom->nmax > nmax)
+   {
+      nmax = atom->nmax;
+      delete [] vector_atom;
+      vector_atom = new double[nmax];
+   }
 
    if (atom->nmolecule > nmolecules)
    {
@@ -518,6 +521,7 @@ void FixAdaptiveProtonation::set_mark_prev()
 
 double FixAdaptiveProtonation::compute_scalar()
 {
+   return nchanges[0];
 }
 
 /* --------------------------------------------------------------------------
@@ -526,10 +530,8 @@ double FixAdaptiveProtonation::compute_scalar()
 
 double FixAdaptiveProtonation::compute_vector(int n)
 {
-   if (n < 3)
-      return nchanges[n];
-   else
-      error->one(FLERR,"Out of bound access");
+   int *molecule = atom->molecule;
+    
 }
 
 /* --------------------------------------------------------------------------
