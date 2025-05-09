@@ -12,7 +12,7 @@
 
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
-/* ---v0.08.02----- */
+/* ---v0.08.05----- */
 
 #define DEBUG
 #ifdef DEBUG
@@ -37,6 +37,7 @@
 #include "update.h"
 #include "math_const.h"
 #include "modify.h"
+#include "random_park.h"
 
 #include <cstring>
 #include <string>
@@ -266,6 +267,22 @@ void FixConstantPH::setup(int /*vflag*/)
 	
     fixgpu = modify->get_fix_by_id("package_gpu");
 
+    /* 
+     * As it is hypothesized that the initial values for 
+     * lambdas are zero the initial value for the lambda_buff
+     * should be one so there is enough protons to be exchanged
+     * between the lambdas and buffer due to the contraint on
+     * the lambas[0] + ... + lambdas[n] + lambda_buff
+     */
+    
+    if (flags & BUFFER) {
+        lambda_buff = 1.0;
+        v_lambda_buff = 0.0;
+        m_lambda_buff = 20.0;
+        
+        modify_q_buff(lambda_buff);
+        compute_q_total();
+    }
 
     set_lambdas();
        
@@ -278,22 +295,6 @@ void FixConstantPH::setup(int /*vflag*/)
 
     nmax = atom->nmax;
     allocate_storage();
-    
-    /* As it is hypothesized that the initial values for 
-       lambdas are zero the initial value for the lambda_buff
-       should be one so there is enough protons to be exchanged
-       between the lambdas and buffer due to the contraint on
-       the lambas[0] + ... + lambdas[n] + lambda_buff
-    */
-    
-    if (flags & BUFFER) {
-        lambda_buff = 1.0;
-        v_lambda_buff = 0.0;
-        m_lambda_buff = 20.0;
-        
-        modify_q_buff(lambda_buff);
-        compute_q_total();
-    }
 
 }
 
@@ -1271,47 +1272,56 @@ void FixConstantPH::compute_f_lambda_charge_interpolation()
 /* --------------------------------------------------------------------- */
 
 void FixConstantPH::initialize_v_lambda(const double _T_lambda)
-{
-    std::mt19937 rng;
-    std::normal_distribution<double> distribution(0.0, 1.0);
-    double kT = force->boltz * _T_lambda;
-    double ke_lambdas = 0.0;
-    double ke_lambdas_target = 0.5*n_lambdas*kT; // Not sure about this part.
-    if (flags & BUFFER) ke_lambdas_target += 0.5*N_buff*kT;
-    for (int j = 0; j < n_lambdas; j++) {
-	double stddev = std::sqrt(kT/m_lambdas[j]);
-	for (int k = 0; k < 3; k++) {
-	    v_lambdas[j][k] = distribution(rng);
-	    ke_lambdas += 0.5*m_lambdas[j]*v_lambdas[j][k]*v_lambdas[j][k];
-	    v_lambdas[j][k] *= std::sqrt(4184/10.0)/1000.0; // A/fs
-	}
-    }
-    if (flags & BUFFER) {
-        double stddev = std::sqrt(kT/m_lambda_buff);
-        v_lambda_buff = distribution(rng);
-	ke_lambdas += 0.5*m_lambda_buff*v_lambda_buff*v_lambda_buff;
-	v_lambda_buff *= std::sqrt(4184/10.0)/1000.0; // A/fs
-    }
-    double scaling_factor = std::sqrt(ke_lambdas_target/ke_lambdas);
+{    
+    RanPark *random = nullptr;
+    double seed = 1234579;
+    random = new RanPark(lmp,seed);
 
-    for (int j = 0; j < n_lambdas; j++)
-        for (int k = 0; k < 3; k++)
-	    v_lambdas[j][k] *= scaling_factor;
+    for (int i = 0; i < n_lambdas; i++) 
+        for (int j = 0; j < 3; j++)
+	    v_lambdas[j] = random->gaussian()/std::sqrt(m_lambdas[j]);
+
+    if (flags & BUFFER) 
+        v_lambda_buff = random->gaussian()/std::sqrt(m_lambda_buff);
+
+    this->calculate_T_lambda();
+
+    double scaling_factor = std::sqrt(_T_lambda/T_lambda);
+
+    for (int i = 0; i < n_lambdas; i++)
+	for (int j = 0; j < 3; j++)
+	    v_lambdas[j] *= scaling_factor;
+
     if (flags & BUFFER)
         v_lambda_buff *= scaling_factor;
 
-    double v_cm = 0.0;
-    for (int j = 0; j < n_lambdas; j++)
-        for (int k = 0; k < 3; k++)
-	    v_cm += v_lambdas[j][k];
+    this->calculate_T_lambda();    
+    scaling_factor = std::sqrt(_T_lambda/T_lambda);
+
+    double vcm[3]{0.0,0.0,0.0};
+    for (int i = 0; i < n_lambdas; i++)
+	for (int j = 0; j < 3; j++)
+	    v_cm[j] += v_lambdas[i][j];
+
     if (flags & BUFFER)
-        v_cm += N_buff*v_lambda_buff;
+        v_cm[0] += N_buff*v_lambda_buff;
+
     double n_cm = static_cast<double>(n_lambdas);
-    if (flags & BUFFER) n_cm += static_cast<double>(N_buff);
-    v_cm /= static_cast<double>(n_cm);
-    for (int j = 0; j < n_lambdas; j++)
-        for (int k = 0; k < 3; k++)
-	    v_lambdas[j][k] -= v_cm;
+
+    if (flags & BUFFER) n_cm += 1.0;
+
+    v_cm[0] /= n_cm;
+    v_cm[1] /= (n_cm-1);
+    v_cm[2] /= (n_cm-1);
+
+    for (int i = 0; i < n_lambdas; i++)
+        for (int j = 0; j < 3; j++)
+	    v_lambdas[i][j] -= v_cm[j];
+
+    if (flags & BUFFER) 
+        v_lambda_buff -= v_cm[0];
+
+    delete random;
 }
 
 /* --------------------------------------------------------------------- */
@@ -1324,7 +1334,7 @@ void FixConstantPH::calculate_T_lambda()
     
     double Nf = static_cast<double>(3.0*n_lambdas);
     if (flags & BUFFER)
-    	Nf += static_cast<double>(N_buff);
+    	Nf += 1.0;
     if (flags & CONSTRAIN)
     	Nf -= 1.0;
     	

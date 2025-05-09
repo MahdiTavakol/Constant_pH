@@ -238,7 +238,10 @@ void FixNHConstantPH::nh_v_temp()
      fix_constant_pH->return_buff_params(x_lambda_buff,v_lambda_buff,a_lambda_buff,m_lambda_buff,N_buff);
      
   // The number of degrees of freedom
-  double Nf_lambdas = static_cast<double>(3*n_lambdas+N_buff);
+  double Nf_lambdas = static_cast<double>(3*n_lambdas);
+
+  if (lambda_integration_flags & BUFFER)
+     Nf_lambdas += 1.0;
   
   if (lambda_integration_flags & CONSTRAIN)
      Nf_lambdas -= 1.0;
@@ -249,7 +252,7 @@ void FixNHConstantPH::nh_v_temp()
   double t_lambda_target = t_target;
   fix_constant_pH->return_T_lambda(t_lambda_current);
   
-  if (lambda_thermostat_type == LAMBDA_ANDERSEN) {
+  if (lambda_thermostat_type == LAMBDA_ANDERSEN && comm->me == 0) {
     double P = dt/t_andersen;
    
 
@@ -278,7 +281,7 @@ void FixNHConstantPH::nh_v_temp()
         double r = static_cast<double>(rand())/ RAND_MAX;
         if (r < P) {
            double mean = 0.0;
-           double sigma = std::sqrt(kT/(m_lambda_buff*mvv2e));
+           double sigma = std::sqrt(kT/(N_buff*m_lambda_buff*mvv2e));
            v_lambda_buff = random_normal(mean,sigma);
         }
         if (x_lambda_buff < -0.1 || x_lambda_buff > 1.1)
@@ -288,7 +291,7 @@ void FixNHConstantPH::nh_v_temp()
       // This needs to be implemented
       error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  } else if (lambda_thermostat_type == LAMBDA_BUSSI) {
+  } else if (lambda_thermostat_type == LAMBDA_BUSSI  && comm->me == 0) {
     //tau_t_bussi should be 1000
      
 
@@ -336,7 +339,7 @@ void FixNHConstantPH::nh_v_temp()
        // This needs to be implemented
        error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
     }
-  } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER) {  
+  } else if (lambda_thermostat_type == LAMBDA_NOSEHOOVER && comm->me == 0) {  
      zeta_nose_hoover += dt * (t_lambda_current - t_lambda_target);
 
      if (which == NOBIAS) {
@@ -365,7 +368,11 @@ void FixNHConstantPH::nh_v_temp()
         error->one(FLERR,"The bias keyword for the fix_nh_constant_pH has not been implemented yet!");
      }
   }
-  
+
+  MPI_Bcast(v_lambdas,n_lambdas,MPI_DOUBLE,0,world);
+  if (lambda_integration_flags & BUFFER)
+     MPI_Bcast(&v_lambda_buff,1,MPI_DOUBLE,0,world);  
+   
   for (int i = 0; i < n_lambdas; i++) {
      v_cm += v_lambdas[i]*mols_charge_change;
   }
