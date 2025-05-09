@@ -652,9 +652,9 @@ void FixConstantPH::check_num_OWs_HWs()
    num_HWs = num_total[0];
    num_OWs = num_total[1];
 
-  if (num_HWs != 3*num_OWs) 
+  if (num_HWs != 3*num_OWs && comm->me == 0) 
       error->one(FLERR,"Number of HWs in the fix constant pH {} is not three times the number of OWs {}",num_HWs,num_OWs);
-  if (num_OWs != N_buff)
+  if (num_OWs != N_buff && comm->me == 0)
       error->one(FLERR,"Wrong number of N_buff in the fix constant pH: {}",N_buff);
    
    delete [] num_local;
